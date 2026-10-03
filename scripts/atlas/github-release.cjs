@@ -24,6 +24,7 @@ async function main(){
  const out=path.resolve(root,'../outputs'),checks=JSON.parse(fs.readFileSync(path.join(out,'Atlas-'+version+'-checksums.json'))),feed=path.join(out,'Atlas-update-feed');
  const body=fs.readFileSync(path.join(root,'build-check/github-release-notes.md'),'utf8');
  let release;try{release=await api('/releases/tags/v'+version);}catch(error){if(!String(error.message).includes('GitHub 404:'))throw error;}
+ if(!release){const drafts=(await api('/releases?per_page=100')).filter(item=>item.tag_name==='v'+version);if(drafts.length>1)throw new Error('Several drafts use this version. Resolve the duplicate drafts before publishing.');release=drafts[0];}
  if(!release)release=await api('/releases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag_name:'v'+version,target_commitish:repo.default_branch,name:'Atlas '+version+' — Felix',body,draft:true,prerelease:false})});
  if(!release.draft)throw new Error('This release is already public. Do not overwrite published assets.');
  const existing=await api('/releases/'+release.id+'/assets');
