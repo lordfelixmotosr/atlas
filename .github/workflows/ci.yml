@@ -1,22 +1,33 @@
-name: ci
+name: Atlas source checks
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
+  source:
+    runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-        with:
-          submodules: recursive
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
+      - name: Install isolated compiler dependencies
+        shell: pwsh
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.11.0 --activate
+          pnpm --dir build-tools/native install --frozen-lockfile --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'Compiler dependency installation failed.' }
+          New-Item -ItemType Junction -Path node_modules -Target (Resolve-Path build-tools/native/node_modules)
+      - name: Check Atlas types
+        run: node build-tools/native/node_modules/typescript/bin/tsc -p tsconfig.atlas.json --noEmit
+      - name: Compile Atlas source
+        run: node scripts/atlas/native-build.mjs --compile-only
