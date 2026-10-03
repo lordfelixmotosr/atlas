@@ -1,0 +1,2 @@
+export function editorText(text:string){return text.replace(/\r\n?/g,'\n');}
+export function fileText(text:string,lineSeparator:'\n'|'\r\n'){return lineSeparator==='\r\n'?text.replace(/\n/g,'\r\n'):text;}

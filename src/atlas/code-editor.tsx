@@ -1,3 +1,4 @@
+import {editorText,fileText} from './editor-text';
 import {useEffect,useRef} from 'react';
 import {basicSetup,EditorView} from 'codemirror';
 import {EditorState} from '@codemirror/state';
@@ -28,26 +29,26 @@ const theme=EditorView.theme({
  '&.cm-focused':{outline:'none'},'.cm-searchMatch':{backgroundColor:'#b7c4ec30',outline:'1px solid #b7c4ec70'},
 },{dark:true});
 export type EditorLocation={line:number;column?:number;key:number};
-export function CodeEditor({path,text,onChange,onSave,location,onCursor,states}: {
- path:string;text:string;onChange:(text:string)=>void;onSave:()=>void;location?:EditorLocation|null;onCursor?:(line:number,column:number)=>void;states?:Map<string,EditorState>;
+export function CodeEditor({path,text,onChange,onSave,location,onCursor,states,lineSeparator}: {
+ path:string;text:string;onChange:(text:string)=>void;onSave:()=>void;location?:EditorLocation|null;onCursor?:(line:number,column:number)=>void;states?:Map<string,EditorState>;lineSeparator?:'\n'|'\r\n';
 }){
- const mount=useRef<HTMLDivElement>(null),view=useRef<EditorView|null>(null),callbacks=useRef({onChange,onSave,onCursor});
- callbacks.current={onChange,onSave,onCursor};
+ const mount=useRef<HTMLDivElement>(null),view=useRef<EditorView|null>(null),callbacks=useRef({onChange,onSave,onCursor,lineSeparator:lineSeparator??(text.includes('\r\n')?'\r\n':'\n') as '\n'|'\r\n'});
+ callbacks.current={onChange,onSave,onCursor,lineSeparator:lineSeparator??callbacks.current.lineSeparator};
  useEffect(()=>{
   if(!mount.current)return;
   const language=/\.(xml|csproj|props)$/i.test(path)?xml():/\.cs$/i.test(path)?StreamLanguage.define(csharp):[];
-  const editor=new EditorView({parent:mount.current,state:states?.get(path)??EditorState.create({doc:text,extensions:[
+  const editor=new EditorView({parent:mount.current,state:states?.get(path)??EditorState.create({doc:editorText(text),extensions:[
    basicSetup,language,theme,syntaxHighlighting(colors),EditorView.contentAttributes.of({'aria-label':'Edit '+path}),
    keymap.of([{key:'Mod-s',run:()=>{callbacks.current.onSave();return true;}},indentWithTab]),
    EditorView.updateListener.of(update=>{
-    if(update.docChanged)callbacks.current.onChange(update.state.doc.toString());
+    if(update.docChanged)callbacks.current.onChange(fileText(update.state.doc.toString(),callbacks.current.lineSeparator));
     if(update.selectionSet||update.docChanged){const pos=update.state.selection.main.head,line=update.state.doc.lineAt(pos);callbacks.current.onCursor?.(line.number,pos-line.from+1);}
    }),
   ]})});
   view.current=editor;
   return()=>{states?.set(path,editor.state);view.current=null;editor.destroy();};
  },[path]);
- useEffect(()=>{const editor=view.current;if(editor&&editor.state.doc.toString()!==text)editor.dispatch({changes:{from:0,to:editor.state.doc.length,insert:text}});},[text]);
+ useEffect(()=>{const editor=view.current;if(editor&&editor.state.doc.toString()!==editorText(text))editor.dispatch({changes:{from:0,to:editor.state.doc.length,insert:editorText(text)}});},[text]);
  useEffect(()=>{
   const editor=view.current;if(!editor||!location)return;
   const line=editor.state.doc.line(Math.min(editor.state.doc.lines,Math.max(1,location.line))),at=Math.min(line.to,line.from+Math.max(0,(location.column??1)-1));
