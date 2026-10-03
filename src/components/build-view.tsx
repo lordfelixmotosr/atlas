@@ -57,11 +57,19 @@ export function BuildView({
   onUnarchiveChat: (id: string) => void;
 }) {
   const [navigation,setNavigation]=useState(()=>localStorage.getItem('atlas.layout.navigation')!=='closed');
-  const [chatWidth,setChatWidth]=useState(()=>Math.max(320,Math.min(700,Number(localStorage.getItem('atlas.layout.chatWidth'))||440)));
-  const [chatVisible,setChatVisible]=useState(true);const workspace=useRef<HTMLDivElement>(null);
+  const [chatWidth,setChatWidth]=useState(()=>Math.max(320,Number(localStorage.getItem('atlas.layout.chatWidth'))||440));
+  const [chatVisible,setChatVisible]=useState(true);
+  const [editorVisible,setEditorVisible]=useState(()=>localStorage.getItem('atlas.layout.editor')!=='closed');
+  const [filesVisible,setFilesVisible]=useState(()=>localStorage.getItem('atlas.layout.files')!=='closed');
+  const workspace=useRef<HTMLDivElement>(null),body=useRef<HTMLDivElement>(null);
+  const [bodyWidth,setBodyWidth]=useState(1000);
   useEffect(()=>{localStorage.setItem('atlas.layout.navigation',navigation?'open':'closed')},[navigation]);
-  useEffect(()=>{localStorage.setItem('atlas.layout.chatWidth',String(chatWidth))},[chatWidth]);
-  const resize=(x:number)=>{const box=workspace.current?.getBoundingClientRect();if(box)setChatWidth(Math.max(320,Math.min(700,box.right-x,box.width-420)))};
+  useEffect(()=>{const timer=setTimeout(()=>localStorage.setItem('atlas.layout.chatWidth',String(chatWidth)),200);return()=>clearTimeout(timer)},[chatWidth]);
+  useEffect(()=>{localStorage.setItem('atlas.layout.editor',editorVisible?'open':'closed')},[editorVisible]);
+  useEffect(()=>{localStorage.setItem('atlas.layout.files',filesVisible?'open':'closed')},[filesVisible]);
+  useEffect(()=>{const element=body.current;if(!element)return;const observer=new ResizeObserver(()=>setBodyWidth(element.clientWidth));observer.observe(element);setBodyWidth(element.clientWidth);return()=>observer.disconnect()},[]);
+  const maxChatWidth=Math.max(320,bodyWidth-266),visibleChatWidth=Math.min(chatWidth,maxChatWidth);
+  const resize=(x:number)=>{const box=body.current?.getBoundingClientRect();if(box)setChatWidth(Math.max(320,Math.min(maxChatWidth,box.right-x)))};
   // Pre-scaffold "new mod" chat: no mod yet, no Assets to browse.
   // Force panel='chat' and hide the Assets entry until a mod exists.
   const newModInProgress = !activeMod;
@@ -90,6 +98,9 @@ export function BuildView({
     (panel === 'deps' && !showDepsPanel)
       ? 'chat'
       : panel;
+  const filesPanel=effectivePanel==='files'||effectivePanel==='chat';
+  const showCenter=!!activeMod&&(!filesPanel||editorVisible||!chatVisible);
+  const compactEditor=()=>{setEditorVisible(true);setChatVisible(true);setFilesVisible(false);setChatWidth(Math.max(320,bodyWidth-326))};
 
   return (
     <div className="atlas-workspace flex min-h-0 flex-1" ref={workspace}>
@@ -124,10 +135,10 @@ export function BuildView({
             hasAi={hasAi}
           />
         )}
-        <div className="atlas-workspace-toolbar"><span>{effectivePanel==='chat'?'Project workspace':effectivePanel==='files'?'File editor':effectivePanel[0].toUpperCase()+effectivePanel.slice(1)}</span><button className="atlas-button" disabled={!activeMod} onClick={()=>setChatVisible(v=>!v)}>{chatVisible?'Hide chat':'Show chat'}</button></div>
-        <div className="atlas-workspace-body">
-        <div className="atlas-center-pane">
-        {activeMod&&<div className={effectivePanel==='files'||effectivePanel==='chat'?'flex flex-1 min-h-0 min-w-0':'hidden'}><FilesView mod={activeMod} busy={busy}/></div>}
+        <div className="atlas-workspace-toolbar"><span>{effectivePanel==='chat'?'Project workspace':effectivePanel==='files'?'File editor':effectivePanel[0].toUpperCase()+effectivePanel.slice(1)}</span><div className="atlas-actions">{activeMod&&filesPanel&&<><button className="atlas-button" onClick={compactEditor} title="Narrow the editor and give the assistant more room">Compact editor</button><button className="atlas-button" onClick={()=>{setEditorVisible(!showCenter);if(showCenter)setChatVisible(true)}}>{showCenter?'Hide editor':'Show editor'}</button></>}<button className="atlas-button" disabled={!activeMod} onClick={()=>{setChatVisible(v=>!v);if(chatVisible)setEditorVisible(true)}}>{chatVisible?'Hide chat':'Show chat'}</button></div></div>
+        <div className="atlas-workspace-body" ref={body} data-center-hidden={!showCenter}>
+        <div className={showCenter?'atlas-center-pane':'hidden'}>
+        {activeMod&&<div className={filesPanel?'flex flex-1 min-h-0 min-w-0':'hidden'}><FilesView key={activeMod.folder} mod={activeMod} busy={busy} active={showCenter&&filesPanel} filesVisible={filesVisible} onToggleFiles={()=>setFilesVisible(v=>!v)}/></div>}
         {effectivePanel === 'schematic' && activeMod && (
           <ModSchematicPanel mod={activeMod} />
         )}
@@ -151,8 +162,13 @@ export function BuildView({
           />
         )}
         </div>
-        {activeMod&&chatVisible&&<div role="separator" aria-label="Resize chat" aria-orientation="vertical" aria-valuenow={Math.round(chatWidth)} aria-valuemin={320} aria-valuemax={700} tabIndex={0} className="atlas-resize-handle" onKeyDown={e=>{if(e.key==='ArrowLeft'){e.preventDefault();setChatWidth(v=>Math.min(700,v+24))}if(e.key==='ArrowRight'){e.preventDefault();setChatWidth(v=>Math.max(320,v-24))}}} onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId)}} onPointerMove={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId))resize(e.clientX)}} onPointerUp={e=>e.currentTarget.releasePointerCapture(e.pointerId)}/>}
-        <div className={chatVisible||!activeMod?'atlas-chat-pane':'hidden'} style={activeMod?{width:chatWidth}:undefined}>
+        {showCenter&&chatVisible&&<div role="separator" aria-label="Resize editor and chat" aria-orientation="vertical" aria-valuenow={Math.round(visibleChatWidth)} aria-valuemin={320} aria-valuemax={maxChatWidth} tabIndex={0} className="atlas-resize-handle" title="Drag to resize. Arrow keys resize; double-click resets."
+          onDoubleClick={()=>setChatWidth(440)}
+          onKeyDown={e=>{if(e.key==='ArrowLeft'){e.preventDefault();setChatWidth(Math.min(maxChatWidth,visibleChatWidth+24))}if(e.key==='ArrowRight'){e.preventDefault();setChatWidth(Math.max(320,visibleChatWidth-24))}}}
+          onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId)}}
+          onPointerMove={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId))resize(e.clientX)}}
+          onPointerUp={e=>e.currentTarget.releasePointerCapture(e.pointerId)}/>}
+        <div className={chatVisible||!activeMod?'atlas-chat-pane':'hidden'} style={activeMod?{width:visibleChatWidth}:undefined}>
           <div className="atlas-pane-heading"><strong>Atlas assistant</strong><span>Steer while working</span></div>
           <ChatPanel
             key={activeConvo.id}

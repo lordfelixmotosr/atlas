@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname } from 'node:path';
+import {felixAccountLabel} from '../../atlas/account-label';
 import lockfile from 'proper-lockfile';
 import type {
   Credential,
@@ -324,13 +325,6 @@ function parseCredentials(raw: string | undefined): CredentialData {
 
 const FELIX_ACCOUNTS_KEY="__felixOpenAIAccounts";
 function felixValidCredential(value){return value?.type==="oauth"&&typeof value.access==="string"&&!!value.access&&typeof value.refresh==="string"&&!!value.refresh&&typeof value.expires==="number"&&Number.isFinite(value.expires)&&typeof value.accountId==="string"&&!!value.accountId;}
-function felixAccountLabel(value,fallback){
-  if(value===undefined)return fallback;
-  if(typeof value!=="string")throw new Error("Enter an account name.");
-  const label=value.replace(/[\x00-\x1f\x7f]/g," ").trim();
-  if(!label||label.length>40)throw new Error("Account names must be 1–40 characters.");
-  return label;
-}
 function felixAccountDocument(data){
   let document=data[FELIX_ACCOUNTS_KEY];
   if(document!==undefined){

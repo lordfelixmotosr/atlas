@@ -8,6 +8,7 @@ import {loadSettings,saveSettings} from '../agent/settings';
 import {getConversation} from '../agent/conversations';
 import {toPiThinking} from '../lib/thinking-levels';
 import {buildAttachedPrompt} from '../agent/agent-host';
+import {felixAccountLabel} from './account-label';
 function felixSupportsFast(model) {
   return model?.provider === "openai-codex" && ["gpt-6-astra","gpt-6-sol","gpt-6-luna","gpt-6.1-sol","gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna","gpt-5.5","gpt-5.4"].includes(model.id ?? model.modelId);
 }

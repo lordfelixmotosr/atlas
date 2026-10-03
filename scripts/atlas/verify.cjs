@@ -12,6 +12,8 @@ function init(){
   win.webContents.once('did-finish-load',()=>{if(win.webContents.getURL().startsWith('data:'))return;setTimeout(async()=>{
    try{
     const result=await win.webContents.executeJavaScript(`(async()=>({version:await window.modmixer.getAppVersion(),library:await window.modmixer.atlasLibraryStatus(),app:await window.modmixer.atlasAppStatus(),modelIds:(await window.modmixer.listModels()).map(model=>({id:model.id,contextWindow:model.contextWindow})),body:document.body.innerText,title:document.title,hasLibraryApi:typeof window.modmixer.atlasLibrarySearch==='function'}))()`);
+    result.nativeOpenAILogin=await win.webContents.executeJavaScript(`(async()=>{let message='';try{await window.modmixer.loginOpenAIAccount(undefined,'')}catch(error){message=error.message}const accounts=await window.modmixer.getOpenAIAccounts();return {validationReached:message.includes('Account names must be'),noMissingHelper:!message.includes('is not defined'),busyCleared:!accounts.busy,accounts:accounts.accounts.length,providerSignInPerformed:false}})()`);
+    if(!result.nativeOpenAILogin.validationReached||!result.nativeOpenAILogin.noMissingHelper||!result.nativeOpenAILogin.busyCleared)throw new Error('Native account login preparation failed.');
     await win.webContents.executeJavaScript("window.modmixer.atlasLibraryOpenReference('rimworld-forge','references/source/__init__.py')");result.referenceWindowOpened=require('electron').BrowserWindow.getAllWindows().some(window=>window.getTitle().includes('__init__.py'));
     const detected=await win.webContents.executeJavaScript('window.modmixer.modMixerImportPlan()');
     result.modMixerDetection={found:!!detected.source,projects:detected.rows.length,ready:detected.rows.filter(row=>row.status==='ready').length};
@@ -33,6 +35,9 @@ function init(){
     fs.mkdirSync(path.join(copied,'Defs'),{recursive:true});fs.writeFileSync(path.join(copied,'Defs/test.xml'),'<Defs><ThingDef><defName>NativeArmor</defName><label>native armor</label></ThingDef></Defs>');
     fs.writeFileSync(path.join(copied,'Textures/test.png'),Buffer.from([0,255,71,4,5,6]));
     const changes=await win.webContents.executeJavaScript(`window.modmixer.modChanges(${folder})`);
+    const projectFiles=await win.webContents.executeJavaScript(`window.modmixer.projectFiles(${folder})`);
+    result.nativeFileBrowser={files:projectFiles.files.length,listsDef:projectFiles.files.some(file=>file.path==='Defs/test.xml'),excludesMetadata:projectFiles.files.every(file=>!file.path.startsWith('.')),truncated:projectFiles.truncated};
+    if(!result.nativeFileBrowser.listsDef||!result.nativeFileBrowser.excludesMetadata)throw new Error('Native file browser verification failed.');
     const libraryMods=await win.webContents.executeJavaScript('window.modmixer.listWorkspaceMods()');
     result.nativeChanges={started:tracked.status,marked:clean.status,status:changes.status,count:changes.count,describesDef:changes.files.some(file=>file.description.includes('Added ThingDef NativeArmor')),librarySummary:libraryMods.find(mod=>mod.folder===JSON.parse(folder))?.changes?.count===2,baselineOutsideMod:fs.existsSync(path.join(path.dirname(copied),'.atlas/mod-changes',imported.imported[0].folder,'state.json'))};
     if(tracked.status!=='tracking'||clean.status!=='clean'||changes.status!=='modified'||changes.count!==2||Object.values(result.nativeChanges).includes(false))throw new Error('Native change report verification failed.');
