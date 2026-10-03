@@ -1,12 +1,7 @@
 // @ts-nocheck
 import {AdaptersSection} from "./adapters-ui";
+import {AtlasApplicationUpdates} from "./application-updates";
 import * as v from "react";import * as s from "react/jsx-runtime";
-function AtlasApplicationUpdates(){
- const [value,setValue]=v.useState(null),[error,setError]=v.useState(''),[busy,setBusy]=v.useState(false);
- v.useEffect(()=>{let alive=true;window.modmixer.atlasAppStatus().then(value=>alive&&setValue(value)).catch(e=>alive&&setError(e.message));const off=window.modmixer.onAtlasAppState(value=>alive&&setValue(value));return()=>{alive=false;off();};},[]);
- async function action(fn){setBusy(true);setError('');try{setValue(await fn());}catch(e){setError(e.message);}finally{setBusy(false);}}
- return s.jsxs('details',{className:'atlas-source-settings',children:[s.jsx('summary',{children:'Atlas application updates'}),s.jsx('p',{children:'Atlas '+(value?.version??'0.2.0')+' portable · checked daily with your library. Verified app updates download automatically; you choose when to restart.'}),(error||value?.error)&&s.jsx('p',{role:'alert',className:'atlas-error',children:error||value.error}),value?.ready?s.jsx('p',{className:'atlas-notice',children:'Version '+value.ready+' is verified and ready.'}):value?.available?s.jsx('p',{children:'Version '+value.available+' is available.'}):s.jsx('p',{children:'Updates from '+(value?.source??'the selected signed feed')+'.'}),value?.recovery&&s.jsx('p',{className:value.recovery.status==='rolled-back'?'atlas-warning':'atlas-notice',children:value.recovery.reason||'Last update started successfully.'}),value?.lastCheckedAt&&s.jsx('p',{children:'Last check: '+new Date(value.lastCheckedAt).toLocaleString()}),s.jsxs('div',{className:'atlas-actions',children:[s.jsx('button',{type:'button',className:'atlas-action',disabled:busy||value?.working,onClick:()=>void action(()=>window.modmixer.atlasAppCheck()),children:busy||value?.working?'Working…':'Check app updates'}),value?.available&&!value?.ready&&s.jsx('button',{type:'button',className:'atlas-action',disabled:busy,onClick:()=>void action(()=>window.modmixer.atlasAppDownload()),children:'Download update'}),value?.ready&&s.jsx('button',{type:'button',className:'atlas-action atlas-primary',disabled:busy,onClick:()=>void action(()=>window.modmixer.atlasAppInstall()),children:'Restart and install'})]})]});
-}
 function AtlasKnowledgeButton(){
   const [open,setOpen]=v.useState(false),[status,setStatus]=v.useState(null),[error,setError]=v.useState(''),[pending,setPending]=v.useState(''),[query,setQuery]=v.useState(''),[results,setResults]=v.useState([]),[source,setSource]=v.useState(''),[notice,setNotice]=v.useState('');
   const button=v.useRef(null),dialog=v.useRef(null),alive=v.useRef(true);

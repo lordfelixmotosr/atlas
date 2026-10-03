@@ -1,4 +1,4 @@
-# Atlas 0.2.4 portable
+# Atlas 0.2.5 portable
 
 Atlas is a Windows x64 fork of ModMixer 0.10.5 maintained by Felix, with your stag logo, portable storage, and signed knowledge and skill updates. This release supports **RimWorld**. Minecraft is disabled in both game registries and its tools, grammar, bridge JAR and reference pack are excluded. Atlas's application and UI are now compiled from TypeScript/React source.
 
@@ -9,6 +9,12 @@ Atlas is a Windows x64 fork of ModMixer 0.10.5 maintained by Felix, with your st
 3. Open **Knowledge & Skills** in the top toolbar to manage the library.
 
 No installer or administrator access is required. The executable is a locally built, unsigned Windows app. It is separate from the original ModMixer installation. Use one app at a time when using the in-game monitoring or live bridge: those inherited bridges share local ports.
+
+## 0.2.5 application download progress
+
+Application updates show actual percentage, downloaded MB / total MB, and average transfer speed, with **Downloading**, **Verifying** and **Ready to install** stages. Both manual and automatic downloads report progress while the Knowledge & Skills panel is open; reopening it shows the current status. Archives stream directly to a temporary file, reducing memory use. The total comes from the signed feed. Interrupted, oversized, incomplete or corrupted downloads never become installable, and temporary files are discarded before retrying.
+
+After verification, choose **Install and restart**. Atlas checks again that the downloaded archive is unchanged and refuses to restart while an agent, compaction or account operation is active. The existing update helper backs up application files and watches startup, retaining private data. There is no estimated finish time; download speed depends on the connection and GitHub.
 
 ## 0.2.4 sign-in, workspace and responsiveness
 
@@ -124,6 +130,6 @@ Upstream licenses and notices are retained. `LICENSE` and `NOTICE` cover the inh
 
 ## Branding and verification
 
-Chat, confirmation, library and provider setup labels use Atlas. Windows product metadata identifies Atlas 0.2.4 maintained by Felix. The local OpenAI/Claude browser callback page uses the stag logo; provider-owned sign-in/consent pages and registered OAuth identities remain controlled by the provider. Legacy internal IPC names, bridge package IDs and project sidecars are retained for compatibility. Required upstream authorship stays in LICENSE, NOTICE and source provenance. Old product website links and leaderboard registration are removed from the Atlas workflow.
+Chat, confirmation, library and provider setup labels use Atlas. Windows product metadata identifies Atlas 0.2.5 maintained by Felix. The local OpenAI/Claude browser callback page uses the stag logo; provider-owned sign-in/consent pages and registered OAuth identities remain controlled by the provider. Legacy internal IPC names, bridge package IDs and project sidecars are retained for compatibility. Required upstream authorship stays in LICENSE, NOTICE and source provenance. Old product website links and leaderboard registration are removed from the Atlas workflow.
 
-Verification: source type checking; 63 automated tests covering signed packs and update validation, restricted GitHub redirects, startup recovery, source-file boundaries and conflicts, bulk replacement and backups, account/steering/compaction lifecycle, metadata migration, bulk ModMixer import and cancellation, withdrawing queued steering, and content comparisons across publications and updates; native Electron rendering, library IPC, reference viewer, synthetic mod import and change-report IPC; browser UI checks with synthetic projects. No live model request, provider account sign-in, or Steam upload was performed for this release.
+Verification: source type checking; 70 automated tests covering byte progress, streamed updates, failed downloads and retries, scheduled progress broadcasts, signed packs and update validation, restricted GitHub redirects, startup recovery, source-file boundaries and conflicts, bulk replacement and backups, account/steering/compaction lifecycle, metadata migration, bulk ModMixer import and cancellation, withdrawing queued steering, and content comparisons across publications and updates; native Electron rendering, library IPC, reference viewer, synthetic mod import and change-report IPC; browser UI checks with synthetic projects. No live model request, provider account sign-in, or Steam upload was performed for this release.

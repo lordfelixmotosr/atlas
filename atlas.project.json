@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.4 native source release built and verified",
+  "status": "Atlas 0.2.5 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -148,7 +148,8 @@
     "0.2.1: neutral charcoal UI, Atlas mod metadata, preserved legacy metadata and corrected code references",
     "0.2.2: bulk ModMixer import; steering cancellation; modification reports and publication/update comparisons; signed GitHub updates",
     "0.2.3: task activity progress bar with retry wait and reduced-motion states",
-    "0.2.4: shared OpenAI account label validation; compact and hideable editor; virtualized asynchronous file browser; idle polling and refresh reduction"
+    "0.2.4: shared OpenAI account label validation; compact and hideable editor; virtualized asynchronous file browser; idle polling and refresh reduction",
+    "0.2.5: real application download progress and transfer speed; streamed temporary archives; verification and retry stages; Install and restart button"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -163,7 +164,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.4",
+  "version": "0.2.5",
   "supportedGames": [
     "rimworld"
   ],
@@ -223,19 +224,22 @@
       "0.2.3 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
       "0.2.4 source type checking and 63 automated tests passed",
       "Native 0.2.4 Electron rendering, portable paths, signed packs, account login validation, asynchronous file browser, library IPC, reference viewer, synthetic bulk import and modification reports; no provider login or real mod edits",
-      "0.2.4 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.4 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.5 source type checking and 70 automated tests passed; real streamed byte progress, failed-download cleanup, retry reset, concurrent-operation guard and scheduled IPC broadcasts",
+      "Native 0.2.5 Electron rendering, portable paths, signed packs, account login validation, asynchronous file browser, library IPC, reference viewer, synthetic bulk import and modification reports; browser UI verified with a temporary signed local download and simulated install; no provider login or real mod edits",
+      "0.2.5 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "portable": {
-      "path": "Atlas-0.2.4-win-x64-portable.zip",
-      "size": 400832368,
-      "sha256": "3c5d083a460c4af000f7fad72467848ad66c38c2c320f4d925464a8696bf4923"
+      "path": "Atlas-0.2.5-win-x64-portable.zip",
+      "size": 400831912,
+      "sha256": "18746938dc5140ed09e89f1fb47987490cfdeb25ab7ea1e210d093bff0068c95"
     },
     "application-update": {
-      "path": "Atlas-0.2.4-win-x64-application-update.zip",
-      "size": 400470973,
-      "sha256": "b3e6e4348311cf1cb083e6001977b71cb166cc03e76e9f49e2bfde698e2c9ea9"
+      "path": "Atlas-0.2.5-win-x64-application-update.zip",
+      "size": 400470517,
+      "sha256": "ca5288c40b57ade9825be5577e734ac428788235b8e1a6092f49401be1d66eb3"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"

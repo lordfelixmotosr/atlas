@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const VERSION = '0.2.4';
+const VERSION = '0.2.5';
 const ONLINE_SOURCE = 'https://github.com/lordfelixmotosr/atlas/releases/latest/download/';
 const MAX_BYTES = 24 * 1024 * 1024;
 const SAFE_ID = /^[a-z][a-z0-9-]{0,63}$/;
@@ -101,8 +101,18 @@ class Library {
     }
     this.available=[];this.saveConfig(next);return this.status();
   }
-  async obtain(source,relative,maxBytes=MAX_BYTES) {
+  async obtain(source,relative,maxBytes=MAX_BYTES,options={}) {
     safeRelative(relative);
+    // Optional chunk sink keeps large application archives out of memory.
+    const consume=async body=>{
+      const chunks=[];let total=0;
+      for await(const chunk of body){
+        total+=chunk.length;if(total>maxBytes)throw new Error('Update exceeds size limit.');
+        if(options.onChunk)await options.onChunk(chunk);else chunks.push(Buffer.from(chunk));
+        options.onProgress?.(total);
+      }
+      return options.onChunk?total:Buffer.concat(chunks,total);
+    };
     if(/^https:\/\//i.test(source)) {
       const base=new URL(source.endsWith('/')?source:source+'/'),url=new URL(relative,base);
       if(url.origin!==base.origin)throw new Error('Update URL changed origin.');
@@ -123,13 +133,11 @@ class Library {
       }
       if(!response.ok)throw new Error('Update download failed ('+response.status+').');
       if(Number(response.headers.get('content-length')??0)>maxBytes)throw new Error('Update exceeds size limit.');
-      const chunks=[];let total=0;
-      for await(const chunk of response.body){total+=chunk.length;if(total>maxBytes)throw new Error('Update exceeds size limit.');chunks.push(Buffer.from(chunk));}
-      return Buffer.concat(chunks);
+      return consume(response.body);
     }
     const folder=path.resolve(this.root,source),file=path.resolve(folder,...relative.split('/'));
     if(!inside(folder,file)||!inside(fs.realpathSync(folder),fs.realpathSync(file))||!fs.statSync(file).isFile()||fs.statSync(file).size>maxBytes)throw new Error('Invalid local update file.');
-    return fs.readFileSync(file);
+    return options.onChunk||options.onProgress?consume(fs.createReadStream(file)):fs.readFileSync(file);
   }
   async checkInternal(source=this.config.source,allowExpired=false) {
     const index=verifyEnvelope(await this.obtain(source,'index.atlas.json'),this.trust,this.now(),allowExpired);

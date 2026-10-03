@@ -7,7 +7,7 @@ function init({root,resources,host,getWindow,electron,rebuildIndex,invalidatePat
   const {ipcMain,shell,dialog}=electron;
   const busy=isBusy??(()=>host.felixAccountOperation||host.pendingOAuth||host.felixOpenAIStarting>0||[...host.sessions.values()].some(({session})=>session.felixManualCompacting||!session.isIdle||session.agent?.abortController||session.agent?.state?.isStreaming||session.isCompacting||session.isRetrying));
   const library=new Library(root,resources,{busy});
-  const application=new ApplicationUpdate(library,electron,busy);
+  const application=new ApplicationUpdate(library,electron,busy,{onState:state=>{const win=getWindow();if(win&&!win.isDestroyed())win.webContents.send('atlas:app:state',state);}});
   let timer=null,disposed=false;
   const referenceWindows=new Set();
   const broadcast=()=>{const win=getWindow();if(win&&!win.isDestroyed()){win.webContents.send('atlas:library:state',library.status());win.webContents.send('atlas:app:state',application.status());}};
