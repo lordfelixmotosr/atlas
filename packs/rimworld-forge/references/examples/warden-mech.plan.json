@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "mod": {
+    "name": "Warden Mech Example",
+    "packageId": "example.rimworldforge.wardenexample",
+    "author": "YourName",
+    "supportedVersions": [
+      "1.6"
+    ],
+    "description": "RimWorldForge teaching example for a heavy mech concept. Inspect current installed mech Defs before treating this as a shippable unit.",
+    "dependencies": [
+      {
+        "packageId": "ludeon.rimworld.biotech",
+        "displayName": "RimWorld - Biotech"
+      }
+    ]
+  },
+  "defs": [
+    {
+      "type": "ThingDef",
+      "file": "Warden/Warden_Things.xml",
+      "attributes": {
+        "ParentName": "MechanoidBase"
+      },
+      "fields": {
+        "defName": "RWForge_Warden",
+        "label": "warden",
+        "description": "A heavy combat mech concept built around frontal durability and a compact energy cannon.",
+        "graphicData": {
+          "texPath": "Shugoki/Warden/Warden",
+          "graphicClass": "Graphic_Multi",
+          "drawSize": {
+            "x": 2.2,
+            "z": 2.2
+          }
+        },
+        "statBases": {
+          "MoveSpeed": 3.4,
+          "MarketValue": 1800
+        }
+      }
+    },
+    {
+      "type": "PawnKindDef",
+      "file": "Warden/Warden_PawnKinds.xml",
+      "fields": {
+        "defName": "RWForge_WardenKind",
+        "label": "warden",
+        "race": "RWForge_Warden",
+        "combatPower": 420
+      }
+    }
+  ],
+  "assets": [
+    {
+      "id": "warden_south",
+      "kind": "pawn_directional",
+      "target": "Textures/Shugoki/Warden/Warden_south.png",
+      "transparent": true,
+      "canvas": [
+        128,
+        128
+      ],
+      "direction": "south",
+      "style": "RimWorld-compatible top-down sci-fi mech pawn sprite",
+      "notes": "Broad ivory armor, dark joints, cyan sensor/emissive accents, integrated cannon arm. No ground or baked shadow."
+    },
+    {
+      "id": "warden_north",
+      "kind": "pawn_directional",
+      "target": "Textures/Shugoki/Warden/Warden_north.png",
+      "transparent": true,
+      "canvas": [
+        128,
+        128
+      ],
+      "direction": "north",
+      "style": "Match the south sprite exactly in scale, materials and anchor."
+    },
+    {
+      "id": "warden_east",
+      "kind": "pawn_directional",
+      "target": "Textures/Shugoki/Warden/Warden_east.png",
+      "transparent": true,
+      "canvas": [
+        128,
+        128
+      ],
+      "direction": "east",
+      "style": "Match the other directions; preserve cannon silhouette. West may be mirrored only after visual review."
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "csharp-harmony",
+  "name": "C# & Harmony",
+  "description": "C# compilation, Harmony patching and Combat Extended compatibility reference recipes.",
+  "category": "skills",
+  "source": "https://github.com/lebek/modmixer",
+  "license": "MIT",
+  "version": "0.1.0",
+  "minAtlasVersion": "0.1.0",
+  "gameVersions": [
+    "1.6"
+  ],
+  "notes": "Initial Atlas reference pack."
+}

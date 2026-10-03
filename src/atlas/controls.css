@@ -1,0 +1,107 @@
+
+.felix-account-control{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0}
+.felix-account-select{max-width:210px;text-overflow:ellipsis}
+.felix-account-error{font-size:12px;line-height:18px;color:var(--failed,#ed8e85);overflow-wrap:anywhere}
+.felix-account-manager{padding:14px;display:flex;flex-direction:column;gap:10px}
+.felix-account-manager-heading,.felix-account-card-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.felix-account-manager-heading h3{font-size:14px;font-weight:500;color:var(--ink)}
+.felix-account-manager-heading>span,.felix-account-description{font-size:12px;line-height:18px;color:var(--muted)}
+.felix-account-cards{display:flex;flex-direction:column;gap:8px}
+.felix-account-card{border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:12px}
+.felix-account-label{display:flex;align-items:center;gap:12px;min-width:0}
+.felix-account-label strong{font-size:13px;font-weight:500;overflow-wrap:anywhere}
+.felix-account-rename{font-size:11px;color:var(--muted);cursor:pointer}
+.felix-account-active{font-size:11px;color:var(--accent);border:1px solid var(--line);border-radius:20px;padding:3px 9px}
+.felix-account-card-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.felix-account-button{border:1px solid var(--line);background:var(--surface);border-radius:6px;color:var(--ink);padding:5px 10px;font:12px/18px var(--font-sans,Inter,system-ui,sans-serif);cursor:pointer;align-self:flex-start}
+.felix-account-button:hover{border-color:var(--muted)}
+.felix-account-use{background:var(--accent);border-color:var(--accent);color:var(--accent-foreground)}
+.felix-account-button:disabled,.felix-account-rename:disabled{opacity:.45;cursor:default}
+.felix-account-button:focus-visible,.felix-account-rename:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.felix-account-name-form,.felix-account-code{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
+.felix-account-name{border:1px solid var(--line);background:var(--paper);border-radius:6px;color:var(--ink);padding:5px 8px;font-size:13px;min-width:0;max-width:100%;flex:1}
+.felix-account-name:focus{outline:none;border-color:var(--accent)}
+.felix-account-login{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:8px;font-size:12px}
+@media(max-width:640px){.felix-account-select{max-width:190px}.felix-account-name-form{width:100%}}
+
+
+.felix-shortcut{display:flex;align-items:center;flex-shrink:0;gap:0;position:relative}
+.felix-shortcut button{min-height:34px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:13px/20px var(--font-sans,Inter,system-ui,sans-serif);padding:6px 12px;border-radius:6px;cursor:pointer}
+.felix-shortcut-insert{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.felix-shortcut:has(.felix-shortcut-edit) .felix-shortcut-insert{border-radius:6px 0 0 6px}
+.felix-shortcut .felix-shortcut-edit{padding:6px 9px;display:flex;align-items:center;border-left:0;border-radius:0 6px 6px 0;color:var(--muted)}
+.felix-shortcut button:hover,.felix-dialog-actions button:hover{background:var(--surface);border-color:var(--muted)}
+.felix-shortcut button:disabled,.felix-shortcut-dialog button:disabled{opacity:.5;cursor:default}
+.felix-shortcut button:focus-visible,.felix-shortcut-dialog button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.felix-shortcut-dialog{margin:auto;width:min(520px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);padding:24px;box-shadow:0 16px 60px #0005}
+.felix-shortcut-dialog::backdrop{background:#0009}
+.felix-shortcut-dialog h2{font-size:18px;font-weight:600;margin:0 0 8px}
+.felix-shortcut-dialog p{font-size:13px;line-height:20px;color:var(--muted);margin:0 0 16px}
+.felix-shortcut-dialog label{display:block;font-size:13px;font-weight:500;margin:16px 0 6px}
+.felix-shortcut-dialog input,.felix-shortcut-dialog textarea{display:block;width:100%;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:9px 11px;font:13px/20px var(--font-sans,Inter,system-ui,sans-serif)}
+.felix-shortcut-dialog textarea{resize:vertical;min-height:100px;max-height:240px}
+.felix-shortcut-dialog input:focus,.felix-shortcut-dialog textarea:focus{outline:2px solid var(--accent);outline-offset:2px}
+.felix-shortcut-dialog .felix-shortcut-note{font-size:12px;margin-top:8px}
+.felix-shortcut-error,.felix-shortcut-dialog .felix-shortcut-error{color:var(--failed);font-size:12px}
+.felix-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:22px}
+.felix-dialog-actions button{border:1px solid var(--line);border-radius:6px;padding:7px 13px;color:var(--ink);background:var(--surface);font:13px/20px var(--font-sans,Inter,system-ui,sans-serif);cursor:pointer}
+.felix-dialog-actions .felix-shortcut-save{background:var(--accent);color:var(--accent-foreground);border-color:var(--accent)}
+.felix-agent-activity{border-top:1px solid var(--line);padding:10px 24px;font-size:12px;color:var(--muted);background:var(--paper)}
+.felix-activity-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.felix-activity-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.felix-activity-time{font-variant-numeric:tabular-nums;color:var(--ink)}
+.felix-activity-last{margin-left:auto;color:var(--subtle)}
+.felix-agent-activity p{margin:7px 0 0;line-height:18px;max-width:800px}
+.felix-mod-header{flex-wrap:wrap;gap:10px}
+.felix-mod-header>div:first-child{min-width:min(220px,100%)}
+@media(max-width:650px){.felix-mod-header>div:first-child{flex-basis:100%}.felix-mod-header>div:last-child{margin-left:0;flex-wrap:wrap}.felix-shortcut-insert{max-width:160px}.felix-agent-activity{padding:10px 16px}.felix-activity-last{margin-left:0}}
+
+
+.felix-steer-controls{flex-wrap:wrap}
+.felix-steer-button{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:var(--accent-foreground);font:13px/20px var(--font-sans,Inter,system-ui,sans-serif);cursor:pointer;transition:background .15s}
+.felix-steer-button:hover{background:var(--accent-soft)}
+.felix-steer-button:disabled,.felix-steer-controls button:disabled{opacity:.4;cursor:default}
+.felix-steer-button:focus-visible,.felix-steer-resume:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.felix-steering-queue{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:var(--surface);font-size:12px;color:var(--muted)}
+.felix-steering-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.felix-steering-heading strong{font-size:12px;font-weight:500;color:var(--ink)}
+.felix-steering-heading strong span{margin-left:8px;padding:1px 6px;border-radius:4px;background:var(--paper);font-variant-numeric:tabular-nums}
+.felix-steering-hint{margin:5px 0 7px;font-size:12px;line-height:18px}
+.felix-steering-queue ol{margin:0;padding-left:18px;max-height:110px;overflow:auto}
+.felix-steering-queue li{padding:2px 0;line-height:18px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.felix-steering-queue li{display:flex;align-items:flex-start;gap:12px;padding:6px 0}.felix-steering-queue li>span{flex:1;min-width:0}.felix-steering-queue li>.atlas-button{flex-shrink:0;min-height:26px;padding:2px 8px}
+.felix-steer-resume{border:1px solid var(--line);background:var(--paper);border-radius:5px;color:var(--ink);padding:3px 9px;font:12px/18px var(--font-sans,Inter,system-ui,sans-serif);cursor:pointer}
+.felix-steer-notice{font-size:12px;line-height:18px;margin:0 0 8px;color:var(--muted)}
+
+
+.felix-context-actions{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.felix-compact-button{border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);padding:5px 10px;font:12px/18px var(--font-sans,Inter,system-ui,sans-serif);white-space:nowrap;cursor:pointer;transition:border-color .15s}
+.felix-compact-button:hover{border-color:var(--muted)}
+.felix-compact-button:disabled{opacity:.45;cursor:default}
+.felix-compact-button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.felix-compact-notice{margin:0 0 8px;font-size:12px;line-height:18px;color:var(--muted)}
+
+
+/* Felix toolbar: scoped controls and read-only status, using the app's theme. */
+.felix-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 20px;margin-bottom:12px;min-width:0}
+.felix-toolbar-controls,.felix-settings-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;max-width:100%}
+.felix-speed-usage{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;max-width:100%}
+.felix-control{position:relative;display:inline-flex;align-items:center;min-width:0;max-width:100%}
+.felix-select,.felix-connect{appearance:none;min-width:0;max-width:100%;min-height:34px;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:6px 30px 6px 11px;color:var(--ink);font-family:var(--font-sans,Inter,system-ui,sans-serif);font-size:13px;font-weight:400;line-height:20px;letter-spacing:normal;text-transform:none;transition:border-color .15s,background-color .15s;text-overflow:ellipsis}
+.felix-select option{font:inherit;background:var(--surface);color:var(--ink)}
+.felix-model-select{max-width:280px}
+.felix-connect{padding-right:11px;cursor:pointer}
+.felix-select:hover,.felix-connect:hover{border-color:var(--muted);background:var(--raised)}
+.felix-select:focus-visible,.felix-connect:focus-visible,.felix-usage:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.felix-select:disabled{opacity:.5}
+.felix-chevron{pointer-events:none;position:absolute;right:10px;width:12px;height:12px;color:var(--muted)}
+.felix-usage{min-height:34px;max-width:100%;border-radius:6px;padding:6px 8px;font-family:var(--font-sans,Inter,system-ui,sans-serif);font-size:12px;line-height:20px;text-align:left;transition:background-color .15s,color .15s;cursor:pointer;font-variant-numeric:tabular-nums}
+.felix-usage:hover{background:var(--surface);color:var(--ink)}
+.felix-usage:disabled{opacity:.65;cursor:default}
+.felix-toolbar-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;min-width:0;font-size:12px;line-height:20px;color:var(--muted)}
+.felix-context,.felix-status-item{display:inline-flex;align-items:center;flex-wrap:wrap;gap:6px;font-variant-numeric:tabular-nums}
+.felix-status-label{color:var(--muted)}
+.felix-context-value{white-space:nowrap}
+.felix-context-track{display:inline-flex;overflow:hidden;width:44px;height:3px;margin-left:2px;border-radius:9px;background:var(--line)}
+.felix-context-track>span{height:100%;border-radius:inherit;background:currentColor}
+@media(prefers-reduced-motion:reduce){.felix-select,.felix-connect,.felix-usage{transition:none}}

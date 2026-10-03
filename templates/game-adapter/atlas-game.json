@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": 1,
+  "id": "atlas-game-example",
+  "gameId": "example",
+  "name": "Example Game",
+  "version": "0.1.0",
+  "description": "Starter manifest for a future Atlas source adapter.",
+  "gameVersions": ["1.0"]
+}

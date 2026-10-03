@@ -1,0 +1,234 @@
+{
+  "name": "Atlas",
+  "plannedInitialVersion": "0.1.0",
+  "status": "Atlas 0.2.2 native source release built and verified",
+  "createdAt": "2026-10-03",
+  "upstream": {
+    "repository": "https://github.com/lebek/modmixer",
+    "tag": "v0.10.5",
+    "commit": "f4e820be90dc9950b1c9210fd2be5a71a0ac7fc9",
+    "license": "MIT",
+    "retainFiles": [
+      "LICENSE",
+      "NOTICE"
+    ]
+  },
+  "branding": {
+    "logoSource": "assets/atlas/logo-source.png",
+    "logoSourcePreserved": true,
+    "derivedIconsPending": false
+  },
+  "portableDesign": {
+    "initialPlatform": "Windows x64",
+    "distribution": "extractable folder or ZIP",
+    "launcher": "Atlas.exe",
+    "runtimeVersions": "Atlas.exe and resources in the portable root; previous application files under backups",
+    "userData": "data/profile",
+    "projects": "data/profile/workspace/Mods",
+    "managedLibrary": "library/packs/<pack-id>/<version>",
+    "customSkills": "custom/skills",
+    "customReferences": "custom/references",
+    "customArtProfiles": "custom/art-profiles",
+    "rebuildableCache": "data/cache",
+    "backups": "backups",
+    "bootstrapBeforeProfileReads": true,
+    "projectPathsRelativeToPortableRoot": "Inherited projects resolve from the portable profile workspace; external attachment/export paths can require reselection",
+    "externalGamePaths": "rediscover or select on new computer",
+    "credentialPolicy": "OS-encrypted credentials; reauthenticate if unavailable after moving computers",
+    "readOnlyOrUnwritableRoot": "Use a writable folder; no automatic relocation"
+  },
+  "preserveFelixFeatures": [
+    "model catalog and context overrides",
+    "thinking and Fast speed settings",
+    "account usage display",
+    "two OpenAI account profiles",
+    "manual context compaction",
+    "steering and resume lifecycle fixes",
+    "slow and interrupted request recovery",
+    "clean toolbar",
+    "editable sentence shortcut",
+    "asset search, filters, pagination, compact view and file reveal",
+    "RimWorldForge reference and validation integration"
+  ],
+  "libraryDesign": {
+    "initialPacks": [
+      "rimworld-core",
+      "rimworld-forge",
+      "csharp-harmony",
+      "rimworld-art"
+    ],
+    "referenceAuthority": "installed game and dependency versions for exact APIs and asset layout",
+    "localIndexInputs": [
+      "game build",
+      "DLC set",
+      "dependency versions and content hashes"
+    ],
+    "publicDistributionExcludes": [
+      "user game assemblies",
+      "decompiled proprietary source",
+      "unlicensed example art",
+      "user projects",
+      "credentials",
+      "private notes"
+    ],
+    "retrieval": "version-filtered search and on-demand reading, not full-library prompt injection",
+    "codeContent": [
+      "XML and C# reference docs",
+      "framework examples",
+      "schemas",
+      "validation and diagnostics workflows"
+    ],
+    "imageContent": [
+      "asset briefs",
+      "style profiles",
+      "direction and body-type rules",
+      "prompt templates",
+      "licensed references",
+      "alpha, dimensions, path and variant checks"
+    ],
+    "imageExecution": "provider adapters configured separately; optional external ComfyUI installation is not bundled by default",
+    "personalLearning": "save evidence-backed local notes; user edits remain separate from managed packs",
+    "modelWeightsChanged": false,
+    "onlinePublishing": "Signed GitHub Release assets from lordfelixmotosr/atlas; restricted release redirects, daily checks, offline starter feed retained"
+  },
+  "updaterDesign": {
+    "releaseFeed": "updates",
+    "feedStatus": "Local signed feed included; live HTTPS feed not published",
+    "channels": [
+      "application",
+      "managed knowledge and skills",
+      "tools and provider adapters"
+    ],
+    "checkSchedule": "After 24 hours since the previous library check; checked each minute while running; manual Check now",
+    "ordinaryReferencePackUpdates": "download approved compatible stable packs automatically and activate while idle",
+    "executableToolUpdates": "only tested Atlas releases from pinned trusted publishers; new sources or capabilities require review",
+    "verification": [
+      "signed manifest with pinned public key",
+      "SHA-256 files",
+      "pack and app compatibility",
+      "monotonic release metadata",
+      "expiry",
+      "safe extraction and size limits",
+      "schema and regression checks",
+      "RimWorld 1.6 adapter compatibility"
+    ],
+    "activation": "Reference packs stage and atomically select versions; app updates replace backed-up files after exit",
+    "activeChats": "pin pack versions until idle or a new chat; show pending update status",
+    "customContent": "never overwrite user overrides",
+    "networkFailure": "retain current library and display last successful update",
+    "modelRequestsForUpdateChecks": false,
+    "automaticPrivateUploads": false
+  },
+  "settingsDesign": {
+    "section": "Knowledge and Skills",
+    "controls": [
+      "Check now",
+      "Update all",
+      "Auto-update",
+      "Sources",
+      "View changes",
+      "Revert",
+      "Open folder",
+      "Rebuild local index"
+    ],
+    "perPackStatus": [
+      "version",
+      "source",
+      "last successful check",
+      "supported game versions",
+      "pending or stale state"
+    ]
+  },
+  "buildPhases": [
+    "Atlas overlay implemented over verified Felix runtime; upstream source retained",
+    "Four signed code and art packs bundled; portable Forge validator",
+    "Signed local/HTTPS feed support; idle activation; cached offline operation; pack revert",
+    "Application update downloader and Windows replacement helper with rollback on replacement failure",
+    "0.2.0: native source compilation; consistent workspace/editor/chat UI; grouped and batch assets; live agent phases; startup recovery; future game adapter template",
+    "0.2.1: neutral charcoal UI, Atlas mod metadata, preserved legacy metadata and corrected code references",
+    "0.2.2: bulk ModMixer import; steering cancellation; modification reports and publication/update comparisons; signed GitHub updates"
+  ],
+  "acceptanceChecks": [
+    "launch from a path with spaces and move to a different drive",
+    "no ModMixer profile reads or writes during Atlas startup",
+    "new-PC missing credentials and external game paths handled clearly",
+    "offline startup uses installed packs",
+    "preserved Felix features tested in source build",
+    "corrupt, incompatible, expired or escaping packs rejected",
+    "interrupted update retains last working version",
+    "rollback restores compatible app and data versions",
+    "custom skills survive managed updates",
+    "local game changes invalidate relevant indexes",
+    "image validation reports static checks separately from in-game visual evidence"
+  ],
+  "version": "0.2.2",
+  "supportedGames": [
+    "rimworld"
+  ],
+  "implementation": {
+    "runtime": "Atlas TypeScript/React application compiled from source; Electron, native bindings, connectors and public tools reused from an Atlas portable runtime",
+    "baseline": "scripts/atlas/inputs/runtime-baseline.json",
+    "sources": "src, templates/game-adapter",
+    "windows": "x64",
+    "newGames": "Versioned source adapter interface and starter template; local manifests are informational until a reviewed adapter is compiled; RimWorld only",
+    "applicationRollback": "Verified application replacement with backups; startup window/API health check and failed-startup rollback; private data retained; no data migrations",
+    "portableTools": [
+      "Git Bash 2.55.0.windows.2 public runtime",
+      "Python 3.12 runtime",
+      "RimWorldForge"
+    ]
+  },
+  "acceptanceResults": {
+    "pending": [],
+    "passed": [
+      "real Electron first-run rendering and library IPC",
+      "portable profile/cache paths",
+      "four signed starter packs",
+      "stock SQLite, C# grammar, ripgrep and ILSpy smoke",
+      "corrupt and expired release rejection",
+      "offline cached packs",
+      "managed-file tampering exclusion",
+      "busy activation and pack revert",
+      "Windows ZIP path rejection and locked-file rollback",
+      "real Electron startup after moving folder with spaces",
+      "portable Bash and rebased shell settings",
+      "stag Windows EXE icon verified",
+      "No data, custom, library or backup folders in the clean release staging tree",
+      "real Electron reference-viewer window opened successfully",
+      "14 automated tests passed",
+      "Both release ZIPs passed CRC checks and contain the matching ASAR/executable receipt",
+      "Actual application ZIP passed Windows updater validation for all 33125 files",
+      "Atlas and Felix executable/package metadata; visible UI branding scan",
+      "16 automated tests passed (junction test rerun with Windows fixture permissions)",
+      "Real Electron 0.1.1 startup and read-only reference window",
+      "OpenAI and Claude local callback previews visually checked",
+      "0.2.0 source type checking and 27 automated tests passed",
+      "Native 0.2.0 Electron first-run, portable paths, four signed packs, library IPC and reference viewer",
+      "Synthetic 432-slot workspace UI verified: grouped variants, bulk preview, editor save and unsaved draft preservation",
+      "0.2.0 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "Production 0.2.0 renderer/API startup health receipt confirmed in isolated portable staging",
+      "Actual 0.2.0 application ZIP accepted by Windows updater: 33129 files",
+      "0.2.1 source type checking and 31 automated tests passed",
+      "Native 0.2.1 Electron first-run, portable paths, four signed packs, library IPC and reference viewer",
+      "0.2.1 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.1 Windows updater validated the actual 33130-file application ZIP",
+      "0.2.1 neutral UI visually checked; new .atlas metadata and intact legacy rename verified",
+      "0.2.2 source type checking and 57 automated tests passed",
+      "Native 0.2.2 Electron rendering, portable paths, four signed packs, library IPC, reference viewer, synthetic bulk import, repeat-import detection, and modification reports; real mods scanned read-only",
+      "0.2.2 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+    ]
+  },
+  "release": {
+    "portable": {
+      "path": "Atlas-0.2.2-win-x64-portable.zip",
+      "size": 400826715,
+      "sha256": "256d4ae582f97a4969bed9f1112b5501316cfdc91d4d1a1299b36550ccc82cea"
+    },
+    "application-update": {
+      "path": "Atlas-0.2.2-win-x64-application-update.zip",
+      "size": 400465320,
+      "sha256": "10b55f098504f5470d46002534aa81c0d3e5c531bdecb473989e5730270a33bf"
+    }
+  },
+  "repository": "https://github.com/lordfelixmotosr/atlas"
+}

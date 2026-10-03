@@ -1,0 +1,19 @@
+import type {GameAdapter} from '../adapters/types';
+import {descriptor} from './descriptor';
+const pending=()=>{throw new Error('Implement this game adapter before registering it.');};
+// Implement every member with the exact types in GameAdapter.
+export const adapter:GameAdapter={
+ def:descriptor,
+ setup:{getStatus:pending,checkRequirements:pending,rebuild:pending},
+ index:{ensureAtStartup:pending,ensureForSession:pending,symbolDbReady:pending},
+ toolText:{testCycle:'Build, deploy and test the active project in this game.'},
+ testCycleParams: /* TypeBox schema for game-specific test settings */ null as never,
+ isPlaceholderMod:pending,
+ readModMetadata:pending,
+ writeModMetadata:pending,
+ createPlaceholder:pending,
+ buildSystemPrompt:pending,
+ researchTools:pending,
+ build:pending,
+ test:pending,
+};

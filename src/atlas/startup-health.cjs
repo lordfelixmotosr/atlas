@@ -1,0 +1,5 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path');
+function readRecovery(root){try{return JSON.parse(fs.readFileSync(path.join(root,'data/updates/recovery-status.json'),'utf8'))}catch{return null}}
+function monitor(app,getWindow){const root=process.env.ATLAS_ROOT,request=path.join(root,'data/updates/pending-startup.json');if(!fs.existsSync(request))return;let pending;try{pending=JSON.parse(fs.readFileSync(request,'utf8'));if(pending.version!==app.getVersion())return}catch{return}let attempts=0;const timer=setInterval(async()=>{if(++attempts>60){clearInterval(timer);return}const win=getWindow();if(!win||win.isDestroyed())return;try{const version=await win.webContents.executeJavaScript('document.getElementById("root")?.children.length && window.modmixer?.getAppVersion()');if(version!==pending.version)return;const file=path.join(root,'data/updates/startup-healthy.json'),tmp=file+'.'+process.pid+'.tmp';fs.writeFileSync(tmp,JSON.stringify({version,pid:process.pid,token:pending.token,checkedAt:new Date().toISOString()}));fs.renameSync(tmp,file);clearInterval(timer)}catch{}},1000);timer.unref();}
+module.exports={readRecovery,monitor};

@@ -1,0 +1,446 @@
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import { invoke, on } from './preload/typed-ipc.js';
+
+// Re-export envelope types so renderer modules can keep importing them
+// from `./preload`.
+export type {
+  AgentEventEnvelope,
+  AssetsChangedEnvelope,
+  CommunityRulesInfo,
+  EnableWithDepsResult,
+  HydratedConversation,
+  ModChangedEnvelope,
+  RegistryEnvelope,
+  ScopeUpgradedEnvelope,
+} from './preload/typed-ipc.js';
+
+const api = {
+  modChanges:(folder:string,comparison:'latest'|'published'|'updated'='latest'):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:changes',folder,comparison),
+  markModUpdated:(folder:string,note:string):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:mark-updated',folder,note),
+  modMixerImportPlan:(choose=false):Promise<import('./atlas/modmixer-import').ModMixerImportPlan|null>=>ipcRenderer.invoke('atlas:mods:import-plan',choose),
+  modMixerImportApply:(token:string,selected:string[]):Promise<import('./atlas/modmixer-import').ModMixerImportResult>=>ipcRenderer.invoke('atlas:mods:import-apply',token,selected),
+  modMixerImportCancel:(token:string):Promise<void>=>ipcRenderer.invoke('atlas:mods:import-cancel',token),
+  cancelSteering:(id:string,ids:string[])=>ipcRenderer.invoke('atlas:agent:cancel-steering',id,ids),
+  onModMixerImportProgress:(fn:(state:import('./atlas/modmixer-import').ModMixerImportProgress)=>void)=>{const cb=(_e:any,state:import('./atlas/modmixer-import').ModMixerImportProgress)=>fn(state);ipcRenderer.on('atlas:mods:import-progress',cb);return()=>ipcRenderer.removeListener('atlas:mods:import-progress',cb)},
+  atlasLibraryStatus:()=>ipcRenderer.invoke('atlas:library:status'),
+  atlasLibraryConfigure:(patch:any)=>ipcRenderer.invoke('atlas:library:configure',patch),
+  atlasLibraryCheck:()=>ipcRenderer.invoke('atlas:library:check'),atlasLibraryUpdate:()=>ipcRenderer.invoke('atlas:library:update'),
+  atlasLibraryRevert:(id:string)=>ipcRenderer.invoke('atlas:library:revert',id),atlasLibrarySearch:(query:any)=>ipcRenderer.invoke('atlas:library:search',query),
+  atlasLibraryOpenReference:(id:string,file:string)=>ipcRenderer.invoke('atlas:library:open-reference',id,file),atlasLibraryReveal:(id?:string)=>ipcRenderer.invoke('atlas:library:reveal',id),
+  atlasLibraryCustom:()=>ipcRenderer.invoke('atlas:library:custom'),atlasLibraryChooseSource:()=>ipcRenderer.invoke('atlas:library:choose-source'),atlasLibraryRebuild:()=>ipcRenderer.invoke('atlas:library:rebuild'),
+  onAtlasLibraryState:(fn:any)=>{const cb=(_e:any,x:any)=>fn(x);ipcRenderer.on('atlas:library:state',cb);return()=>ipcRenderer.removeListener('atlas:library:state',cb)},
+  atlasAppStatus:()=>ipcRenderer.invoke('atlas:app:status'),atlasAppCheck:()=>ipcRenderer.invoke('atlas:app:check'),atlasAppDownload:()=>ipcRenderer.invoke('atlas:app:download'),atlasAppInstall:()=>ipcRenderer.invoke('atlas:app:install'),
+  onAtlasAppState:(fn:any)=>{const cb=(_e:any,x:any)=>fn(x);ipcRenderer.on('atlas:app:state',cb);return()=>ipcRenderer.removeListener('atlas:app:state',cb)},
+  setOpenAISpeed:(mode:string)=>ipcRenderer.invoke('modmixer:settings:set-openai-speed',mode),
+  onOpenAISpeedChanged:(fn:any)=>{const cb=(_e:any,x:any)=>fn(x);ipcRenderer.on('modmixer:settings:speed',cb);return()=>ipcRenderer.removeListener('modmixer:settings:speed',cb)},
+  setSentenceShortcut:(value:any)=>ipcRenderer.invoke('modmixer:settings:set-sentence-shortcut',value),
+  onSentenceShortcutChanged:(fn:any)=>{const cb=(_e:any,x:any)=>fn(x);ipcRenderer.on('modmixer:settings:sentence-shortcut',cb);return()=>ipcRenderer.removeListener('modmixer:settings:sentence-shortcut',cb)},
+  getOpenAIUsage:(force=false)=>ipcRenderer.invoke('modmixer:usage:openai',force),
+  getOpenAIAccounts:()=>ipcRenderer.invoke('modmixer:accounts:openai:list'),switchOpenAIAccount:(id:string)=>ipcRenderer.invoke('modmixer:accounts:openai:switch',id),renameOpenAIAccount:(id:string,label:string)=>ipcRenderer.invoke('modmixer:accounts:openai:rename',id,label),removeOpenAIAccount:(id:string)=>ipcRenderer.invoke('modmixer:accounts:openai:remove',id),loginOpenAIAccount:(id?:string,label?:string)=>ipcRenderer.invoke('modmixer:accounts:openai:login',id,label),
+  steer:(id:string,text:string,files?:any[])=>ipcRenderer.invoke('modmixer:agent:steer',id,text,files),compactContext:(id:string)=>ipcRenderer.invoke('modmixer:agent:compact',id),getAgentStatus:(id:string,includeMessages=false)=>ipcRenderer.invoke('modmixer:agent:status',id,includeMessages),
+  revealAsset:(folder:string,file:string)=>ipcRenderer.invoke('atlas:assets:reveal',folder,file),
+  projectFiles:(folder:string)=>ipcRenderer.invoke('atlas:files:list',folder),projectRead:(folder:string,file:string)=>ipcRenderer.invoke('atlas:files:read',folder,file),projectSave:(folder:string,file:string,text:string,hash:string)=>ipcRenderer.invoke('atlas:files:save',folder,file,text,hash),projectReveal:(folder:string,file?:string)=>ipcRenderer.invoke('atlas:files:reveal',folder,file),
+  assetBulkPlan:(folder:string,paths:string[])=>ipcRenderer.invoke('atlas:assets:bulk-plan',folder,paths),assetBulkApply:(token:string)=>ipcRenderer.invoke('atlas:assets:bulk-apply',token),
+  adapterStatus:()=>ipcRenderer.invoke('atlas:adapters:status'),adapterReveal:()=>ipcRenderer.invoke('atlas:adapters:reveal'),
+
+  // App
+  getAppVersion: () => invoke('modmixer:app:version'),
+
+  // Updater
+  getUpdaterState: () => invoke('modmixer:updater:get-state'),
+  checkForUpdates: () => invoke('modmixer:updater:check'),
+  quitAndInstallUpdate: () => invoke('modmixer:updater:quit-and-install'),
+  onUpdaterState: (handler: (state: import('./agent/updater').UpdaterState) => void) =>
+    on('modmixer:updater:state', handler),
+
+  // Quit confirmation: main defers the window close to us so we can warn the
+  // user when an agent turn is in flight, then call back to let it proceed.
+  onQuitRequested: (handler: () => void) => on('modmixer:quit:requested', handler),
+  confirmQuit: () => ipcRenderer.send('modmixer:quit:confirm'),
+
+  // Consent
+  getConsentStatus: () => invoke('modmixer:consent:get'),
+  acceptConsent: (options?: { analyticsOptIn?: boolean }) =>
+    invoke('modmixer:consent:accept', options),
+
+  // Onboarding
+  getOnboardingStatus: () => invoke('modmixer:onboarding:get-status'),
+  completeOnboarding: () => invoke('modmixer:onboarding:complete'),
+  resetOnboarding: () => invoke('modmixer:onboarding:reset'),
+  detectEnv: () => invoke('modmixer:env:detect'),
+  browseRimWorldInstall: () => invoke('modmixer:env:browse-rimworld-install'),
+  clearRimWorldInstallOverride: () =>
+    invoke('modmixer:env:clear-rimworld-install-override'),
+
+  // Agent
+  send: (
+    conversationId: string,
+    text: string,
+    attachments?: import('./agent/attachments/types').PreparedAttachment[],
+  ) => invoke('modmixer:agent:send', conversationId, text, attachments),
+  interrupt: (conversationId: string) =>
+    invoke('modmixer:agent:interrupt', conversationId),
+  retry: (conversationId: string) =>
+    invoke('modmixer:agent:retry', conversationId),
+  closeConversation: (conversationId: string) =>
+    invoke('modmixer:agent:close', conversationId),
+  releaseIdleConversation: (conversationId: string) =>
+    invoke('modmixer:agent:release-idle', conversationId),
+  getContextUsage: (conversationId: string) =>
+    invoke('modmixer:agent:get-context-usage', conversationId),
+  onEvent: (handler: (env: import('./preload/typed-ipc').AgentEventEnvelope) => void) =>
+    on('modmixer:agent:event', handler),
+  // Demo-video harness only — rejects unless launched with MODMIXER_DEMO=1.
+  demoComplete: (args: { modelId: string; system: string; user: string }) =>
+    invoke('modmixer:demo:complete', args),
+  onScopeUpgraded: (
+    handler: (env: import('./preload/typed-ipc').ScopeUpgradedEnvelope) => void,
+  ) => on('modmixer:agent:scope-upgraded', handler),
+
+  // Settings
+  getSettings: () => invoke('modmixer:settings:get'),
+  setModel: (selection: import('./agent/settings').ModelSelection) =>
+    invoke('modmixer:settings:set-model', selection),
+  setDefaultAuthor: (author: string) =>
+    invoke('modmixer:settings:set-default-author', author),
+  setDefaultModLicense: (license: string) =>
+    invoke('modmixer:settings:set-default-mod-license', license),
+  setAnalyticsOptIn: (optIn: boolean) =>
+    invoke('modmixer:settings:set-analytics-opt-in', optIn),
+  setTheme: (theme: import('./agent/settings').ThemePreference) =>
+    invoke('modmixer:settings:set-theme', theme),
+  setThinkingLevel: (level: import('./lib/thinking-levels.js').MixerThinkingLevel) =>
+    invoke('modmixer:settings:set-thinking-level', level),
+  setMultiChat: (enabled: boolean) =>
+    invoke('modmixer:settings:set-multi-chat', enabled),
+  getGameSetupSnapshot: (game: import('./agent/games/types').GameId) =>
+    invoke('modmixer:game-setup:snapshot', game),
+  checkGameRequirements: (game: import('./agent/games/types').GameId) =>
+    invoke('modmixer:game-setup:requirements', game),
+  rebuildGameSetup: (
+    game: import('./agent/games/types').GameId,
+    opts?: { force?: boolean },
+  ) => invoke('modmixer:game-setup:rebuild', game, opts),
+  onGameSetupProgress: (
+    handler: (
+      game: import('./agent/games/types').GameId,
+      event: import('./agent/index/progress').IndexProgressEvent,
+    ) => void,
+  ) =>
+    on('modmixer:game-setup:progress', ({ game, event }) =>
+      handler(game, event),
+    ),
+  setSelectedGame: (game: import('./agent/games/types').GameId) =>
+    invoke('modmixer:settings:set-selected-game', game),
+  setAutoLaunch: (enabled: boolean) =>
+    invoke('modmixer:settings:set-auto-launch', enabled),
+  setDangerouslySkipPermissions: (enabled: boolean) =>
+    invoke('modmixer:settings:set-dangerously-skip-permissions', enabled),
+  setCommunityLore: (enabled: boolean) =>
+    invoke('modmixer:settings:set-community-lore', enabled),
+  listModels: () => invoke('modmixer:models:list'),
+
+  // Conversations
+  listConversations: () => invoke('modmixer:conversations:list'),
+  listConversationsForMod: (folder: string) =>
+    invoke('modmixer:conversations:list-for-mod', folder),
+  archiveConversation: (id: string) =>
+    invoke('modmixer:conversations:archive', id),
+  unarchiveConversation: (id: string) =>
+    invoke('modmixer:conversations:unarchive', id),
+  setActiveConversationForMod: (folder: string, id: string) =>
+    invoke('modmixer:conversations:set-active-for-mod', folder, id),
+  createConversation: (
+    scope: import('./agent/conversations').ConversationScope,
+    title?: string,
+  ) => invoke('modmixer:conversations:create', scope, title),
+  deleteConversation: (id: string) => invoke('modmixer:conversations:delete', id),
+  setConversationModel: (
+    conversationId: string,
+    selection: import('./agent/settings').ModelSelection,
+  ) => invoke('modmixer:conversations:set-model', conversationId, selection),
+  setConversationThinkingLevel: (
+    conversationId: string,
+    level: import('./lib/thinking-levels.js').MixerThinkingLevel,
+  ) =>
+    invoke('modmixer:conversations:set-thinking-level', conversationId, level),
+  /**
+   * Resolve the "active chat" for a mod to a Conversation (creating one if
+   * none exists) — fast, no session construction. Pair with
+   * openConversationSession to load the transcript in the background.
+   */
+  resolveConversationForMod: (folder: string) =>
+    invoke('modmixer:conversations:resolve-for-mod', folder),
+  /** Open a conversation's agent session and return its hydrated transcript. */
+  openConversationSession: (conversationId: string) =>
+    invoke('modmixer:conversations:open-session', conversationId),
+  /**
+   * Replace the active chat for a mod with a fresh one. The previous chat's
+   * session file is left on disk.
+   */
+  startFreshChatForMod: (folder: string) =>
+    invoke('modmixer:conversations:start-fresh-for-mod', folder),
+  /**
+   * Copy this conversation's raw session transcript (.jsonl) to the clipboard
+   * for troubleshooting. Returns { ok, bytes } so the caller can confirm.
+   */
+  copySessionLog: (conversationId: string) =>
+    invoke('modmixer:conversations:copy-session-log', conversationId),
+
+  // Mods (workspace)
+  listWorkspaceMods: () => invoke('modmixer:mods:list-workspace'),
+  syncModToGame: (folder: string) => invoke('modmixer:mods:sync-to-game', folder),
+  unsyncModFromGame: (folder: string) =>
+    invoke('modmixer:mods:unsync-from-game', folder),
+  deleteMod: (folder: string) => invoke('modmixer:mods:delete', folder),
+  importModFromFolder: () => invoke('modmixer:mods:import-from-folder'),
+  createUntitledMod: (game?: import('./agent/games/types').GameId) =>
+    invoke('modmixer:mods:create-untitled', game),
+  readModAbout: (folder: string) => invoke('modmixer:mods:read-about', folder),
+  readSchematic: (folder: string) => invoke('modmixer:mods:read-schematic', folder),
+  scanModDefs: (folder: string) => invoke('modmixer:mods:scan-defs', folder),
+  writeModAbout: (
+    folder: string,
+    patch: Partial<import('./agent/workspace').AboutMetadata>,
+  ) => invoke('modmixer:mods:write-about', folder, patch),
+  setModPrefs: (
+    folder: string,
+    patch: { pinned?: boolean; archived?: boolean },
+  ) => invoke('modmixer:mods:set-prefs', folder, patch),
+  onModChanged: (
+    handler: (env: import('./preload/typed-ipc').ModChangedEnvelope) => void,
+  ) => on('modmixer:mod:changed', handler),
+  getWorkspacePaths: () => invoke('modmixer:workspace:paths'),
+  enableModInGame: (folder: string) =>
+    invoke('modmixer:rimworld:enable-mod', folder),
+  disableModInGame: (folder: string) =>
+    invoke('modmixer:rimworld:disable-mod', folder),
+  launchRimWorld: () => invoke('modmixer:rimworld:launch'),
+  isRimWorldRunning: () => invoke('modmixer:rimworld:is-running'),
+  quitRimWorld: () => invoke('modmixer:rimworld:quit'),
+
+  // Assets
+  scanAssets: (folder: string) => invoke('modmixer:assets:scan', folder),
+  addAsset: (folder: string, destRelPath: string, sourceAbsPath: string) =>
+    invoke('modmixer:assets:add', folder, destRelPath, sourceAbsPath),
+  addSlotFile: (
+    folder: string,
+    slot: import('./agent/assets/types').AssetSlotRef,
+    sourceAbsPath: string,
+  ) => invoke('modmixer:assets:add-slot', folder, slot, sourceAbsPath),
+  setPreviewImage: (folder: string, sourceAbsPath: string) =>
+    invoke('modmixer:assets:set-preview-image', folder, sourceAbsPath),
+  removeAsset: (folder: string, relPath: string) =>
+    invoke('modmixer:assets:remove', folder, relPath),
+  pickAssetFile: (kind: import('./agent/assets/types').AssetKind) =>
+    invoke('modmixer:assets:pick-file', kind),
+
+  // Chat attachments
+  prepareAttachments: (
+    inputs: import('./agent/attachments/types').AttachmentInput[],
+  ) => invoke('modmixer:attachments:prepare', inputs),
+  pickAttachments: () => invoke('modmixer:attachments:pick'),
+  pickPreviewBg: () => invoke('modmixer:assets:pick-preview-bg'),
+  setPreviewBg: (folder: string, sourceAbsPath: string) =>
+    invoke('modmixer:assets:set-preview-bg', folder, sourceAbsPath),
+  clearPreviewBg: (folder: string) =>
+    invoke('modmixer:assets:clear-preview-bg', folder),
+  getPreviewBg: (folder: string) =>
+    invoke('modmixer:assets:get-preview-bg', folder),
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  readAssetDataUrl: (folder: string, relPath: string) =>
+    invoke('modmixer:assets:read-data-url', folder, relPath),
+  onAssetsChanged: (
+    handler: (env: import('./preload/typed-ipc').AssetsChangedEnvelope) => void,
+  ) => on('modmixer:assets:changed', handler),
+
+  // Live sessions (in-game prompting)
+  launchLiveSession: () => invoke('modmixer:live:launch'),
+  getLiveState: () => invoke('modmixer:live:get-state'),
+  onLiveState: (
+    handler: (state: import('./agent/live/protocol').LiveConnectionState) => void,
+  ) => on('modmixer:live:state', handler),
+
+  // Monitor (in-game bridge)
+  getMonitorState: () => invoke('modmixer:monitor:get-state'),
+  getMonitorSnapshot: () => invoke('modmixer:monitor:get-snapshot'),
+  onMonitorState: (
+    handler: (state: import('./agent/monitor/protocol').MonitorConnectionState) => void,
+  ) => on('modmixer:monitor:state', handler),
+  onMonitorMessage: (
+    handler: (msg: import('./agent/monitor/protocol').BridgeMessage) => void,
+  ) => on('modmixer:monitor:message', handler),
+
+  // OAuth
+  listOAuthLinks: () => invoke('modmixer:oauth:list'),
+  loginOAuth: (providerId: string) => invoke('modmixer:oauth:login', providerId),
+  cancelOAuthLogin: () => invoke('modmixer:oauth:cancel-login'),
+  provideOAuthCode: (providerId: string, value: string) =>
+    invoke('modmixer:oauth:provide-code', providerId, value),
+  logoutOAuth: (providerId: string) => invoke('modmixer:oauth:logout', providerId),
+  onOAuthEvent: (
+    handler: (event: import('./agent/agent-host').OAuthEvent) => void,
+  ) => on('modmixer:oauth:event', handler),
+
+  // OpenRouter
+  getOpenRouterConfig: () => invoke('modmixer:openrouter:get-config'),
+  setOpenRouterApiKey: (key: string | null) =>
+    invoke('modmixer:openrouter:set-api-key', key),
+  addOpenRouterModel: (slug: string) =>
+    invoke('modmixer:openrouter:add-model', slug),
+  removeOpenRouterModel: (slug: string) =>
+    invoke('modmixer:openrouter:remove-model', slug),
+  getOpenRouterCredits: () => invoke('modmixer:openrouter:get-credits'),
+
+  // Local OpenAI-compatible providers
+  listLocalProviders: () => invoke('modmixer:local:list'),
+  addLocalProvider: (input: {
+    label: string;
+    baseUrl: string;
+    apiKey?: string | null;
+  }) => invoke('modmixer:local:add', input),
+  updateLocalProvider: (
+    id: string,
+    patch: { label?: string; baseUrl?: string; apiKey?: string | null },
+  ) => invoke('modmixer:local:update', id, patch),
+  removeLocalProvider: (id: string) => invoke('modmixer:local:remove', id),
+  addLocalModel: (id: string, modelId: string) =>
+    invoke('modmixer:local:add-model', id, modelId),
+  removeLocalModel: (id: string, modelId: string) =>
+    invoke('modmixer:local:remove-model', id, modelId),
+  discoverLocalModels: (baseUrl: string) =>
+    invoke('modmixer:local:discover', baseUrl),
+
+  // Shell
+  openExternal: (url: string) => invoke('modmixer:shell:open-external', url),
+  openFolder: (folder: string) => invoke('modmixer:shell:open-folder', folder),
+
+  // Lore (power-user reveal)
+  revealLoreDir: () => invoke('modmixer:lore:reveal'),
+
+  // Power-user config (~/.modmixer): skills folder + global instructions
+  revealSkillsDir: () => invoke('modmixer:skills:reveal'),
+  editGlobalInstructions: () => invoke('modmixer:instructions:edit'),
+
+  // Confirmation gate (sensitive agent actions)
+  onConfirmRequest: (
+    handler: (req: import('./agent/security/confirmation-gate').ConfirmationRequest) => void,
+  ) => on('modmixer:confirm:request', handler),
+  resolveConfirm: (id: string, approved: boolean, alwaysAllowForSession = false) => {
+    ipcRenderer.send('modmixer:confirm:resolve', {
+      id,
+      approved,
+      alwaysAllowForSession,
+    });
+  },
+
+  // Workshop
+  publishToWorkshop: (
+    folder: string,
+    visibility?: number,
+    changeNote?: string,
+    trackOnLeaderboard?: boolean,
+  ) =>
+    invoke(
+      'modmixer:workshop:publish',
+      folder,
+      visibility,
+      changeNote,
+      trackOnLeaderboard,
+    ),
+  unlinkWorkshopItem: (folder: string) =>
+    invoke('modmixer:workshop:unlink', folder),
+  linkWorkshopItem: (folder: string, workshopId: string) =>
+    invoke('modmixer:workshop:link', folder, workshopId),
+  onWorkshopProgress: (
+    handler: (event: import('./agent/rimworld/workshop').PublishProgressEvent) => void,
+  ) => on('modmixer:workshop:progress', handler),
+
+  // Modrinth (Minecraft publishing)
+  getModrinthToken: () => invoke('modmixer:modrinth:get-token'),
+  hasModrinthToken: () => invoke('modmixer:modrinth:has-token'),
+  setModrinthToken: (token: string) =>
+    invoke('modmixer:modrinth:set-token', token),
+  // meta is only present on a first publish (project creation); updates pass
+  // null — project metadata is owned on modrinth.com afterwards.
+  publishToModrinth: (
+    folder: string,
+    meta: import('./agent/minecraft/modrinth').ModrinthPublishMeta | null,
+    version: import('./agent/minecraft/modrinth').ModrinthVersionMeta,
+  ) => invoke('modmixer:modrinth:publish', folder, meta, version),
+  onModrinthProgress: (
+    handler: (
+      event: import('./agent/minecraft/modrinth').ModrinthPublishProgressEvent & {
+        folder: string;
+      },
+    ) => void,
+  ) => on('modmixer:modrinth:progress', handler),
+
+  // Mod registry — full system view (DLCs + local + workshop + workspace).
+  getRegistry: () => invoke('modmixer:registry:get'),
+  refreshRegistry: () => invoke('modmixer:registry:refresh'),
+  setActiveMods: (packageIds: string[]) =>
+    invoke('modmixer:registry:set-active', packageIds),
+  autosortMods: () => invoke('modmixer:registry:autosort'),
+  applyAutosort: () => invoke('modmixer:registry:apply-autosort'),
+  enableWithDeps: (packageId: string) =>
+    invoke('modmixer:registry:enable-with-deps', packageId),
+  getCommunityRulesInfo: () => invoke('modmixer:registry:community-rules'),
+  refreshCommunityRules: () => invoke('modmixer:registry:refresh-community-rules'),
+  onRegistryChanged: (
+    handler: (env: import('./preload/typed-ipc').RegistryEnvelope) => void,
+  ) => on('modmixer:registry:changed', handler),
+
+  // Saves (snapshots) — rollback for the active mod's history.
+  listSnapshots: (folder: string) =>
+    invoke('modmixer:snapshots:list', folder),
+  saveSnapshot: (folder: string, label: string | null) =>
+    invoke('modmixer:snapshots:save', folder, label),
+  renameSnapshot: (folder: string, sha: string, label: string | null) =>
+    invoke('modmixer:snapshots:rename', folder, sha, label),
+  deleteSnapshot: (folder: string, sha: string) =>
+    invoke('modmixer:snapshots:delete', folder, sha),
+  restoreSnapshot: (folder: string, sha: string) =>
+    invoke('modmixer:snapshots:restore', folder, sha),
+  onSnapshotsChanged: (
+    handler: (event: import('./agent/snapshots').SnapshotsChangedEvent) => void,
+  ) => on('modmixer:snapshots:changed', handler),
+  getSnapshotUsage: () => invoke('modmixer:snapshots:usage'),
+  cleanupSnapshots: (folders: string[]) =>
+    invoke('modmixer:snapshots:cleanup', folders),
+  onSnapshotCleanupProgress: (
+    handler: (
+      event: import('./agent/snapshots').SnapshotCleanupProgressEvent,
+    ) => void,
+  ) => on('modmixer:snapshots:cleanup-progress', handler),
+  dismissStorageBanner: (totalBytes: number) =>
+    invoke('modmixer:settings:dismiss-storage-banner', totalBytes),
+
+  // Sessions — snapshot-restore for test mode and fix mode.
+  getActiveSession: () => invoke('modmixer:session:get-active'),
+  startTestSession: (args: { folder: string; packageId: string }) =>
+    invoke('modmixer:session:start-test', args),
+  startFixSession: () => invoke('modmixer:session:start-fix'),
+  applySession: () => invoke('modmixer:session:apply'),
+  revertSession: () => invoke('modmixer:session:revert'),
+  getSessionDiff: () => invoke('modmixer:session:diff'),
+  onSessionChanged: (
+    handler: (session: import('./agent/registry').ActiveSession | null) => void,
+  ) => on('modmixer:session:changed', handler),
+
+  // Workspace mod deps — write-side helper for the UI dep editor.
+  writeModDeps: (
+    folder: string,
+    deps: {
+      modDependencies: import('./agent/registry').ModDependency[];
+      loadAfter: string[];
+      loadBefore: string[];
+      incompatibleWith: string[];
+    },
+  ) => invoke('modmixer:mods:write-deps', folder, deps),
+};
+
+contextBridge.exposeInMainWorld('modmixer', api);
+
+export type ModMixerApi = typeof api;
+

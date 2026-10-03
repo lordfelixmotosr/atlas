@@ -1,0 +1,35 @@
+import fs from 'node:fs';import path from 'node:path';import cp from 'node:child_process';import {createRequire,builtinModules} from 'node:module';import {fileURLToPath} from 'node:url';
+import {build} from '../../build-tools/native/node_modules/vite/dist/node/index.js';import react from '../../build-tools/native/node_modules/@vitejs/plugin-react/dist/index.js';import tailwind from '../../build-tools/native/node_modules/@tailwindcss/vite/dist/index.mjs';
+const require=createRequire(import.meta.url),asar=require('./asar.cjs'),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');process.chdir(root);
+const version=JSON.parse(fs.readFileSync('package.json','utf8')).version,buildRoot=path.join(root,'build-check/native'),output=path.join(root,'dist/Atlas-'+version),base=path.resolve(process.env.ATLAS_RUNTIME_BASE||path.join(root,'dist/Atlas-0.1.0-release'));
+const defines={__SENTRY_DSN__:'""',__POSTHOG_KEY__:'""',__POSTHOG_HOST__:'""',MAIN_WINDOW_VITE_DEV_SERVER_URL:'undefined',MAIN_WINDOW_VITE_NAME:'"main_window"'};
+const external=[...builtinModules,'electron','steamworks.js',/^@earendil-works\//,'typebox','better-sqlite3','web-tree-sitter','@resvg/resvg-wasm','@silvia-odwyer/photon-node','@vscode/ripgrep',/^node:/];
+await build({configFile:false,root,define:defines,build:{emptyOutDir:true,outDir:path.join(buildRoot,'build'),minify:false,target:'node22',lib:{entry:{main:'src/main.ts', 'workshop-publish-host':'src/agent/workshop-publish-host.ts'},formats:['cjs'],fileName:(_f,n)=>n+'.js'},rollupOptions:{external}}});
+await build({configFile:false,root,build:{emptyOutDir:false,outDir:path.join(buildRoot,'build'),minify:false,target:'node22',lib:{entry:'src/preload.ts',formats:['cjs'],fileName:()=> 'preload.js'},rollupOptions:{external:['electron',/^node:/],output:{inlineDynamicImports:true}}}});
+await build({configFile:false,root,base:'./',define:defines,plugins:[react(),tailwind()],resolve:{alias:{'@':path.join(root,'src')}},build:{outDir:path.join(buildRoot,'renderer/main_window'),emptyOutDir:true,target:'chrome134'}});
+if(process.argv.includes('--compile-only'))process.exit(0);
+if(base.toLowerCase()===output.toLowerCase()||base.toLowerCase().startsWith(output.toLowerCase()+path.sep)||output.toLowerCase().startsWith(base.toLowerCase()+path.sep))throw new Error('Use a separate extracted Atlas runtime folder as ATLAS_RUNTIME_BASE.');
+for(const required of ['Atlas.exe','resources/app.asar','resources/atlas/Atlas.ico','tools/python/python.exe'])if(!fs.existsSync(path.join(base,required)))throw new Error('Atlas runtime base is missing '+required+'. Set ATLAS_RUNTIME_BASE to an extracted portable release.');
+const basePackage=asar.read(fs.readFileSync(path.join(base,'resources/app.asar'))).files.find(f=>f.name==='package.json');
+if(!basePackage||JSON.parse(basePackage.bytes.toString()).name!=='atlas')throw new Error('The runtime base must be an Atlas portable release.');
+console.log('Staging public runtime dependencies and tools.');fs.mkdirSync(output,{recursive:true});
+try{cp.execFileSync('robocopy.exe',[base,output,'/E','/R:1','/W:1','/NFL','/NDL','/NJH','/NJS','/NP','/XJ','/MT:16','/XD',...['data','custom','library','backups'].map(x=>path.join(base,x))],{stdio:'inherit',windowsHide:true})}catch(e){if(e.status>7||e.status===null)throw e}
+const original=fs.readFileSync(path.join(output,'resources/app.asar')),parsed=asar.read(original);
+const retained=parsed.files.filter(f=>!f.name.startsWith('.vite/'));delete parsed.header.files['.vite'];parsed.files=retained;
+function addDirectory(dir,prefix){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,e.name);if(e.isDirectory())addDirectory(full,prefix+'/'+e.name);else asar.add(parsed,prefix+'/'+e.name,fs.readFileSync(full));}}
+addDirectory(buildRoot,'.vite');asar.add(parsed,'.vite/build/atlas/default-models.json',fs.readFileSync('scripts/atlas/inputs/default-models.json'));
+if(process.argv.includes('--verify-build')){const main=parsed.files.find(f=>f.name==='.vite/build/main.js');main.bytes=Buffer.from('require("./atlas/verify.cjs").init();'+main.bytes.toString());asar.add(parsed,'.vite/build/atlas/verify.cjs',fs.readFileSync('scripts/atlas/verify.cjs'));}for(const e of fs.readdirSync('src/atlas'))if(e.endsWith('.cjs')||e==='default-models.json')asar.add(parsed,'.vite/build/atlas/'+e,fs.readFileSync('src/atlas/'+e));
+const pkg={name:'atlas',productName:'Atlas',version,main:'.vite/build/main.js',author:{name:'Felix'},license:'MIT'};const existing=parsed.files.find(f=>f.name==='package.json');existing.bytes=Buffer.from(JSON.stringify(pkg));
+const archive=asar.write(parsed);fs.writeFileSync(path.join(output,'resources/app.asar'),archive);
+const exePath=path.join(output,'Atlas.exe');cp.execFileSync('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/atlas/set-icon.ps1','-ExePath',exePath,'-IconPath',path.join(output,'resources/atlas/Atlas.ico')],{stdio:'inherit',windowsHide:true});const exe=asar.patchExe(fs.readFileSync(exePath),asar.sha(asar.read(original).raw),asar.sha(asar.read(archive).raw));fs.writeFileSync(exePath,exe);
+for(const f of ['apply-update.ps1','watch-update.ps1'])fs.copyFileSync('src/atlas/'+f,path.join(output,'resources/atlas',f));for(const f of ['README-ATLAS.md','LICENSE','NOTICE'])fs.copyFileSync(f,path.join(output,f));
+fs.cpSync('templates/game-adapter',path.join(output,'resources/atlas/game-adapter-template'),{recursive:true});
+fs.copyFileSync('src/atlas/distribution.json',path.join(output,'resources/atlas/distribution.json'));
+fs.copyFileSync('src/atlas/oauth-page.mjs',path.join(output,'resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/oauth-page.js'));
+const signedSeed=path.join(root,'release-assets/seed');
+if(fs.existsSync(path.join(signedSeed,'index.atlas.json'))){
+ const library=require('../../src/atlas/library.cjs'),trust=JSON.parse(fs.readFileSync(path.join(output,'resources/atlas/trust.json'))),index=library.verifyEnvelope(fs.readFileSync(path.join(signedSeed,'index.atlas.json')),trust,Date.now(),true);
+ for(const entry of index.packs){library.safeRelative(entry.file);const bytes=fs.readFileSync(path.join(signedSeed,entry.file));if(library.sha(bytes)!==entry.sha256)throw new Error('Bundled pack checksum mismatch.');library.validatePack(library.verifyEnvelope(bytes,trust,Date.now(),true));}
+ for(const target of ['resources/atlas/seed','updates']){fs.mkdirSync(path.join(output,target),{recursive:true});for(const file of ['index.atlas.json',...index.packs.map(p=>p.file)])fs.copyFileSync(path.join(signedSeed,file),path.join(output,target,file));}
+}
+fs.writeFileSync(path.join(output,'atlas-build.json'),JSON.stringify({name:'Atlas',version,runtime:'Native Atlas TypeScript/React source build',upstream:'lebek/modmixer v0.10.5 (MIT)',archiveSha256:asar.sha(archive),exeSha256:asar.sha(exe),archiveIntegrity:true,credentialsIncluded:false,compiler:'Vite 5.4.21',buildLock:'build-tools/native/pnpm-lock.yaml'},null,2));console.log('Built '+output);

@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "mod": {
+    "name": "Pelagic Xenotype Example",
+    "packageId": "example.rimworldforge.pelagicexample",
+    "author": "YourName",
+    "supportedVersions": [
+      "1.6"
+    ],
+    "description": "Teaching example for a Biotech xenotype. Search installed GeneDef/XenotypeDef examples before selecting real gene defNames.",
+    "dependencies": [
+      {
+        "packageId": "ludeon.rimworld.biotech",
+        "displayName": "RimWorld - Biotech"
+      }
+    ]
+  },
+  "defs": [
+    {
+      "type": "XenotypeDef",
+      "file": "Pelagic/Pelagic_Xenotypes.xml",
+      "fields": {
+        "defName": "RWForge_Pelagic",
+        "label": "pelagic",
+        "description": "A placeholder xenotype plan for an aquatic-inspired human variant.",
+        "inheritable": true,
+        "genes": [
+          "ExampleGene_ReplaceAfterIndexSearch"
+        ]
+      }
+    }
+  ],
+  "assets": [
+    {
+      "id": "pelagic_icon",
+      "kind": "ui_icon",
+      "target": "Textures/Shugoki/Pelagic/PelagicIcon.png",
+      "transparent": true,
+      "canvas": [
+        128,
+        128
+      ],
+      "notes": "Simple fin/gill silhouette with strong small-size readability."
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+  <rect width="960" height="540" fill="#1d2228"/>
+  <g opacity="0.16" stroke="#b8c0c8" stroke-width="1">
+    <path d="M0 90H960M0 180H960M0 270H960M0 360H960M0 450H960"/>
+    <path d="M120 0V540M240 0V540M360 0V540M480 0V540M600 0V540M720 0V540M840 0V540"/>
+  </g>
+  <g transform="translate(480 278)" stroke="#11161a" stroke-width="14" stroke-linejoin="round">
+    <path d="M-150-105 L-65-150 L70-145 L145-90 L170 35 L118 125 L40 150 L-72 138 L-155 70 Z" fill="#c8c2ad"/>
+    <path d="M-66-84 L-20-112 L42-108 L78-70 L74 15 L40 55 L-32 58 L-76 20 Z" fill="#252c31"/>
+    <path d="M-170-40 L-255-8 L-268 72 L-208 92 L-132 48 Z" fill="#a9a48f"/>
+    <path d="M-250 7 L-335 25 L-344 61 L-267 72 Z" fill="#31383c"/>
+    <path d="M142-55 L220-20 L238 55 L186 83 L132 38 Z" fill="#aaa58f"/>
+    <path d="M-112 88 L-156 174 L-112 211 L-48 146 Z" fill="#9d9988"/>
+    <path d="M83 92 L122 174 L82 213 L25 145 Z" fill="#9d9988"/>
+    <path d="M-18-89 L22-89 L39-40 L18-15 L-17-16 L-38-43 Z" fill="#65ecf5" stroke="#15383c"/>
+    <circle cx="-22" cy="31" r="10" fill="#65ecf5" stroke="#15383c" stroke-width="5"/>
+    <circle cx="34" cy="31" r="10" fill="#65ecf5" stroke="#15383c" stroke-width="5"/>
+  </g>
+  <text x="52" y="70" font-family="Segoe UI, sans-serif" font-size="34" fill="#eef4f5">WARDEN</text>
+  <text x="52" y="106" font-family="Segoe UI, sans-serif" font-size="18" fill="#97a6ad">RimWorldForge concept reference</text>
+  <text x="52" y="495" font-family="Segoe UI, sans-serif" font-size="15" fill="#77858c">Concept only. Not a game-ready directional pawn texture.</text>
+</svg>

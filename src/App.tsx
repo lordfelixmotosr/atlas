@@ -1,0 +1,914 @@
+import logo from "../assets/atlas/logo-source.png";
+import {AtlasKnowledgeButton} from "./atlas/library-ui";
+import {ModMixerImportDialog} from './atlas/modmixer-import-ui';
+import { useCallback, useEffect, useState } from 'react';
+import type { Conversation } from './agent/conversations';
+import type { WorkspaceMod } from './agent/workspace';
+import type { ModelOption } from './agent/models';
+import type { ActiveSession } from './agent/registry';
+import type { RegistryEnvelope } from './preload';
+import { GridMark } from './components/grid-mark';
+import { AppSettingsDialog, type SettingsSection } from './components/app-settings-dialog';
+import { GameSetupGate } from './components/game-setup-gate';
+import { TabNav, type AppView, type ModTabDescriptor } from './components/tab-nav';
+import { BuildView } from './components/build-view';
+import { ModsView } from './components/mods-view';
+import { LibraryView } from './components/library-view';
+import { LibraryPlaceholder } from './components/library-placeholder';
+import { GameSelector } from './components/game-selector';
+import type { GameId } from './agent/games/types';
+import { getGame, resolveGameId } from './agent/games/registry';
+import type { RestoreResult } from './components/saves-view';
+import { SessionRecoveryDialog } from './components/session-recovery-dialog';
+import { appAlert, appConfirm } from './components/app-dialog';
+import type { BuildPanel } from './components/mod-build-sidebar';
+import { formatBytes } from './agent/index/format';
+import {
+  dropConversation,
+  isConversationBusy,
+  isConversationEmpty,
+  markConversationLoading,
+  resetPanelState,
+  seedConversation,
+  seedPanelState,
+  useAnyBusy,
+  useConversationRuntime,
+} from './conversations-store';
+
+/**
+ * One open mod tab. Each tab is an independent build session: its own
+ * conversation, its own agent session in the main process, its own sidebar
+ * panel selection. Live chat state (messages, streaming, busy) is NOT held
+ * here — it lives in the conversation store so a background tab keeps
+ * accumulating while the user is focused elsewhere.
+ */
+interface ModTab {
+  folder: string;
+  conversation: Conversation;
+  buildPanel: BuildPanel;
+}
+
+/** Show the storage banner once save history crosses this. */
+const STORAGE_BANNER_THRESHOLD_BYTES = 2 * 1024 ** 3;
+/** After a dismissal, only re-show once usage has grown by this much. */
+const STORAGE_BANNER_REGROWTH_BYTES = 5 * 1024 ** 3;
+
+export function App() {
+  const [view, setView] = useState<AppView>('mods');
+  const [importModMixerOpen, setImportModMixerOpen] = useState(false);
+  // The app-level active game: a lens over Home / Library / new-mod. NOT a
+  // mode — switching it leaves open mod tabs untouched, so mods from different
+  // games can be edited side by side. Persisted as settings.selectedGameId.
+  const [activeGame, setActiveGame] = useState<GameId>('rimworld');
+  const [mods, setMods] = useState<WorkspaceMod[]>([]);
+  const [tabs, setTabs] = useState<ModTab[]>([]);
+  const [focusedFolder, setFocusedFolder] = useState<string | null>(null);
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(
+    null,
+  );
+  const [appVersion, setAppVersion] = useState<string>('');
+  const [registryEnvelope, setRegistryEnvelope] = useState<RegistryEnvelope | null>(null);
+  const [session, setSession] = useState<ActiveSession | null>(null);
+  const [recoveryShown, setRecoveryShown] = useState(false);
+  const [multiChat, setMultiChat] = useState(false);
+  const [skipPermissions, setSkipPermissions] = useState(false);
+  // Total snapshot bytes when the storage banner should show; null = hidden.
+  const [storageBannerBytes, setStorageBannerBytes] = useState<number | null>(
+    null,
+  );
+  // Bumped after a chat is created/archived/restored so the sidebar's chat
+  // list re-fetches. The list also self-refreshes off agent events.
+  const [chatListRev, setChatListRev] = useState(0);
+
+  const hasAi = availableModels.length > 0;
+  // Header indicator: lit while ANY open tab's agent is working.
+  const busy = useAnyBusy();
+
+  const focusedTab = tabs.find((t) => t.folder === focusedFolder) ?? null;
+  const activeMod = focusedTab
+    ? mods.find((m) => m.folder === focusedTab.folder) ?? null
+    : null;
+  // Drives the focused mod's Test button — unconditionally called (empty id
+  // resolves to an idle runtime when no tab is focused).
+  const focusedBusy = useConversationRuntime(
+    focusedTab?.conversation.id ?? '',
+  ).busy;
+
+  const refreshModels = useCallback(async () => {
+    const list = await window.modmixer.listModels();
+    setAvailableModels(list);
+  }, []);
+
+  const openSettings = useCallback((section: SettingsSection = 'general') => {
+    setSettingsSection(section);
+  }, []);
+
+  useEffect(() => {
+    void window.modmixer.getAppVersion().then(setAppVersion);
+  }, []);
+
+  // Storage banner: one deferred check per launch (the walk stats every
+  // snapshot dir, so keep it off the critical startup path). Shows when
+  // save history is heavy and either was never dismissed or has grown well
+  // past the dismissal watermark — a dismissal is not a nag loop.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const [report, settings] = await Promise.all([
+            window.modmixer.getSnapshotUsage(),
+            window.modmixer.getSettings(),
+          ]);
+          const dismissedAt = settings.storageBannerDismissedAtBytes ?? 0;
+          const show =
+            report.totalBytes >= STORAGE_BANNER_THRESHOLD_BYTES &&
+            (dismissedAt === 0 ||
+              report.totalBytes >= dismissedAt + STORAGE_BANNER_REGROWTH_BYTES);
+          if (show) setStorageBannerBytes(report.totalBytes);
+        } catch {
+          // Usage probe failing must never affect startup.
+        }
+      })();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // A couple of toggles live in settings and need to take effect without a
+  // restart; re-read them whenever the settings dialog closes. The skip-
+  // permissions flag also drives the header's "Permissions off" badge.
+  const refreshSettingsFlags = useCallback(() => {
+    void window.modmixer.getSettings().then((s) => {
+      setMultiChat(s.multiChat);
+      setSkipPermissions(s.dangerouslySkipPermissions);
+      setActiveGame(resolveGameId(s.selectedGameId));
+    });
+  }, []);
+
+  // Switch the active game. Persisted so the choice survives a relaunch; the
+  // view is left as-is (switching while on a mod tab keeps editing that mod).
+  const changeActiveGame = useCallback((game: GameId) => {
+    setActiveGame(game);
+    void window.modmixer.setSelectedGame(game);
+  }, []);
+  useEffect(() => {
+    refreshSettingsFlags();
+  }, [refreshSettingsFlags]);
+
+  useEffect(() => {
+    void refreshModels();
+    // links-changed and login-success/logout all imply the available-model
+    // list may have changed.
+    return window.modmixer.onOAuthEvent((event) => {
+      if (
+        event.type === 'links-changed' ||
+        event.type === 'login-success' ||
+        event.type === 'logout'
+      ) {
+        void refreshModels();
+      }
+    });
+  }, [refreshModels]);
+
+  const refreshMods = useCallback(async () => {
+    const list = await window.modmixer.listWorkspaceMods();
+    setMods(list);
+  }, []);
+
+  // Home-tab pin/archive toggles. The route only rewrites the prefs sidecar and
+  // hands back the resolved prefs, so we patch that one mod in place rather than
+  // re-fetching (and re-scanning) the whole workspace — a toggle stays O(1) even
+  // with hundreds of mods. On failure, reconcile with a full refresh.
+  const setModPrefs = useCallback(
+    async (folder: string, patch: { pinned?: boolean; archived?: boolean }) => {
+      try {
+        const prefs = await window.modmixer.setModPrefs(folder, patch);
+        setMods((prev) =>
+          prev.map((m) => (m.folder === folder ? { ...m, prefs } : m)),
+        );
+      } catch (err) {
+        console.error('setModPrefs failed:', err);
+        void refreshMods();
+      }
+    },
+    [refreshMods],
+  );
+
+  useEffect(() => {
+    void refreshMods();
+    const offEvent = window.modmixer.onEvent((env) => {
+      // A finished turn may have changed the mod on disk (new files, About
+      // edits) — refresh the workspace list. Per-conversation chat state is
+      // owned by the conversation store, not here.
+      if (env.event.type === 'agent_end') void refreshMods();
+    });
+    const offModChanged = window.modmixer.onModChanged(() => {
+      void refreshMods();
+    });
+    const offScope = window.modmixer.onScopeUpgraded((env) => {
+      if (env.scope.type !== 'mod') return;
+      void refreshMods();
+      // A legacy folder-less chat was just bound to a mod — keep the tab's copy
+      // of the conversation in sync.
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.conversation.id === env.conversationId
+            ? { ...t, conversation: { ...t.conversation, scope: env.scope } }
+            : t,
+        ),
+      );
+    });
+    return () => {
+      offEvent();
+      offModChanged();
+      offScope();
+    };
+  }, [refreshMods]);
+
+  // Mod registry: subscribe to live updates + bootstrap snapshot.
+  useEffect(() => {
+    void window.modmixer.getRegistry().then(setRegistryEnvelope);
+    return window.modmixer.onRegistryChanged(setRegistryEnvelope);
+  }, []);
+
+  // Active session: bootstrap + live updates. If we boot with an active
+  // session it's a crash-orphan from a previous run — show the recovery
+  // dialog one time per launch.
+  useEffect(() => {
+    void window.modmixer.getActiveSession().then((s) => {
+      setSession(s);
+      if (s) setRecoveryShown(true);
+    });
+    return window.modmixer.onSessionChanged(setSession);
+  }, []);
+
+  const refreshRegistry = useCallback(async () => {
+    const env = await window.modmixer.refreshRegistry();
+    setRegistryEnvelope(env);
+  }, []);
+  const setActiveMods = useCallback(async (packageIds: string[]) => {
+    const env = await window.modmixer.setActiveMods(packageIds);
+    setRegistryEnvelope(env);
+  }, []);
+  const applyAutosort = useCallback(async () => {
+    const { envelope } = await window.modmixer.applyAutosort();
+    setRegistryEnvelope(envelope);
+  }, []);
+  const startFix = useCallback(async () => {
+    const res = await window.modmixer.startFixSession();
+    setSession(res.session);
+    setRegistryEnvelope(res.envelope);
+  }, []);
+  const applySession = useCallback(async () => {
+    const { envelope } = await window.modmixer.applySession();
+    setRegistryEnvelope(envelope);
+    setSession(null);
+  }, []);
+  const revertSession = useCallback(async () => {
+    const { envelope } = await window.modmixer.revertSession();
+    setRegistryEnvelope(envelope);
+    setSession(null);
+  }, []);
+  const enableWithDeps = useCallback(
+    async (packageId: string) => {
+      const res = await window.modmixer.enableWithDeps(packageId);
+      setRegistryEnvelope(res.envelope);
+      return res;
+    },
+    [],
+  );
+
+  /**
+   * Open a mod in a tab. Each mod opens exactly once — re-opening one that's
+   * already open just focuses its existing tab. Other tabs keep running.
+   */
+  const openMod = useCallback(
+    async (folder: string) => {
+      if (tabs.some((t) => t.folder === folder)) {
+        setFocusedFolder(folder);
+        setView('mod');
+        return;
+      }
+      // Fast: resolve the Conversation (index op, no session) so the
+      // workspace can appear immediately.
+      const convo = await window.modmixer.resolveConversationForMod(folder);
+      markConversationLoading(convo.id);
+      seedPanelState(convo);
+      setTabs((prev) =>
+        prev.some((t) => t.folder === folder)
+          ? prev
+          : [...prev, { folder, conversation: convo, buildPanel: 'chat' }],
+      );
+      setFocusedFolder(folder);
+      setView('mod');
+      // Slow: construct the session + hydrate the transcript off the
+      // critical path. The chat shows a loading state until this lands.
+      void window.modmixer
+        .openConversationSession(convo.id)
+        .then(({ messages }) => seedConversation(convo.id, messages))
+        .catch((err) => {
+          console.error('Failed to open conversation session:', err);
+          seedConversation(convo.id, []);
+        });
+    },
+    [tabs],
+  );
+
+  /** Close a tab: dispose its session, forget its runtime, focus a neighbour. */
+  const closeTab = useCallback(
+    (folder: string) => {
+      const idx = tabs.findIndex((t) => t.folder === folder);
+      if (idx < 0) return;
+      const tab = tabs[idx];
+      void window.modmixer.closeConversation(tab.conversation.id);
+      dropConversation(tab.conversation.id);
+      const next = tabs.filter((t) => t.folder !== folder);
+      setTabs(next);
+      if (focusedFolder === folder) {
+        const neighbour = next[idx] ?? next[idx - 1] ?? null;
+        setFocusedFolder(neighbour?.folder ?? null);
+        if (!neighbour) setView('mods');
+      }
+    },
+    [tabs, focusedFolder],
+  );
+
+  const setTabBuildPanel = useCallback(
+    (folder: string, panel: BuildPanel) => {
+      setTabs((prev) =>
+        prev.map((t) => (t.folder === folder ? { ...t, buildPanel: panel } : t)),
+      );
+    },
+    [],
+  );
+
+  // Sidebar "back": return to Home without closing the tab.
+  const goHome = useCallback(() => setView('mods'), []);
+
+  const startFreshChat = useCallback(async () => {
+    const tab = tabs.find((t) => t.folder === focusedFolder);
+    if (!tab) return;
+    const oldId = tab.conversation.id;
+    const convo = await window.modmixer.startFreshChatForMod(tab.folder);
+    markConversationLoading(convo.id);
+    seedPanelState(convo);
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.folder === tab.folder
+          ? { ...t, conversation: convo, buildPanel: 'chat' }
+          : t,
+      ),
+    );
+    // The previous chat is archived on disk; drop its live session + runtime.
+    await window.modmixer.closeConversation(oldId);
+    dropConversation(oldId);
+    // Construct the fresh session in the background.
+    void window.modmixer
+      .openConversationSession(convo.id)
+      .then(({ messages }) => seedConversation(convo.id, messages))
+      .catch((err) => {
+        console.error('Failed to open conversation session:', err);
+        seedConversation(convo.id, []);
+      });
+  }, [tabs, focusedFolder]);
+
+  // Multi-chat: switch the focused mod's tab to an existing chat. The
+  // previous chat's runtime stays in the store (a background turn keeps
+  // streaming); only its session is freed, and only if it's idle.
+  const selectChat = useCallback(
+    async (convo: Conversation) => {
+      const tab = tabs.find((t) => t.folder === focusedFolder);
+      if (!tab) return;
+      // Re-clicking the active chat from another panel (Assets, Publish,
+      // …) is the natural way back to its transcript — flip the panel and
+      // skip the heavy switch path.
+      if (tab.conversation.id === convo.id) {
+        if (tab.buildPanel !== 'chat') setTabBuildPanel(tab.folder, 'chat');
+        return;
+      }
+      const oldId = tab.conversation.id;
+      // A chat with a turn in flight has a live, accurate store runtime —
+      // leave it alone. Otherwise show a loading state until its transcript
+      // re-hydrates (its session may have been freed while switched away).
+      if (!isConversationBusy(convo.id)) markConversationLoading(convo.id);
+      // First open of this chat seeds its panel state (draft + pickers);
+      // a switch-back is a no-op — the existing entry is the live truth.
+      seedPanelState(convo);
+      await window.modmixer.setActiveConversationForMod(tab.folder, convo.id);
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.folder === tab.folder
+            ? { ...t, conversation: convo, buildPanel: 'chat' }
+            : t,
+        ),
+      );
+      // Switching is non-destructive — keep the previous chat, just free its
+      // session if it's idle. Untouched chats are reaped by newChatMulti, not
+      // here: deleting on switch-away would orphan a chat the user is about
+      // to return to.
+      void window.modmixer.releaseIdleConversation(oldId);
+      void window.modmixer
+        .openConversationSession(convo.id)
+        .then(({ messages }) => {
+          if (!isConversationBusy(convo.id)) {
+            seedConversation(convo.id, messages);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to open conversation session:', err);
+          if (!isConversationBusy(convo.id)) seedConversation(convo.id, []);
+        });
+    },
+    [tabs, focusedFolder, setTabBuildPanel],
+  );
+
+  // Multi-chat "+ New chat": create a chat and switch to it. Unlike the
+  // single-chat flow this keeps the previous chat — it stays in the list.
+  const newChatMulti = useCallback(async () => {
+    const tab = tabs.find((t) => t.folder === focusedFolder);
+    if (!tab) return;
+    // If the user never sent a message to the chat they're on, drop it as the
+    // next one is created — otherwise "+ New chat" stacks up untouched "New
+    // chat" entries. The new chat is always kept, so the mod never ends up
+    // with zero chats.
+    const oldId = tab.conversation.id;
+    const discardOld = isConversationEmpty(oldId);
+    const convo = await window.modmixer.startFreshChatForMod(tab.folder);
+    await selectChat(convo);
+    if (discardOld) {
+      void window.modmixer.deleteConversation(oldId);
+      dropConversation(oldId);
+    }
+    setChatListRev((n) => n + 1);
+  }, [tabs, focusedFolder, selectChat]);
+
+  // Archive a chat. If it's the one on screen, fall back to the most recent
+  // remaining chat (or a fresh one when nothing is left).
+  const archiveChat = useCallback(
+    async (id: string) => {
+      await window.modmixer.archiveConversation(id);
+      const tab = tabs.find((t) => t.folder === focusedFolder);
+      if (tab && tab.conversation.id === id) {
+        const list = await window.modmixer.listConversationsForMod(tab.folder);
+        const next = list
+          .filter((c) => c.id !== id && !c.archivedAt)
+          .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        if (next) {
+          await selectChat(next);
+        } else {
+          await selectChat(
+            await window.modmixer.startFreshChatForMod(tab.folder),
+          );
+        }
+      }
+      setChatListRev((n) => n + 1);
+    },
+    [tabs, focusedFolder, selectChat],
+  );
+
+  const unarchiveChat = useCallback(async (id: string) => {
+    await window.modmixer.unarchiveConversation(id);
+    setChatListRev((n) => n + 1);
+  }, []);
+
+  // Restore from a save replaces the focused mod's whole world: files, chat
+  // list, and which chat is active. Re-seed the conversation store and swap
+  // the tab's conversation in one render so the UI doesn't flash.
+  const onSavesRestored = useCallback(
+    (result: RestoreResult) => {
+      setMods(result.mods);
+      if (!result.hydrated) return;
+      const restored = result.hydrated;
+      const oldId = tabs.find(
+        (t) => t.folder === focusedFolder,
+      )?.conversation.id;
+      if (oldId && oldId !== restored.conversation.id) {
+        dropConversation(oldId);
+      }
+      seedConversation(restored.conversation.id, restored.messages);
+      // Restore swaps in the snapshot's conversation wholesale — overwrite
+      // any stale panel state (model/thinking on disk just changed too).
+      resetPanelState(restored.conversation);
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.folder === focusedFolder
+            ? { ...t, conversation: restored.conversation }
+            : t,
+        ),
+      );
+      // Restore pruned any post-checkpoint chats on disk — bump the rev so the
+      // sidebar list re-fetches instead of lingering until BuildView remounts.
+      setChatListRev((n) => n + 1);
+    },
+    [tabs, focusedFolder],
+  );
+
+  // "Enable" for a workspace mod has to be atomic: create the symlink AND
+  // add the packageId to <activeMods>. If we did only one, RimWorld either
+  // can't find the packageId on disk (no symlink) or finds the folder but
+  // ignores it (not in active list). Same constraint for disable.
+  const sync = async (folder: string) => {
+    try {
+      const next = await window.modmixer.syncModToGame(folder);
+      setMods(next);
+      const m = next.find((x) => x.folder === folder);
+      const packageId = m?.about.packageId;
+      if (!packageId) {
+        const env = await window.modmixer.refreshRegistry();
+        setRegistryEnvelope(env);
+        void appAlert(
+          'Mod synced, but About.xml has no packageId, so it was not added to the active list.',
+        );
+        return;
+      }
+      try {
+        const res = await enableWithDeps(packageId);
+        if (res.missing.length > 0) {
+          void appAlert(
+            `Enabled ${m?.about.name || folder}. Declared deps not installed (mod will fail to load until installed): ${res.missing.join(', ')}.`,
+          );
+        }
+      } catch (err) {
+        console.error(err);
+        void appAlert(
+          err instanceof Error
+            ? err.message
+            : 'Mod synced, but adding to ModsConfig.xml failed.',
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      void appAlert(
+        err instanceof Error ? err.message : 'Failed to sync mod to game.',
+      );
+    }
+  };
+
+  // Disable = remove from <activeMods> only. The symlink stays so the mod
+  // remains in RimWorld's installed-mod list as "inactive" — same behavior
+  // as a Workshop or local mod when disabled. Removing the symlink would
+  // make the mod disappear from RimWorld entirely, which is asymmetric and
+  // surprising.
+  const unsync = async (folder: string) => {
+    try {
+      await window.modmixer.disableModInGame(folder);
+      const next = await window.modmixer.listWorkspaceMods();
+      setMods(next);
+      const env = await window.modmixer.refreshRegistry();
+      setRegistryEnvelope(env);
+    } catch (err) {
+      console.error(err);
+      void appAlert(
+        err instanceof Error ? err.message : 'Failed to disable mod.',
+      );
+    }
+  };
+
+  const test = async () => {
+    if (!focusedTab || !hasAi) return;
+    const mod = mods.find((m) => m.folder === focusedTab.folder);
+    const displayName = mod?.about.name || focusedTab.folder;
+    const gameName = getGame(resolveGameId(mod?.prefs.game)).displayName;
+    try {
+      await window.modmixer.send(
+        focusedTab.conversation.id,
+        `Test "${displayName}" in ${gameName} now. Run the full test-in-game flow including monitoring the log for errors.`,
+      );
+    } catch (err) {
+      console.error(err);
+      void appAlert(
+        err instanceof Error ? err.message : 'Failed to start test.',
+      );
+    }
+  };
+
+  // "Generate Preview Image" hands off to the chat panel: switch the build
+  // sub-panel from publish → chat so the user can watch the agent compose
+  // the image, then auto-submit a request. The agent's system prompt
+  // teaches it to write to {folder}/About/Preview.png at 1280×720.
+  const generatePreview = async () => {
+    if (!focusedTab || !hasAi) return;
+    const folder = focusedTab.folder;
+    const conversationId = focusedTab.conversation.id;
+    const mod = mods.find((m) => m.folder === folder);
+    const displayName = mod?.about.name || folder;
+    setTabBuildPanel(folder, 'chat');
+    try {
+      // If the user has supplied a background image (Preview panel drop zone),
+      // tell the agent to use it as render_preview's `backgroundImagePath`
+      // and skip the gradient/color choice. Path lives in the workspace
+      // sidecar, which is allowed by render_preview's path policy.
+      const bg = await window.modmixer.getPreviewBg(folder);
+      const bgInstruction = bg
+        ? ` The user has supplied a background image at ${bg.path} — pass it as render_preview's backgroundImagePath (do not pick a background color/gradient) and choose a titleEffect like "outline" or "shadow" so the title stays legible over the image.`
+        : '';
+      await window.modmixer.send(
+        conversationId,
+        `Generate a Steam Workshop preview image for "${displayName}" and save it to ${folder}/About/Preview.png. Use render_preview — pick a template, choose a sprite from Textures/ if any exist, and pick a background and title treatment that fits the mod's tone.${bgInstruction}`,
+      );
+    } catch (err) {
+      console.error(err);
+      void appAlert(
+        err instanceof Error
+          ? err.message
+          : 'Failed to start preview generation.',
+      );
+    }
+  };
+
+  const newMod = async (game?: import('./agent/games/types').GameId) => {
+    if (!hasAi) {
+      openSettings('providers');
+      return;
+    }
+    // Create the mod folder up front (placeholder About.xml, standard
+    // subdirs) so the chat is bound to a real on-disk mod from message
+    // zero. If the user bails before the agent fills in metadata, the mod
+    // is still recoverable from the Mods view instead of orphaned.
+    try {
+      const { folder, mods: nextMods } = await window.modmixer.createUntitledMod(game);
+      setMods(nextMods);
+      await openMod(folder);
+    } catch (err) {
+      console.error(err);
+      void appAlert(
+        err instanceof Error ? err.message : 'Failed to create new mod.',
+      );
+    }
+  };
+
+  // Live session: quit any running RimWorld, scaffold a session mod, launch
+  // the game with the Live in-game mod, then open the created mod the same
+  // way "+ New Mod" does (conversation resolution is automatic via
+  // resolveConversationForMod, so the returned conversationId is unused).
+  // First-ever launch shows a one-time consent dialog.
+  const launchLiveSession = async () => {
+    if (!hasAi) {
+      openSettings('providers');
+      return;
+    }
+    const consentKey = 'modmixer.live.consentShown';
+    if (!localStorage.getItem(consentKey)) {
+      const ok = await appConfirm(
+        "Atlas will start RimWorld in a sandboxed test colony with the Atlas Live mod installed. You prompt from a chat window inside the game, and Atlas builds and runs code in that session without asking again. Your real saves and mod list aren't touched. In-game prompts use your AI credits like normal chat.",
+        { title: 'Launch a live session?', okLabel: 'Launch' },
+      );
+      if (!ok) return;
+      localStorage.setItem(consentKey, '1');
+    }
+    try {
+      const res = await window.modmixer.launchLiveSession();
+      if (!res.ok) {
+        // Workshop-fixable gates carry the item links; everything else is a
+        // plain explanation. Relaunching after subscribing is the retry path.
+        if (res.steamUrl) {
+          const open = await appConfirm(
+            res.webUrl ? `${res.message}\n\n${res.webUrl}` : res.message,
+            {
+              title: "Get Atlas Live on the Steam Workshop",
+              okLabel: 'Open Workshop Page',
+            },
+          );
+          if (open) void window.modmixer.openExternal(res.steamUrl);
+        } else {
+          void appAlert(res.message);
+        }
+        return;
+      }
+      await refreshMods();
+      await openMod(res.folder);
+    } catch (err) {
+      console.error(err);
+      void appAlert(
+        err instanceof Error ? err.message : 'Failed to launch live session.',
+      );
+    }
+  };
+
+  const importMod = async () => {
+    try {
+      const imported = await window.modmixer.importModFromFolder();
+      if (!imported) return;
+      setMods(imported.mods);
+      await openMod(imported.result.folder);
+    } catch (err) {
+      console.error(err);
+      void appAlert(
+        err instanceof Error ? err.message : 'Failed to import mod folder.',
+      );
+    }
+  };
+
+  const tabDescriptors: ModTabDescriptor[] = tabs.map((t) => {
+    const mod = mods.find((m) => m.folder === t.folder);
+    return {
+      folder: t.folder,
+      conversationId: t.conversation.id,
+      title: mod?.about.name || t.conversation.title || t.folder,
+      game: resolveGameId(mod?.prefs.game),
+    };
+  });
+
+  return (
+    <div className="flex h-full flex-col bg-paper text-ink">
+      <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
+        <div className="flex min-w-0 flex-1 items-center gap-4">
+          <div className="flex shrink-0 items-center gap-2.5">
+            <img src={logo} alt="" className="atlas-logo" />
+            <span className="font-display text-sm font-medium tracking-tight">
+              Atlas
+            </span>
+            {appVersion && (
+              <span className="ml-1 font-mono text-[10px] uppercase tracking-[0.18em] text-subtle">
+                v{appVersion}
+              </span>
+            )}
+          </div>
+          <GameSelector game={activeGame} onChange={changeActiveGame} />
+          <TabNav
+            view={view}
+            focusedFolder={focusedFolder}
+            tabs={tabDescriptors}
+            sessionActive={!!session}
+            onSelectMods={() => setView('mods')}
+            onSelectLibrary={() => setView('library')}
+            onSelectTab={(folder) => {
+              setFocusedFolder(folder);
+              setView('mod');
+            }}
+            onCloseTab={closeTab}
+          />
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {skipPermissions && (
+            <button
+              onClick={() => openSettings('advanced')}
+              title="Permission prompts are off — the agent can edit or delete files and run shell commands without asking. Click to change."
+              className="inline-flex items-center gap-1.5 rounded-md border border-failed/50 bg-failed/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-failed transition-colors hover:bg-failed/20"
+            >
+              <span aria-hidden>⚠</span>
+              Permissions off
+            </button>
+          )}
+          <AtlasKnowledgeButton />
+          <button
+            onClick={() => openSettings('general')}
+            title="Settings"
+            aria-label="Settings"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-line bg-paper text-muted transition-colors hover:border-ink/40 hover:text-ink"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-3.5 w-3.5"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      {storageBannerBytes !== null && (
+        <div className="flex items-center gap-3 border-b border-warning/40 bg-warning/5 px-4 py-1.5 text-[12px] text-ink">
+          <span>
+            Save history is using{' '}
+            <strong>{formatBytes(storageBannerBytes)}</strong> of disk space.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setStorageBannerBytes(null);
+              openSettings('storage');
+            }}
+            className="rounded-md border border-line bg-paper px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ink transition-colors hover:bg-surface"
+          >
+            Review &amp; clean up
+          </button>
+          <span className="flex-1" />
+          <button
+            type="button"
+            onClick={() => {
+              void window.modmixer.dismissStorageBanner(storageBannerBytes);
+              setStorageBannerBytes(null);
+            }}
+            className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted transition-colors hover:text-ink"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {view === 'library' ? (
+        getGame(resolveGameId(activeGame)).capabilities.steamWorkshop ? (
+          <LibraryView
+            envelope={registryEnvelope}
+            session={session}
+            onRefresh={refreshRegistry}
+            onAutosort={applyAutosort}
+            onSetActive={setActiveMods}
+            onEnableWithDeps={enableWithDeps}
+            onStartFix={startFix}
+            onApplySession={applySession}
+            onRevertSession={revertSession}
+          />
+        ) : (
+          <LibraryPlaceholder game={activeGame} />
+        )
+      ) : view === 'mod' && focusedTab ? (
+        // Only the focused tab's workspace is mounted — live chat state lives
+        // in the conversation store, so unmounting an inactive tab is free
+        // and a background agent keeps streaming regardless. Keyed by folder
+        // so switching tabs cleanly remounts the workspace.
+        <BuildView
+          key={focusedTab.folder}
+          activeMod={activeMod}
+          activeConvo={focusedTab.conversation}
+          panel={focusedTab.buildPanel}
+          onSelectPanel={(panel) => setTabBuildPanel(focusedTab.folder, panel)}
+          onBack={goHome}
+          onTest={test}
+          onGeneratePreview={generatePreview}
+          onNewChat={startFreshChat}
+          onSavesRestored={onSavesRestored}
+          onModDeleted={(folder) => {
+            closeTab(folder);
+            void refreshMods();
+            void refreshRegistry();
+          }}
+          busy={focusedBusy}
+          hasAi={hasAi}
+          availableModels={availableModels}
+          onConnect={() => openSettings('providers')}
+          multiChat={multiChat}
+          chatListRev={chatListRev}
+          onSelectChat={selectChat}
+          onNewChatMulti={newChatMulti}
+          onArchiveChat={archiveChat}
+          onUnarchiveChat={unarchiveChat}
+        />
+      ) : (
+        <ModsView
+          game={activeGame}
+          mods={mods}
+          onOpen={openMod}
+          onNewMod={newMod}
+          onImportMod={importMod}
+          onImportModMixer={() => setImportModMixerOpen(true)}
+          onLaunchLiveSession={launchLiveSession}
+          onSetModPrefs={setModPrefs}
+        />
+      )}
+      {settingsSection && (
+        <AppSettingsDialog
+          initialSection={settingsSection}
+          onClose={() => {
+            setSettingsSection(null);
+            refreshSettingsFlags();
+          }}
+        />
+      )}
+      {importModMixerOpen && <ModMixerImportDialog onClose={() => setImportModMixerOpen(false)} onImported={refreshMods} />}
+
+      <GameSetupGate
+        game={
+          view === 'mod' && focusedTab
+            ? resolveGameId(focusedTab.conversation.game)
+            : activeGame
+        }
+        modOpen={view === 'mod' && !!focusedTab}
+        onExit={goHome}
+      />
+
+      {recoveryShown && session && (
+        <SessionRecoveryDialog
+          session={session}
+          onApply={async () => {
+            try {
+              await applySession();
+            } finally {
+              setRecoveryShown(false);
+            }
+          }}
+          onRevert={async () => {
+            try {
+              await revertSession();
+            } finally {
+              setRecoveryShown(false);
+            }
+          }}
+          onDismiss={() => {
+            setRecoveryShown(false);
+            setView('library');
+          }}
+        />
+      )}
+    </div>
+  );
+}
+

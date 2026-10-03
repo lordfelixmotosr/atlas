@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/rimworldforge/project-plan.schema.json",
+  "title": "RimWorldForge Generation Plan",
+  "type": "object",
+  "required": [
+    "schema",
+    "mod",
+    "defs"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "mod": {
+      "type": "object",
+      "required": [
+        "name",
+        "packageId"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "packageId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "author": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "supportedVersions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "packageId"
+                ],
+                "properties": {
+                  "packageId": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "steamWorkshopUrl": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            ]
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "defs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "fields"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "file": {
+            "type": "string"
+          },
+          "attributes": {
+            "type": "object"
+          },
+          "fields": {
+            "type": "object",
+            "required": [
+              "defName"
+            ]
+          },
+          "sourceExample": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "loadFolders": {
+      "type": "object"
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "target"
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

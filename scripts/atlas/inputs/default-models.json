@@ -1,0 +1,79 @@
+{
+  "providers": {
+    "anthropic": {
+      "models": [
+        {
+          "id": "claude-opus-5-5",
+          "name": "Claude Opus 5.5",
+          "api": "anthropic-messages",
+          "baseUrl": "https://api.anthropic.com",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": {
+            "input": 4,
+            "output": 20,
+            "cacheRead": 0.2,
+            "cacheWrite": 5
+          },
+          "contextWindow": 1000000,
+          "maxTokens": 128000,
+          "thinkingLevelMap": {
+            "off": null,
+            "xhigh": "xhigh",
+            "max": "max"
+          },
+          "headers": {
+            "user-agent": "claude-cli/2.1.280"
+          },
+          "compat": {
+            "forceAdaptiveThinking": true,
+            "supportsStrictTools": true,
+            "supportsTemperature": false
+          }
+        }
+      ]
+    },
+    "openai-codex": {
+      "models": [
+        {
+          "id": "gpt-6-sol",
+          "name": "GPT-6 Sol",
+          "api": "openai-codex-responses",
+          "baseUrl": "https://chatgpt.com/backend-api",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": {
+            "input": 2,
+            "output": 10,
+            "cacheRead": 0.2,
+            "cacheWrite": 2.5,
+            "tiers": [
+              {
+                "inputTokensAbove": 272000,
+                "input": 4,
+                "output": 15,
+                "cacheRead": 0.4,
+                "cacheWrite": 5
+              }
+            ]
+          },
+          "contextWindow": 1050000,
+          "maxTokens": 128000,
+          "thinkingLevelMap": {
+            "off": "none",
+            "minimal": "low",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": "xhigh",
+            "max": "max"
+          },
+          "compat": {
+            "supportsOpenAIGrammarTools": true,
+            "supportsToolSearch": true
+          }
+        }
+      ]
+    }
+  }
+}

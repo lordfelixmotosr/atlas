@@ -1,0 +1,14 @@
+{
+  "id": "rimworld-art",
+  "name": "RimWorld Art",
+  "description": "Sprite briefs, transparency, directions, body variants, naming, style consistency and visual validation.",
+  "category": "art",
+  "source": "https://github.com/SenjuWoo/RimWorldForge",
+  "license": "MIT",
+  "version": "0.1.0",
+  "minAtlasVersion": "0.1.0",
+  "gameVersions": [
+    "1.6"
+  ],
+  "notes": "Initial Atlas reference pack."
+}

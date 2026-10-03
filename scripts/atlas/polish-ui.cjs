@@ -1,0 +1,13 @@
+const fs=require('node:fs'),path=require('node:path');const root=path.resolve(__dirname,'../..');function edit(f,fn){const p=path.join(root,f);fs.writeFileSync(p,fn(fs.readFileSync(p,'utf8').replace(/\r\n/g,'\n')))};
+edit('src/components/chat-panel.tsx',s=>s.replace(/\/\{contextUsage\.contextWindow>=[^\n]+/,'/{formatCapacity(contextUsage.contextWindow)}').replace('function formatTokens(n: number): string {','function formatCapacity(n:number):string{return n>=1000000?String(Number((n/1000000).toFixed(2)))+"M":formatTokens(n);}\nfunction formatTokens(n: number): string {'));
+edit('src/atlas/asset-browser.tsx',s=>{
+ s=s.replace('useEffect,useMemo,useState','useEffect,useMemo,useState,useRef');
+ s=s.replace(' const state=',' const modal=useRef<HTMLDialogElement>(null);useEffect(()=>{if(plan)modal.current?.showModal();else modal.current?.close()},[plan]);\n const state=');
+ s=s.replace('<div className="atlas-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="atlas-bulk-title" className="atlas-modal">','<dialog ref={modal} aria-labelledby="atlas-bulk-title" className="atlas-modal" onCancel={e=>{e.preventDefault();if(!working)setPlan(null)}}>');
+ s=s.replace('</section></div>}</div>','</dialog>}</div>');
+ s=s.replace('<strong>{group[0].ref.label','<AssetThumbnail folder={folder} req={group.find(r=>r.status==="present")||group[0]}/><strong>{group[0].ref.label');
+ return s+`\nfunction AssetThumbnail({folder,req}:{folder:string;req:AssetRequirement}){const [url,setUrl]=useState<string|null>(null);useEffect(()=>{let active=true;setUrl(null);if(req.status==='present'||req.status==='invalid')void window.modmixer.readAssetDataUrl(folder,req.path).then(v=>{if(active)setUrl(v)}).catch(()=>{});return()=>{active=false}},[folder,req.path,req.status]);return <span className="atlas-asset-thumbnail">{url&&req.kind!=='audio'?<img src={url} alt=""/>:<span aria-hidden>{req.kind==='audio'?'♫':'◇'}</span>}</span>;}\n`;
+});
+edit('src/atlas/workspace.css',s=>s+'\n.atlas-modal{position:fixed;margin:auto}.atlas-asset-thumbnail{display:grid;place-items:center;width:40px;height:40px;flex-shrink:0;background:var(--paper);border:1px solid var(--line);border-radius:8px;color:var(--subtle)}.atlas-asset-thumbnail img{max-width:90%;max-height:90%;object-fit:contain;image-rendering:pixelated}\n');
+// Avoid advertising an unavailable privacy setting in the native Atlas UI.
+edit('src/agent/security/policy-roots.ts',s=>s.replace('    process.env.GRADLE_USER_HOME ?? path.join(homedir(), \'.gradle\');','    path.join(process.env.ATLAS_ROOT!,\'data/cache/gradle\');').replace("path.join(homedir(), '.neoformruntime')","path.join(process.env.ATLAS_ROOT!,'data/cache/neoformruntime')"));

@@ -1,0 +1,14 @@
+{
+  "id": "rimworld-core",
+  "name": "RimWorld Core",
+  "description": "Installed-game evidence, Def XML, mod structure, testing and debugging references.",
+  "category": "knowledge",
+  "source": "https://github.com/lebek/modmixer",
+  "license": "MIT",
+  "version": "0.1.1",
+  "minAtlasVersion": "0.2.1",
+  "gameVersions": [
+    "1.6"
+  ],
+  "notes": "Use Atlas metadata paths for schematics, C# assets and placeholders."
+}
