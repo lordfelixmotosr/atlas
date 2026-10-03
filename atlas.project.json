@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.7 native source release built and verified",
+  "status": "Atlas 0.2.8 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -153,7 +153,8 @@
     "0.2.6: compact application packages and full recovery fallback; persistent resumable downloads; shared activity panel; XML/C# editor with file tabs and project-content search; stable verified OpenAI model context limits",
     "0.2.6: compact application packages and full recovery fallback; persistent resumable downloads; shared activity panel; XML/C# editor with file tabs and project-content search; stable verified OpenAI model context limits",
     "0.2.6: compact application packages and full recovery fallback; persistent resumable downloads; shared activity panel; XML/C# editor with file tabs and project-content search; stable verified OpenAI model context limits",
-    "0.2.7: fixed Windows update launcher; preflight acknowledgement before closing; independent pinned helpers and persistent installer diagnostics; verified real Electron install and restart"
+    "0.2.7: fixed Windows update launcher; preflight acknowledgement before closing; independent pinned helpers and persistent installer diagnostics; verified real Electron install and restart",
+    "0.2.8: soft forest green accent and player-facing feature descriptions; bounded comparison evidence, independent AI completion, editable saved notes and cancellation"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -168,7 +169,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.7",
+  "version": "0.2.8",
   "supportedGames": [
     "rimworld"
   ],
@@ -243,24 +244,27 @@
       "0.2.6 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
       "0.2.7 source type checking and 86 automated tests passed; helper launch failures keep Atlas open; acknowledgement and cancellation gates, persistent diagnostics, streamed downloads and startup recovery",
       "0.2.7 real Electron install and exit, verified application replacement and healthy restart in an isolated portable fixture; private marker retained; production receipt hashes matched",
-      "0.2.7 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.7 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.8 source type checking and 93 automated tests passed; feature detection, bounded evidence, legacy baseline compatibility, stale-description rejection, persistence and model cancellation guards verified",
+      "0.2.8 source interface checked in dark and light themes; native production startup health verified",
+      "0.2.8 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "portable": {
-      "path": "Atlas-0.2.7-win-x64-portable.zip",
-      "size": 400994769,
-      "sha256": "522faf6a0744726acd8e9b34bc18d82381c023dd00dbf541f9b7b5d2f0431250"
+      "path": "Atlas-0.2.8-win-x64-portable.zip",
+      "size": 401000918,
+      "sha256": "debfaa39005d47579a7c1d4ecfb92ade8849a13e1db30fbc31c338c8effa21b2"
     },
     "full-update": {
-      "path": "Atlas-0.2.7-win-x64-full-update.zip",
-      "size": 400633374,
-      "sha256": "8cd7ebbe9139498937a469aa0474c5abf0ff1d89b8a181dbdee83949867f395c"
+      "path": "Atlas-0.2.8-win-x64-full-update.zip",
+      "size": 400639523,
+      "sha256": "efa1d5af7546d36a8f53f4c8022776bc7af490e8a2c63ebd02d729a1f552adc8"
     },
     "application-update": {
-      "path": "Atlas-0.2.7-win-x64-application-update.zip",
-      "size": 98428783,
-      "sha256": "f6ec586a41f80d3dd90c778ed97cd4a94a088d80dbe9c06dc8b3217c7122cf4e"
+      "path": "Atlas-0.2.8-win-x64-application-update.zip",
+      "size": 98434932,
+      "sha256": "53ee50f8870a13454dab29caa41b8db638d6f48d3d399c619b091b0899b98e18"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"

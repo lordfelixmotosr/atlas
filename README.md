@@ -1,4 +1,10 @@
-# Atlas 0.2.7 portable
+# Atlas 0.2.8 portable
+
+## 0.2.8 feature descriptions and forest accents
+
+Atlas uses muted forest green accents for actions, selections, focus, and progress in both light and dark themes. Change tracking now has a feature overview, including named additions, removals, and recorded property changes. Small text files are captured in future baselines so descriptions can compare actual earlier and current source. Existing comparisons remain usable; missing earlier text is identified rather than reconstructed.
+
+In **Changes**, choose **Write description with AI** to create player-facing release notes using the selected default model and normal account usage. You can cancel, edit, save, copy, or use the description as an update note. Descriptions are stored outside the mod and tied to the exact comparison; further edits invalidate them. Generating a description does not steer or interrupt the mod chat. Image file changes are reported without claiming unverified pixel changes. File details remain available below the overview.
 
 ## 0.2.7 install and restart repair
 

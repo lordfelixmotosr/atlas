@@ -66,8 +66,8 @@
   --ink: #272831;
   --muted: #626570;
   --subtle: #757988;
-  --accent: #586fb0;
-  --accent-soft: #455d9e;
+  --accent: #476c53;
+  --accent-soft: #3b5d45;
   --accent-foreground: #ffffff;
   --ready: #16876c;
   --pending: #8b9197;
@@ -83,9 +83,9 @@
   --ink: #e8e8ec;
   --muted: #a8a8b0;
   --subtle: #7e7e88;
-  --accent: #aebbee;
-  --accent-soft: #c0ccf4;
-  --accent-foreground: #191b25;
+  --accent: #96b69c;
+  --accent-soft: #aac7af;
+  --accent-foreground: #152119;
   --ready: #8ab29b;
   --pending: #bdad82;
   --failed: #e49b9b;

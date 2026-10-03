@@ -23,10 +23,10 @@ const theme=EditorView.theme({
  '.cm-content':{padding:'10px 0'},'.cm-line':{padding:'0 12px'},
  '.cm-gutters':{backgroundColor:'#17171b',borderRight:'1px solid #303038',color:'#747787'},
  '.cm-activeLine,.cm-activeLineGutter':{backgroundColor:'#ffffff05'},
- '.cm-cursor':{borderLeftColor:'#bdc6ec'},'&.cm-focused .cm-selectionBackground,.cm-selectionBackground':{backgroundColor:'#a9b7df35'},
+ '.cm-cursor':{borderLeftColor:'var(--accent)'},'&.cm-focused .cm-selectionBackground,.cm-selectionBackground':{backgroundColor:'color-mix(in srgb,var(--accent) 21%,transparent)'},
  '.cm-panels':{backgroundColor:'#202026',color:'#dedee5'},'.cm-textfield':{backgroundColor:'#131316',border:'1px solid #44444e'},
  '.cm-button':{backgroundImage:'none',backgroundColor:'#292932',color:'#dedee5',border:'1px solid #44444e'},
- '&.cm-focused':{outline:'none'},'.cm-searchMatch':{backgroundColor:'#b7c4ec30',outline:'1px solid #b7c4ec70'},
+ '&.cm-focused':{outline:'none'},'.cm-searchMatch':{backgroundColor:'color-mix(in srgb,var(--accent) 19%,transparent)',outline:'1px solid color-mix(in srgb,var(--accent) 44%,transparent)'},
 },{dark:true});
 export type EditorLocation={line:number;column?:number;key:number};
 export function CodeEditor({path,text,onChange,onSave,location,onCursor,states,lineSeparator}: {

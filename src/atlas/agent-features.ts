@@ -253,6 +253,7 @@ async function felixSteer(host,id,text,attachments){
 
 let felixOpenAIAccountEpoch=0;
 function felixOpenAIWorkBusy(host){
+  if(host.atlasChangeDescriptionsOpenAI>0)return true;
   if(host.felixOpenAIStarting>0)return true;
   for(const {session} of host.sessions.values())if(session.model?.provider==="openai-codex"&&felixAgentWorking(session))return true;
   return false;

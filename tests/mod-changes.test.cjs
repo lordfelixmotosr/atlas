@@ -54,3 +54,25 @@ test('persists deletion detection across restarts and preserves the publication 
  const deleted=await api.readModChanges(root,100);const restarted=load('atlas/mod-changes.ts');assert.equal((await restarted.readModChanges(root,100)).lastModifiedAt,deleted.lastModifiedAt);
  write(root,'file.txt','restored earlier content');const report=await restarted.readModChanges(root,100);assert.equal(report.lastPublishedAt,100);assert.equal(report.status,'modified');assert.equal(JSON.parse(fs.readFileSync(state)).published.at,100);
 });
+
+test('feature overview names new content and explains recorded balance changes',async t=>{
+ const {root}=fixture(t);write(root,'Defs/Armor.xml','<Defs><ThingDef><defName>ScaleArmor</defName><label>scale armor</label><apparel/><statBases><ArmorRating_Sharp>0.3</ArmorRating_Sharp></statBases></ThingDef></Defs>');await api.recordModBaseline(root,'updated');
+ write(root,'Defs/Armor.xml','<Defs><ThingDef><defName>ScaleArmor</defName><label>scale armor</label><apparel/><statBases><ArmorRating_Sharp>0.45</ArmorRating_Sharp></statBases></ThingDef><AbilityDef><defName>Rally</defName><label>rally allies</label><description>Rallies nearby allies to hold their position.</description></AbilityDef></Defs>');
+ const report=await api.readModChanges(root);assert.match(report.features.changed.join('\n'),/scale armor.*sharp protection: 0.3 → 0.45/);assert.match(report.features.added.join('\n'),/rally allies.*Rallies nearby allies/);assert.equal(report.features.removed.length,0);
+});
+test('AI evidence carries actual earlier/current source and excludes credential previews',async t=>{
+ const {root}=fixture(t);write(root,'Source/Rewards.cs','int Reward = 5;');write(root,'auth.json','private credential');await api.recordModBaseline(root,'published');write(root,'Source/Rewards.cs','int Reward = 8;');write(root,'auth.json','updated credential');
+ const report=await api.readModChanges(root),evidence=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey));const code=evidence.evidence.find(file=>file.path==='Source/Rewards.cs');assert.equal(code.before,'int Reward = 5;');assert.equal(code.after,'int Reward = 8;');assert.equal(code.earlierTextAvailable,true);assert(!JSON.stringify(evidence).includes('private credential'));assert(!JSON.stringify(evidence).includes('updated credential'));
+});
+test('descriptions persist only for their exact content and comparison without marking an update',async t=>{
+ const {root}=fixture(t);write(root,'Source/Main.cs','one');await api.recordModBaseline(root,'published','release',undefined,100);write(root,'Source/Main.cs','two');const report=await api.readModChanges(root,100);
+ await api.saveModDescription(root,'latest',report.descriptionKey,'Added a recruitment feature.','ai','Test model');const saved=await api.readModChanges(root,100);assert.equal(saved.featureDescription,'Added a recruitment feature.');assert.equal(saved.descriptionOrigin,'ai');assert.equal(saved.status,'modified');assert.equal(saved.lastPublishedAt,100);assert.equal(saved.lastUpdatedAt,null);
+ write(root,'Source/Main.cs','three');const changed=await api.readModChanges(root,100);assert.equal(changed.featureDescription,'');await assert.rejects(api.saveModDescription(root,'latest',report.descriptionKey,'stale'),/changed/);await assert.rejects(api.prepareModDescription(root,'latest',report.descriptionKey),/changed/);
+});
+test('old baselines without source snapshots remain usable and declare missing evidence',async t=>{
+ const {root,state}=fixture(t);write(root,'Source/Main.cs','before');await api.recordModBaseline(root,'published');const stored=JSON.parse(fs.readFileSync(state));delete stored.published.inventory.files['Source/Main.cs'].preview;fs.writeFileSync(state,JSON.stringify(stored));write(root,'Source/Main.cs','after');const report=await api.readModChanges(root);assert.equal(report.status,'modified');const evidence=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey));assert.equal(evidence.evidence[0].earlierTextAvailable,false);assert.equal(evidence.evidence[0].before,null);assert.match(report.features.changed[0],/Main mod code/);
+});
+test('text snapshots and AI evidence are bounded and a saved description cannot use the wrong baseline',async t=>{
+ const {root}=fixture(t);for(let i=0;i<25;i++)write(root,'Source/File'+i+'.cs','a'.repeat(32000));await api.recordModBaseline(root,'published','',undefined,100);write(root,'Source/File0.cs','b'.repeat(32000));await api.recordModBaseline(root,'updated','',undefined,200);for(let i=0;i<25;i++)write(root,'Source/File'+i+'.cs','c'.repeat(32000));
+ const inventory=await api.collectModInventory(root);assert(Object.values(inventory.files).reduce((total,file)=>total+Buffer.byteLength(file.preview??''),0)<=512*1024);const latest=await api.readModChanges(root),evidence=await api.prepareModDescription(root,'latest',latest.descriptionKey);assert(evidence.length<160000);assert(JSON.parse(evidence).omittedFiles>0);await assert.rejects(api.saveModDescription(root,'published',latest.descriptionKey,'wrong comparison'),/changed/);
+});

@@ -9,6 +9,12 @@ function init(){
  process.on('uncaughtException',error=>{write({error:error.stack});app.exit(1);});
  process.on('unhandledRejection',error=>{write({error:String(error?.stack??error)});app.exit(1);});
  app.on('browser-window-created',(_event,win)=>{
+  const diagnostic=message=>fs.appendFileSync(path.join(root,'data/native-renderer.log'),message+'\n');
+  diagnostic('Window created');
+  win.webContents.on('console-message',(_e,level,message)=>diagnostic('Console '+level+': '+message));
+  win.webContents.on('did-fail-load',(_e,code,description,url)=>diagnostic('Load failure '+code+': '+description+' '+url));
+  win.webContents.on('render-process-gone',(_e,details)=>diagnostic('Renderer stopped: '+JSON.stringify(details)));
+  win.webContents.on('did-stop-loading',()=>diagnostic('Loading stopped: '+win.webContents.getURL()));
   win.webContents.once('did-finish-load',()=>{if(win.webContents.getURL().startsWith('data:'))return;setTimeout(async()=>{
    try{
     const result=await win.webContents.executeJavaScript(`(async()=>({version:await window.modmixer.getAppVersion(),library:await window.modmixer.atlasLibraryStatus(),app:await window.modmixer.atlasAppStatus(),modelIds:(await window.modmixer.listModels()).map(model=>({id:model.id,contextWindow:model.contextWindow})),body:document.body.innerText,title:document.title,hasLibraryApi:typeof window.modmixer.atlasLibrarySearch==='function'}))()`);
@@ -35,6 +41,14 @@ function init(){
     fs.mkdirSync(path.join(copied,'Defs'),{recursive:true});fs.writeFileSync(path.join(copied,'Defs/test.xml'),'<Defs><ThingDef><defName>NativeArmor</defName><label>native armor</label></ThingDef></Defs>');
     fs.writeFileSync(path.join(copied,'Textures/test.png'),Buffer.from([0,255,71,4,5,6]));
     const changes=await win.webContents.executeJavaScript(`window.modmixer.modChanges(${folder})`);
+    const descriptionText='Added native armor for colonists and changed its artwork.';
+    const described=await win.webContents.executeJavaScript(`window.modmixer.saveModDescription(${folder},'latest',${JSON.stringify(changes.descriptionKey)},${JSON.stringify(descriptionText)})`);
+    fs.writeFileSync(path.join(copied,'Textures/test.png'),Buffer.from([0,255,71,7,8,9]));
+    const changedAgain=await win.webContents.executeJavaScript(`window.modmixer.modChanges(${folder})`);
+    const staleRejected=await win.webContents.executeJavaScript(`(async()=>{try{await window.modmixer.saveModDescription(${folder},'latest',${JSON.stringify(changes.descriptionKey)},'stale description');return false}catch(error){return error.message.includes('changed')}})()`);
+    await win.webContents.executeJavaScript(`window.modmixer.cancelModDescription(${folder})`);
+    result.nativeFeatureDescriptions={namedFeature:changes.features.added.some(text=>text.includes('native armor')),descriptionSaved:described.featureDescription===descriptionText,baselineStillModified:described.status==='modified',invalidatedAfterEdit:!changedAgain.featureDescription,staleRejected,noModelCalls:true};
+    if(Object.values(result.nativeFeatureDescriptions).includes(false))throw new Error('Native feature-description verification failed.');
     const projectFiles=await win.webContents.executeJavaScript(`window.modmixer.projectFiles(${folder})`);
     await win.webContents.executeJavaScript(`window.modmixer.projectDraftState(${folder},true)`);result.nativeDraftGuard=globalThis.__atlasRuntime.application.restartBlockReason();if(!result.nativeDraftGuard?.includes('file edits'))throw new Error('Native draft guard failed.');await win.webContents.executeJavaScript(`window.modmixer.projectDraftState(${folder},false)`);
     result.nativeTextSearch=await win.webContents.executeJavaScript(`window.modmixer.projectSearch(${folder},'NativeArmor',{token:'native-test'})`);if(result.nativeTextSearch.matches.length!==1||result.nativeTextSearch.matches[0].line!==1)throw new Error('Native content search failed.');

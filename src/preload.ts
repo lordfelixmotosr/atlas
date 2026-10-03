@@ -17,6 +17,9 @@ export type {
 const api = {
   modChanges:(folder:string,comparison:'latest'|'published'|'updated'='latest'):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:changes',folder,comparison),
   markModUpdated:(folder:string,note:string):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:mark-updated',folder,note),
+  saveModDescription:(folder:string,comparison:'latest'|'published'|'updated',key:string,text:string):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:description-save',folder,comparison,key,text),
+  generateModDescription:(folder:string,comparison:'latest'|'published'|'updated',key:string):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:description-generate',folder,comparison,key),
+  cancelModDescription:(folder:string):Promise<void>=>ipcRenderer.invoke('atlas:mods:description-cancel',folder),
   modMixerImportPlan:(choose=false):Promise<import('./atlas/modmixer-import').ModMixerImportPlan|null>=>ipcRenderer.invoke('atlas:mods:import-plan',choose),
   modMixerImportApply:(token:string,selected:string[]):Promise<import('./atlas/modmixer-import').ModMixerImportResult>=>ipcRenderer.invoke('atlas:mods:import-apply',token,selected),
   modMixerImportCancel:(token:string):Promise<void>=>ipcRenderer.invoke('atlas:mods:import-cancel',token),
