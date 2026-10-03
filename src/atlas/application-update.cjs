@@ -12,6 +12,7 @@ class ApplicationUpdate {
  constructor(library,electron,isBusy,options={}){
   this.library=library;this.electron=electron;this.isBusy=isBusy;this.ready=null;this.available=null;this.working=false;this.error=null;this.progress=null;this.variant='application-update';this.restartBlockReason=options.restartBlockReason??(()=>null);this.onState=options.onState??(()=>{});this.now=options.now??(()=>performance.now());this.lastProgressAt=-Infinity;
   this.folder=path.join(library.root,'data','updates');this.receipt=path.join(this.folder,'resume.json');ensureDir(library.root,this.folder);
+  this.spawnInstaller=options.spawnInstaller??spawn;this.handoffTimeout=options.handoffTimeout??120000;
   try{regular(this.receipt);const info=JSON.parse(fs.readFileSync(this.receipt));metadata(info);if(!/^\d+\.\d+\.\d+$/.test(info.version))throw new Error();const part=path.join(this.folder,info.sha256+'.part');regular(part);const received=fs.statSync(part).size;if(received<=info.size){this.resumeInfo=info;this.progress={stage:'paused',receivedBytes:received,totalBytes:info.size,bytesPerSecond:0};}}catch{}
  }
  status(){return{version:VERSION,available:this.available?.version??null,ready:this.ready?.version??null,working:this.working,error:this.error,progress:this.progress?{...this.progress}:null,downloadKind:this.variant,fullAvailable:!!this.available?.full,source:this.library.config.source,lastCheckedAt:this.lastCheckedAt??null,recovery:readRecovery(this.library.root)};}
@@ -72,8 +73,44 @@ class ApplicationUpdate {
    finally{this.working=false;this.controller=null;this.notify();}
   }return this.status();
  }
- async install(){if(!this.ready)throw new Error('Download an application update first.');if(this.working)throw new Error('An application update is running.');if(this.restartBlockReason())throw new Error(this.restartBlockReason());if(this.isBusy())throw new Error('Finish or stop active work before restarting Atlas.');this.working=true;this.notify();try{const ready=this.ready;if(await digest(ready.path)!==ready.sha256)throw new Error('Downloaded update changed since verification.');if(this.isBusy())throw new Error('Finish or stop active work before restarting Atlas.');
-  const request=path.join(this.folder,'install-request.json');atomicJson(this.library.root,request,{root:this.library.root,pid:process.pid,version:ready.version,zip:ready.path,sha256:ready.sha256});const helper=path.join(this.library.resources,'apply-update.ps1');spawn('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',helper,'-RequestPath',request],{detached:true,stdio:'ignore',windowsHide:true}).unref();this.electron.app.exit(0);
- }finally{this.working=false;this.notify();}}
+ async install(){
+  if(!this.ready)throw new Error('Download an application update first.');
+  if(this.working)throw new Error('An application update is running.');
+  const blocked=()=>this.restartBlockReason()||(this.isBusy()?'Finish or stop active work before restarting Atlas.':null);
+  if(blocked())throw new Error(blocked());
+  this.working=true;this.error=null;this.stage('installing');let child,request;
+  try{
+   const ready=this.ready;if(await digest(ready.path)!==ready.sha256)throw new Error('Downloaded update changed since verification.');
+   if(blocked())throw new Error(blocked());
+   const token=crypto.randomUUID(),runner=path.join(this.folder,'installer-'+token);ensureDir(this.library.root,runner);
+   // Run an independent copy so replacing the app cannot replace a running helper.
+   for(const name of ['launch-update.ps1','apply-update.ps1','watch-update.ps1'])fs.copyFileSync(path.join(this.library.resources,name),path.join(runner,name));
+   request=path.join(this.folder,'install-request.json');
+   const handoff=path.join(runner,'handoff.json');
+   atomicJson(this.library.root,request,{root:this.library.root,pid:process.pid,version:ready.version,zip:ready.path,sha256:ready.sha256,token,handoff,watcher:path.join(runner,'watch-update.ps1')});
+   const powershell=path.join(process.env.SystemRoot||process.env.WINDIR||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
+   const log=fs.openSync(path.join(runner,'launcher.log'),'a');
+   // Windows PowerShell can exit silently without executing -File when launched
+   // with DETACHED_PROCESS from a GUI app. Redirected files keep this normal
+   // process independent of Atlas's stdio; unref below lets Atlas exit.
+   try{child=this.spawnInstaller(powershell,['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(runner,'launch-update.ps1'),'-RequestPath',request],{detached:false,stdio:['ignore',log,log],windowsHide:true,cwd:this.library.root});}finally{fs.closeSync(log);}
+   await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});
+   let failure;child.on('error',error=>failure=error);child.on('exit',(code)=>{if(code!==0)failure=new Error('The update launcher exited before confirming readiness (code '+code+').');});
+   const deadline=Date.now()+this.handoffTimeout;
+   while(true){
+    let receipt;try{receipt=JSON.parse(await fs.promises.readFile(handoff,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+    if(receipt?.token===token){if(receipt.status==='error')throw new Error(receipt.reason);if(receipt.status==='ready')break;}
+    if(failure)throw failure;
+    if(Date.now()>deadline)throw new Error('The update installer did not confirm readiness. Atlas stayed open. Try again.');
+    await new Promise(resolve=>setTimeout(resolve,100));
+   }
+   if(blocked())throw new Error(blocked());
+   child.unref();this.electron.app.exit(0);
+  }catch(error){
+   // The helper has not received permission to replace files while this app lives.
+   if(request)try{const value=JSON.parse(fs.readFileSync(request,'utf8'));atomicJson(this.library.root,request,{...value,cancelled:true});}catch{}
+   this.error=error.message;this.stage('error');throw error;
+  }finally{this.working=false;this.notify();}
+ }
 }
 module.exports={ApplicationUpdate};

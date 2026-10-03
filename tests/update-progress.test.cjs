@@ -103,3 +103,24 @@ test('corrupted retained bytes fail verification even with a valid range',async 
 test('signed compatibility checks select the full archive when the installed runtime is absent',async t=>{
  const f=fixture(t),full=Buffer.from('full repair package');f.entry.minimumVersion='0.2.2';f.entry.runtimeChecks=[{path:'tools/runtime.bin',sha256:'0'.repeat(64)}];f.entry.full={file:'full.zip',size:full.length,sha256:sha(full)};fs.writeFileSync(path.join(f.updates,'full.zip'),full);fs.writeFileSync(path.join(f.updates,'index.atlas.json'),f.feed());const result=await f.app.download();assert.equal(result.downloadKind,'full-update');assert.equal(sha(fs.readFileSync(f.app.ready.path)),sha(full));
 });
+
+function installerResources(f){for(const name of ['launch-update.ps1','apply-update.ps1','watch-update.ps1'])fs.copyFileSync(path.resolve(__dirname,'../src/atlas',name),path.join(f.resources,name));}
+test('failed Windows installer launch leaves Atlas open and reports the error',async t=>{
+ const f=fixture(t);await f.app.download();installerResources(f);let exits=0;
+ f.app.electron={app:{exit:()=>exits++}};
+ f.app.spawnInstaller=()=>{const child=new(require('node:events').EventEmitter)();process.nextTick(()=>child.emit('error',new Error('PowerShell could not start')));return child;};
+ await assert.rejects(f.app.install(),/PowerShell could not start/);assert.equal(exits,0);assert.equal(f.app.status().working,false);assert.match(f.app.status().error,/PowerShell/);
+ assert.equal(JSON.parse(fs.readFileSync(path.join(f.root,'data/updates/install-request.json'))).cancelled,true);
+});
+test('a spawned installer must acknowledge readiness before Atlas exits',async t=>{
+ const f=fixture(t);await f.app.download();installerResources(f);let exits=0,ack;
+ f.app.electron={app:{exit:()=>{assert(ack,'Atlas cannot exit before the helper is ready');exits++;}}};
+ f.app.spawnInstaller=(exe,args,options)=>{assert(path.isAbsolute(exe));assert.equal(options.detached,false);const child=new(require('node:events').EventEmitter)();child.unref=()=>{};process.nextTick(()=>child.emit('spawn'));setTimeout(()=>{const request=JSON.parse(fs.readFileSync(path.join(f.root,'data/updates/install-request.json')));assert.equal(exits,0);assert.notEqual(path.dirname(request.watcher),f.resources);ack=true;fs.writeFileSync(request.handoff,JSON.stringify({status:'ready',token:request.token}));},150);return child;};
+ await f.app.install();assert.equal(exits,1);
+});
+test('installer preflight rejection and timeout keep Atlas open',async t=>{
+ for(const rejected of [true,false]){const f=fixture(t);await f.app.download();installerResources(f);let exits=0;f.app.electron={app:{exit:()=>exits++}};f.app.handoffTimeout=200;
+ f.app.spawnInstaller=()=>{const child=new(require('node:events').EventEmitter)();process.nextTick(()=>{child.emit('spawn');if(rejected){const request=JSON.parse(fs.readFileSync(path.join(f.root,'data/updates/install-request.json')));fs.writeFileSync(request.handoff,JSON.stringify({status:'error',token:request.token,reason:'Update archive is invalid'}));}});return child;};
+ await assert.rejects(f.app.install(),rejected?/archive is invalid/:/confirm readiness/);assert.equal(exits,0);assert.equal(f.app.status().working,false);
+ }
+});

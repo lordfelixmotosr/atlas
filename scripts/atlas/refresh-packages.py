@@ -13,6 +13,7 @@ source, output = map(lambda value: Path(value).resolve(), sys.argv[1:3])
 version = json.loads((source / "atlas-build.json").read_text())["version"]
 replacements = {"resources/app.asar", "Atlas.exe", "atlas-build.json", "README-ATLAS.md", "resources/atlas/apply-update.ps1", "resources/modmixer-bridge/About/About.xml", "resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/oauth-page.js"}
 replacements.add("resources/atlas/watch-update.ps1")
+replacements.add("resources/atlas/launch-update.ps1")
 replacements.add("resources/atlas/distribution.json")
 replacements.update({"LICENSE", "NOTICE"})
 replacements.update(file.relative_to(source).as_posix() for file in (source / "resources/atlas/game-adapter-template").rglob("*") if file.is_file())

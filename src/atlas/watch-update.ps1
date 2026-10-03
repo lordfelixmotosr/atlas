@@ -28,4 +28,4 @@ foreach($atlasRelative in $atlasPending.files){
 }
 @{status='rolled-back';version=$atlasPending.version;reason='The updated app did not confirm a healthy startup. The previous application files were restored.';checkedAt=[DateTime]::UtcNow.ToString('o')}|ConvertTo-Json|Set-Content -LiteralPath $atlasStatus
 Remove-Item -LiteralPath $PendingPath
-if(!$NoRestart){Start-Process -FilePath (Join-Path $atlasRoot 'Atlas.exe') -WindowStyle Hidden}
+if(!$NoRestart){Start-Process -FilePath (Join-Path $atlasRoot 'Atlas.exe') -WorkingDirectory $atlasRoot -WindowStyle Hidden}

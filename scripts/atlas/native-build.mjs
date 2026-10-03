@@ -22,7 +22,7 @@ if(process.argv.includes('--verify-build')){const main=parsed.files.find(f=>f.na
 const pkg={name:'atlas',productName:'Atlas',version,main:'.vite/build/main.js',author:{name:'Felix'},license:'MIT'};const existing=parsed.files.find(f=>f.name==='package.json');existing.bytes=Buffer.from(JSON.stringify(pkg));
 const archive=asar.write(parsed);fs.writeFileSync(path.join(output,'resources/app.asar'),archive);
 const exePath=path.join(output,'Atlas.exe');cp.execFileSync('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/atlas/set-icon.ps1','-ExePath',exePath,'-IconPath',path.join(output,'resources/atlas/Atlas.ico')],{stdio:'inherit',windowsHide:true});const exe=asar.patchExe(fs.readFileSync(exePath),asar.sha(asar.read(original).raw),asar.sha(asar.read(archive).raw));fs.writeFileSync(exePath,exe);
-for(const f of ['apply-update.ps1','watch-update.ps1'])fs.copyFileSync('src/atlas/'+f,path.join(output,'resources/atlas',f));for(const f of ['README-ATLAS.md','LICENSE','NOTICE'])fs.copyFileSync(f,path.join(output,f));
+for(const f of ['launch-update.ps1','apply-update.ps1','watch-update.ps1'])fs.copyFileSync('src/atlas/'+f,path.join(output,'resources/atlas',f));for(const f of ['README-ATLAS.md','LICENSE','NOTICE'])fs.copyFileSync(f,path.join(output,f));
 fs.cpSync('templates/game-adapter',path.join(output,'resources/atlas/game-adapter-template'),{recursive:true});
 fs.copyFileSync('src/atlas/distribution.json',path.join(output,'resources/atlas/distribution.json'));
 fs.copyFileSync('src/atlas/oauth-page.mjs',path.join(output,'resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/oauth-page.js'));

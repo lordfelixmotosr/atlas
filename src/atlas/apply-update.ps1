@@ -9,12 +9,22 @@ $atlasRoot=[IO.Path]::GetFullPath($atlasRequest.root)
 $atlasZip=[IO.Path]::GetFullPath($atlasRequest.zip)
 $atlasPrefix=$atlasRoot.TrimEnd('\')+'\'
 if (!$atlasZip.StartsWith($atlasPrefix,[StringComparison]::OrdinalIgnoreCase) -or $atlasRequest.version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid Atlas update request.' }
+$atlasUpdates=Join-Path $atlasRoot 'data\updates'
+$atlasHandoff=$null
+if($atlasRequest.token){
+ if($atlasRequest.token -notmatch '^[a-f0-9-]{36}$'){throw 'Invalid installer handoff token.'}
+ $atlasHandoff=[IO.Path]::GetFullPath($atlasRequest.handoff)
+ if(!$atlasHandoff.StartsWith($atlasUpdates+'\installer-'+$atlasRequest.token+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe installer handoff path.'}
+}
+function AtlasJson([string]$File,$Value){$temporary=$File+'.'+[Guid]::NewGuid().ToString('N')+'.tmp';[IO.File]::WriteAllText($temporary,($Value|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false));if([IO.File]::Exists($File)){[IO.File]::Delete($File)};[IO.File]::Move($temporary,$File)}
+function AtlasLog([string]$Message){[IO.File]::AppendAllText((Join-Path $atlasUpdates 'installer.log'),[DateTime]::UtcNow.ToString('o')+' '+$Message+[Environment]::NewLine)}
+$atlasParentExited=$false
+try {
+AtlasLog ('Preparing Atlas '+$atlasRequest.version)
 $atlasHash=[Security.Cryptography.SHA256]::Create()
 $atlasStream=[IO.File]::OpenRead($atlasZip)
 try {$atlasDigest=[BitConverter]::ToString($atlasHash.ComputeHash($atlasStream)).Replace('-','').ToLowerInvariant()} finally {$atlasStream.Dispose();$atlasHash.Dispose()}
 if ($atlasDigest -ne $atlasRequest.sha256) { throw 'Update checksum changed.' }
-$atlasOld=Get-Process -Id ([int]$atlasRequest.pid) -ErrorAction SilentlyContinue
-if (!$ValidateOnly -and $atlasOld -and !$atlasOld.WaitForExit(60000)) { throw 'Atlas is still running.' }
 $atlasSuffix=[Guid]::NewGuid().ToString('N')
 $atlasStage=Join-Path $atlasRoot ('data\updates\stage-'+$atlasRequest.version+'-'+$atlasSuffix)
 $atlasBackup=Join-Path $atlasRoot ('backups\app-'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')+'-'+$atlasSuffix)
@@ -45,6 +55,17 @@ try {
 if (!$atlasSeen.Contains('Atlas.exe') -or !$atlasSeen.Contains('resources\app.asar') -or !$atlasSeen.Contains('atlas-build.json')) { throw 'Update is not an Atlas portable application.' }
 if($atlasBuild.version -ne $atlasRequest.version){throw 'Application version does not match its signed update metadata.'}
 if($ValidateOnly){[pscustomobject]@{valid=$true;files=$atlasFiles.Count;version=$atlasBuild.version}|ConvertTo-Json -Compress;return}
+$atlasOld=Get-Process -Id ([int]$atlasRequest.pid) -ErrorAction SilentlyContinue
+if($atlasHandoff){AtlasJson $atlasHandoff @{status='ready';token=$atlasRequest.token};AtlasLog 'Installer ready; waiting for Atlas to close.'}
+# Wait only after extraction succeeds. A cancelled handoff never changes app files.
+for($atlasWait=0;$atlasWait -lt 180;$atlasWait++){
+ $atlasCurrentRequest=Get-Content -LiteralPath $RequestPath -Raw|ConvertFrom-Json
+ if($atlasCurrentRequest.cancelled -or ($atlasRequest.token -and $atlasCurrentRequest.token -ne $atlasRequest.token)){throw 'Update installation cancelled.'}
+ if(!$atlasOld -or $atlasOld.HasExited){$atlasParentExited=$true;break}
+ Start-Sleep -Milliseconds 500
+}
+if(!$atlasParentExited){throw 'Atlas is still running. The application files were not changed.'}
+AtlasLog 'Applying verified application files.'
 $atlasMoved=[Collections.Generic.List[string]]::new()
 try {
  foreach($atlasRelative in $atlasFiles) {
@@ -73,12 +94,20 @@ try {
  }
  throw
 }
-Set-Content -LiteralPath (Join-Path $atlasRoot 'data\updates\last-update.json') -Value ($atlasRequest | ConvertTo-Json)
+AtlasJson (Join-Path $atlasUpdates 'last-update.json') @{version=$atlasRequest.version;installedAt=[DateTime]::UtcNow.ToString('o')}
 if(!$NoRestart){
  $atlasPendingPath=Join-Path $atlasRoot 'data\updates\pending-startup.json'
  $atlasPending=@{root=$atlasRoot;backup=$atlasBackup;files=@($atlasFiles);version=$atlasRequest.version;token=[Guid]::NewGuid().ToString()}
- $atlasPending|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $atlasPendingPath
- $atlasLaunch=Start-Process -FilePath (Join-Path $atlasRoot 'Atlas.exe') -WindowStyle Hidden -PassThru
+ AtlasJson $atlasPendingPath $atlasPending
+ $atlasLaunch=Start-Process -FilePath (Join-Path $atlasRoot 'Atlas.exe') -WorkingDirectory $atlasRoot -WindowStyle Hidden -PassThru
  $atlasWatcher=Join-Path $atlasRoot 'resources\atlas\watch-update.ps1'
- if(Test-Path -LiteralPath $atlasWatcher){Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$atlasWatcher+'"'),'-PendingPath',('"'+$atlasPendingPath+'"'),'-LaunchPid',$atlasLaunch.Id) -WindowStyle Hidden}
+ if($atlasRequest.watcher){$atlasPinnedWatcher=[IO.Path]::GetFullPath($atlasRequest.watcher);if(!$atlasPinnedWatcher.StartsWith($atlasUpdates+'\installer-'+$atlasRequest.token+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe pinned recovery helper.'};$atlasWatcher=$atlasPinnedWatcher}
+ if(Test-Path -LiteralPath $atlasWatcher){Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$atlasWatcher+'"'),'-PendingPath',('"'+$atlasPendingPath+'"'),'-LaunchPid',$atlasLaunch.Id) -WindowStyle Hidden}
+ AtlasLog ('Started Atlas; process '+$atlasLaunch.Id+'.')
+}
+} catch {
+ $atlasReason=$_.Exception.Message
+ try{AtlasLog ('Installation failed: '+$atlasReason);AtlasJson (Join-Path $atlasUpdates 'recovery-status.json') @{status='install-failed';version=$atlasRequest.version;reason=$atlasReason;checkedAt=[DateTime]::UtcNow.ToString('o')};if($atlasHandoff){AtlasJson $atlasHandoff @{status='error';token=$atlasRequest.token;reason=$atlasReason}}}catch{}
+ if($atlasParentExited -and !$NoRestart){try{Start-Process -FilePath (Join-Path $atlasRoot 'Atlas.exe') -WorkingDirectory $atlasRoot -WindowStyle Hidden}catch{}}
+ throw
 }

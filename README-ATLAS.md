@@ -1,4 +1,8 @@
-# Atlas 0.2.6 portable
+# Atlas 0.2.7 portable
+
+## 0.2.7 install and restart repair
+
+The Windows updater now uses a separate launcher and waits for the installer to validate and stage the update before Atlas closes. Installer startup failures keep Atlas open and display an error. The helpers run from an independent copy, write diagnostics to `data/updates/installer.log`, and retain startup recovery. A complete real Electron install, exit and healthy restart was verified in an isolated portable copy.
 
 Atlas is a Windows x64 fork of ModMixer 0.10.5 maintained by Felix, with your stag logo, portable storage, and signed knowledge and skill updates. This release supports **RimWorld**. Minecraft is disabled in both game registries and its tools, grammar, bridge JAR and reference pack are excluded. Atlas's application and UI are now compiled from TypeScript/React source.
 
@@ -130,9 +134,9 @@ Upstream licenses and notices are retained. `LICENSE` and `NOTICE` cover the inh
 
 ## Branding and verification
 
-Chat, confirmation, library and provider setup labels use Atlas. Windows product metadata identifies Atlas 0.2.6 maintained by Felix. The local OpenAI/Claude browser callback page uses the stag logo; provider-owned sign-in/consent pages and registered OAuth identities remain controlled by the provider. Legacy internal IPC names, bridge package IDs and project sidecars are retained for compatibility. Required upstream authorship stays in LICENSE, NOTICE and source provenance. Old product website links and leaderboard registration are removed from the Atlas workflow.
+Chat, confirmation, library and provider setup labels use Atlas. Windows product metadata identifies Atlas 0.2.7 maintained by Felix. The local OpenAI/Claude browser callback page uses the stag logo; provider-owned sign-in/consent pages and registered OAuth identities remain controlled by the provider. Legacy internal IPC names, bridge package IDs and project sidecars are retained for compatibility. Required upstream authorship stays in LICENSE, NOTICE and source provenance. Old product website links and leaderboard registration are removed from the Atlas workflow.
 
-Verification: source type checking; 81 automated tests covering byte progress, streamed updates, failed downloads and retries, scheduled progress broadcasts, signed packs and update validation, restricted GitHub redirects, startup recovery, source-file boundaries and conflicts, bulk replacement and backups, account/steering/compaction lifecycle, metadata migration, bulk ModMixer import and cancellation, withdrawing queued steering, and content comparisons across publications and updates; native Electron rendering, library IPC, reference viewer, synthetic mod import and change-report IPC; browser UI checks with synthetic projects. No live model request, provider account sign-in, or Steam upload was performed for this release.
+Verification: source type checking; 86 automated tests, including installer launch failures, acknowledgement gating, cancelled handoffs, persistent diagnostics, download resume and startup recovery. A real Electron install, close, application replacement and healthy restart was verified in an isolated portable runtime. Existing editor, model context, account, import and modification tracking tests passed. No live model request, provider sign-in, or Steam upload was performed.
 
 ## Atlas 0.2.6
 

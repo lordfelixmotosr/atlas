@@ -24,3 +24,13 @@ test('failed replacement rolls back earlier files and retains user skills',t=>{
 });
 
 test('real runtime data folders and long resource paths are allowed without touching private roots',t=>{const relative='Atlas/resources/data/'+('nested-directory/'.repeat(12))+'catalog.json';const f=fixture(t,[[relative,'{}']]);invoke(f,'-ValidateOnly');invoke(f,'-NoRestart');assert.equal(fs.readFileSync(path.join(f.root,relative.slice(6)),'utf8'),'{}');assert.equal(fs.readFileSync(path.join(f.root,'custom/skills/mine.txt'),'utf8'),'keep');});
+
+test('installer acknowledges preflight and writes persistent diagnostics',t=>{
+ const f=fixture(t),request=JSON.parse(fs.readFileSync(f.request)),token=crypto.randomUUID(),runner=path.join(f.root,'data/updates','installer-'+token);fs.mkdirSync(runner);
+ request.token=token;request.handoff=path.join(runner,'handoff.json');fs.writeFileSync(f.request,JSON.stringify(request));invoke(f,'-NoRestart');
+ assert.equal(JSON.parse(fs.readFileSync(request.handoff)).status,'ready');assert.match(fs.readFileSync(path.join(f.root,'data/updates/installer.log'),'utf8'),/Applying verified/);
+});
+test('cancelled handoff preserves the old application and records the failure',t=>{
+ const f=fixture(t),request=JSON.parse(fs.readFileSync(f.request));request.cancelled=true;fs.writeFileSync(f.request,JSON.stringify(request));assert.throws(()=>invoke(f,'-NoRestart'));
+ assert.equal(fs.readFileSync(path.join(f.root,'Atlas.exe'),'utf8'),'old exe');const status=JSON.parse(fs.readFileSync(path.join(f.root,'data/updates/recovery-status.json')));assert.equal(status.status,'install-failed');assert.match(status.reason,/cancelled/);
+});
