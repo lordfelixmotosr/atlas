@@ -1,3 +1,5 @@
+import {AtlasActivityButton} from './atlas/activity-center';
+import {confirmProjectDrafts} from './atlas/files-view';
 import logo from "../assets/atlas/logo-source.png";
 import {AtlasKnowledgeButton} from "./atlas/library-ui";
 import {ModMixerImportDialog} from './atlas/modmixer-import-ui';
@@ -317,6 +319,8 @@ export function App() {
   /** Close a tab: dispose its session, forget its runtime, focus a neighbour. */
   const closeTab = useCallback(
     (folder: string) => {
+      void (async()=>{
+      if(!await confirmProjectDrafts(folder))return;
       const idx = tabs.findIndex((t) => t.folder === folder);
       if (idx < 0) return;
       const tab = tabs[idx];
@@ -329,6 +333,7 @@ export function App() {
         setFocusedFolder(neighbour?.folder ?? null);
         if (!neighbour) setView('mods');
       }
+      })();
     },
     [tabs, focusedFolder],
   );
@@ -750,7 +755,7 @@ export function App() {
               Permissions off
             </button>
           )}
-          <AtlasKnowledgeButton />
+          <AtlasActivityButton /><AtlasKnowledgeButton />
           <button
             onClick={() => openSettings('general')}
             title="Settings"

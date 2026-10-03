@@ -1,3 +1,4 @@
+import {atlasModelCapabilities} from '../atlas/model-capabilities';
 import {felixWithSpeed,felixGuardStream,felixGateAccountSession,felixObserveSession,felixAccountEvent,felixInterrupt,felixAgentWorking,felixCheckCompacting,felixCheckIdleSteering,felixSendWithAccount,felixContinueSession,felixLoginOpenAIAccount,felixChangeOpenAIAccount,felixRefreshIdleModels,felixClearUsage,felixContextUsage,felixAssertAccountReady,felixSteeringItems} from "../atlas/agent-features";
 import { app, shell, type BrowserWindow } from 'electron';
 import path from 'node:path';
@@ -797,6 +798,7 @@ export class AgentHost {
       }
       // The picker reads the catalog synchronously; nudge the renderer to
       // re-list now that new models may exist.
+      await felixRefreshIdleModels(this);
       this.emitOAuth({ type: 'links-changed' });
     } catch (err) {
       console.error('AgentHost.refreshModelCatalog failed:', err);
@@ -996,7 +998,7 @@ export class AgentHost {
     for (const sel of [preferred, loadSettings().model]) {
       if (!sel) continue;
       const found = this.modelRegistry.find(sel.provider, sel.modelId);
-      if (found && this.modelRegistry.hasConfiguredAuth(found)) return found;
+      if (found && this.modelRegistry.hasConfiguredAuth(found)) return atlasModelCapabilities(found);
     }
     // No usable preferred/saved selection — prefer the Sonnet-tier default of
     // the first linked provider over "first model registered," so a fresh
@@ -1006,11 +1008,11 @@ export class AgentHost {
     for (const provider of HOSTED_PROVIDERS) {
       if (!this.isProviderConfigured(provider)) continue;
       const found = resolveDefaultModel(provider, all);
-      if (found && this.modelRegistry.hasConfiguredAuth(found)) return found;
+      if (found && this.modelRegistry.hasConfiguredAuth(found)) return atlasModelCapabilities(found);
     }
     const available = this.modelRegistry.getAvailable();
-    if (available.length > 0) return available[0];
-    return all[0] ?? null;
+    if (available.length > 0) return atlasModelCapabilities(available[0]);
+    return all[0] ? atlasModelCapabilities(all[0]) : null;
   }
 
   /**
@@ -1276,6 +1278,7 @@ export class AgentHost {
     this.relayLiveEvent(conversationId, event);
 
     felixObserveSession(conversationId,event);
+    (globalThis as any).__atlasRuntime?.tasks?.observeAgent(conversationId,event,getConversation(conversationId)?.title);
     if(event.type==="agent_start"||event.type==="agent_end")felixAccountEvent(this);
     if (event.type === 'agent_start') {
       this.busyConversations.add(conversationId);
@@ -1488,9 +1491,7 @@ export class AgentHost {
    * No-op when there's no active session or no run in flight.
    */
   async interrupt(conversationId: string): Promise<void> {
-    const entry = this.sessions.get(conversationId);
-    if (!entry) return;
-    await entry.session.abort();
+    await felixInterrupt(this,conversationId);
   }
 
   /**
@@ -1595,7 +1596,8 @@ export class AgentHost {
     conversationId: string,
     selection: ModelSelection,
   ): Promise<void> {
-    const model = this.modelRegistry.find(selection.provider, selection.modelId);
+    const registered = this.modelRegistry.find(selection.provider, selection.modelId);
+    const model = registered ? atlasModelCapabilities(registered) : null;
     if (!model) {
       throw new Error(
         `Unknown model: ${selection.provider}/${selection.modelId}`,

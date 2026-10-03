@@ -1,4 +1,4 @@
-# Atlas 0.2.5 portable
+# Atlas 0.2.6 portable
 
 Atlas is a Windows x64 fork of ModMixer 0.10.5 maintained by Felix, with your stag logo, portable storage, and signed knowledge and skill updates. This release supports **RimWorld**. Minecraft is disabled in both game registries and its tools, grammar, bridge JAR and reference pack are excluded. Atlas's application and UI are now compiled from TypeScript/React source.
 
@@ -10,7 +10,7 @@ Atlas is a Windows x64 fork of ModMixer 0.10.5 maintained by Felix, with your st
 
 No installer or administrator access is required. The executable is a locally built, unsigned Windows app. It is separate from the original ModMixer installation. Use one app at a time when using the in-game monitoring or live bridge: those inherited bridges share local ports.
 
-## 0.2.5 application download progress
+## 0.2.6 application download progress
 
 Application updates show actual percentage, downloaded MB / total MB, and average transfer speed, with **Downloading**, **Verifying** and **Ready to install** stages. Both manual and automatic downloads report progress while the Knowledge & Skills panel is open; reopening it shows the current status. Archives stream directly to a temporary file, reducing memory use. The total comes from the signed feed. Interrupted, oversized, incomplete or corrupted downloads never become installable, and temporary files are discarded before retrying.
 
@@ -105,7 +105,7 @@ The local private signing key is generated in `release-tools/publisher.private.p
 
 Reference packs may contain documentation, skills, images and source examples, but never executable installers. Signed envelopes, SHA-256 hashes, safe Windows paths, expiry, release sequencing and Atlas version requirements are checked. Cached signed packs continue to work after their feed expires; new remote expired releases are rejected. Changed installed files cannot silently become managed agent skills. Modify your own files under `custom` instead.
 
-For GitHub publishing, push reviewed source to `lordfelixmotosr/atlas`, then upload the signed feed JSON files, portable ZIP, application-update ZIP and checksums as assets on the same release. `scripts/atlas/github-release.cjs publish` prepares a draft, verifies any already-uploaded draft assets by SHA-256, and publishes after all assets are present. It uses the existing Git credential in memory; the credential and private signing key are never packaged or published. Keep the signing key backed up privately. GitHub's automatic source archive is available separately from the Windows runtime ZIPs.
+For GitHub publishing, push reviewed source to `lordfelixmotosr/atlas`, then upload the signed feed JSON files, portable ZIP, compact application-update ZIP, full-update ZIP and checksums as assets on the same release. `scripts/atlas/github-release.cjs publish` prepares a draft, verifies any already-uploaded draft assets by SHA-256, and publishes after all assets are present. It uses the existing Git credential in memory; the credential and private signing key are never packaged or published. Keep the signing key backed up privately. GitHub's automatic source archive is available separately from the Windows runtime ZIPs.
 
 ## Build and extend
 
@@ -130,6 +130,16 @@ Upstream licenses and notices are retained. `LICENSE` and `NOTICE` cover the inh
 
 ## Branding and verification
 
-Chat, confirmation, library and provider setup labels use Atlas. Windows product metadata identifies Atlas 0.2.5 maintained by Felix. The local OpenAI/Claude browser callback page uses the stag logo; provider-owned sign-in/consent pages and registered OAuth identities remain controlled by the provider. Legacy internal IPC names, bridge package IDs and project sidecars are retained for compatibility. Required upstream authorship stays in LICENSE, NOTICE and source provenance. Old product website links and leaderboard registration are removed from the Atlas workflow.
+Chat, confirmation, library and provider setup labels use Atlas. Windows product metadata identifies Atlas 0.2.6 maintained by Felix. The local OpenAI/Claude browser callback page uses the stag logo; provider-owned sign-in/consent pages and registered OAuth identities remain controlled by the provider. Legacy internal IPC names, bridge package IDs and project sidecars are retained for compatibility. Required upstream authorship stays in LICENSE, NOTICE and source provenance. Old product website links and leaderboard registration are removed from the Atlas workflow.
 
-Verification: source type checking; 70 automated tests covering byte progress, streamed updates, failed downloads and retries, scheduled progress broadcasts, signed packs and update validation, restricted GitHub redirects, startup recovery, source-file boundaries and conflicts, bulk replacement and backups, account/steering/compaction lifecycle, metadata migration, bulk ModMixer import and cancellation, withdrawing queued steering, and content comparisons across publications and updates; native Electron rendering, library IPC, reference viewer, synthetic mod import and change-report IPC; browser UI checks with synthetic projects. No live model request, provider account sign-in, or Steam upload was performed for this release.
+Verification: source type checking; 80 automated tests covering byte progress, streamed updates, failed downloads and retries, scheduled progress broadcasts, signed packs and update validation, restricted GitHub redirects, startup recovery, source-file boundaries and conflicts, bulk replacement and backups, account/steering/compaction lifecycle, metadata migration, bulk ModMixer import and cancellation, withdrawing queued steering, and content comparisons across publications and updates; native Electron rendering, library IPC, reference viewer, synthetic mod import and change-report IPC; browser UI checks with synthetic projects. No live model request, provider account sign-in, or Steam upload was performed for this release.
+
+## Atlas 0.2.6
+
+Application updates now use a compact archive of changed application files. The complete runtime remains available as a full recovery package; signed runtime compatibility checks automatically select it if required components differ or are missing. Interrupted downloads retain a private partial file under `data/updates`. Pause survives restart and prevents automatic resuming; Resume validates HTTP ranges and checks the entire signed size and SHA-256 before installation. Cancel discards the partial download. Servers without Range support restart safely at zero.
+
+The Activity button lists AI work, compiler tasks, reference indexing, and app downloads with elapsed time, recent phase logs, and supported stop/resume/retry controls. AI tasks show activity without a guessed completion percentage; indexing percentages describe the current stage. Logs are bounded and last for the current Atlas process.
+
+The file editor has XML/C# highlighting, line numbers, folding, file tabs with preserved drafts and undo, folder navigation, in-file find, and literal project-content search. Ctrl+S saves, Ctrl+F searches the current file, and Ctrl+Shift+F searches the project. Content searches skip private/build folders, limit text files to 2 MB, scan up to 64 MB, and cap matches at 200. Saves retain the external-change conflict guard. Closing an edited file or project asks before discarding drafts.
+
+Known OpenAI GPT-6 Sol, GPT-6.1 Sol, and GPT-6 Astra models resolve to the documented 1,050,000 context window on startup, selection, account changes, and catalogue refreshes. This corrects stale 272k metadata in Atlas; it does not guarantee that every provider connection or account accepts that many input tokens. Output reservation and compaction thresholds remain separate. No live model request was made during verification.

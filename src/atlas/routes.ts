@@ -5,18 +5,21 @@ import {randomUUID} from 'node:crypto';
 import {getWorkspacePaths} from '../agent/workspace';
 import {scanAssets} from '../agent/assets/scanner';
 import {emitModChanged} from '../agent/mod-events';
-import {startRebuild} from '../agent/index/main-bridge';
+import {onSetupProgress} from '../agent/index/setup-progress';
+import {startRebuild,cancelActiveRebuild} from '../agent/index/main-bridge';
 import {registerModMixerImportRoutes} from './modmixer-import-routes';
 import {readModChanges,recordModBaseline} from './mod-changes';
 import {readModPrefs} from '../agent/mod-prefs';
 import {felixSetSpeed,felixSetShortcut,felixSessionStatus,felixSteer,felixCancelSteering,felixCompactContext,felixAccountsInfo,felixChangeOpenAIAccount,felixLoginOpenAIAccount,felixGetUsage,felixAgentWorking} from './agent-features';
 export function registerAtlasRoutes(ctx){
  const {ipc,host,getWindow,requireConsent}=ctx,root=process.env.ATLAS_ROOT;
+ const drafts=new Set();
  const files=require('./atlas/project-files.cjs'),bulk=require('./atlas/bulk-assets.cjs');
  const modRoot=folder=>files.projectRoot(getWorkspacePaths().workspaceDir,folder);
  const busy=()=>host.atlasModImport||host.felixAccountOperation||host.pendingOAuth||[...host.sessions.values()].some(x=>felixAgentWorking(x.session));
  registerModMixerImportRoutes(ctx,busy);
- require('./atlas/runtime.cjs').init({root,resources:path.join(process.resourcesPath,"atlas"),host,getWindow,electron,rebuildIndex:()=>startRebuild(),isBusy:busy});
+ const runtime=require('./atlas/runtime.cjs').init({root,resources:path.join(process.resourcesPath,"atlas"),host,getWindow,electron,rebuildIndex:()=>startRebuild(),isBusy:busy,hasDrafts:()=>drafts.size>0,cancelIndex:cancelActiveRebuild,requireConsent});
+ onSetupProgress((game,event)=>{if(game==='rimworld')runtime.tasks.observeIndex(event);});
  const h=(name,fn)=>ipc.handle(name,(_e,...args)=>fn(...args));
  h('atlas:mods:changes',async(folder,comparison='latest')=>{if(!['latest','published','updated'].includes(comparison))throw new Error('Choose a saved comparison.');return readModChanges(modRoot(folder),(await readModPrefs(folder)).lastPublishedAt,comparison)});
  h('atlas:mods:mark-updated',async(folder,note='')=>{if(busy())throw new Error('Finish active work before marking an update.');if(typeof note!=='string'||note.length>4000)throw new Error('Use a note of up to 4,000 characters.');await recordModBaseline(modRoot(folder),'updated',note);emitModChanged(folder);return readModChanges(modRoot(folder),(await readModPrefs(folder)).lastPublishedAt)});
@@ -24,7 +27,17 @@ export function registerAtlasRoutes(ctx){
  h('modmixer:agent:status',(id,messages)=>felixSessionStatus(host,id,messages===true));h('modmixer:agent:steer',(id,text,attachments)=>{requireConsent();return felixSteer(host,id,text,attachments)});h('modmixer:agent:compact',id=>{requireConsent();return felixCompactContext(host,id)});
  h('atlas:agent:cancel-steering',(id,ids)=>felixCancelSteering(host,id,ids));
  h('modmixer:accounts:openai:list',()=>felixAccountsInfo(host));h('modmixer:accounts:openai:switch',id=>felixChangeOpenAIAccount(host,'switch',id));h('modmixer:accounts:openai:rename',(id,label)=>felixChangeOpenAIAccount(host,'rename',id,label));h('modmixer:accounts:openai:remove',id=>felixChangeOpenAIAccount(host,'remove',id));h('modmixer:accounts:openai:login',(id,label)=>felixLoginOpenAIAccount(host,id,label));
+ h('atlas:files:draft-state',(folder,dirty)=>{if(typeof folder!=='string'||!folder||/[\\/:]/.test(folder)||folder==='.'||folder==='..'||typeof dirty!=='boolean')throw new Error('Invalid draft state.');if(dirty){modRoot(folder);drafts.add(folder);}else drafts.delete(folder);});
  h('atlas:files:list',folder=>files.listFiles(modRoot(folder)));h('atlas:files:read',(folder,file)=>files.readText(modRoot(folder),file));
+ const searches=new Map();
+ h('atlas:files:search',async(folder,query,options={})=>{
+  if(typeof options.token!=='string'||options.token.length>100)throw new Error('Invalid search request.');
+  const project=modRoot(folder);searches.get(folder)?.controller.abort();
+  const controller=new AbortController(),job={token:options.token,controller};searches.set(folder,job);
+  try{return await files.searchText(project,query,{caseSensitive:options.caseSensitive===true,signal:controller.signal});}
+  finally{if(searches.get(folder)===job)searches.delete(folder);}
+ });
+ h('atlas:files:search-cancel',(folder,token)=>{modRoot(folder);if(searches.get(folder)?.token===token)searches.get(folder).controller.abort();});
  h('atlas:files:save',(folder,file,text,hash)=>{if(busy())throw new Error('Stop or finish active work before saving an edited file.');const result=files.saveText(modRoot(folder),file,text,hash);emitModChanged(folder);return result;});
  const reveal=(folder,file='')=>{const target=files.revealTarget(modRoot(folder),file);return target.file?electron.shell.showItemInFolder(target.path):electron.shell.openPath(target.path)};
  h('atlas:files:reveal',reveal);

@@ -28,12 +28,13 @@ async function main(){
  if(!release)release=await api('/releases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag_name:'v'+version,target_commitish:repo.default_branch,name:'Atlas '+version+' — Felix',body,draft:true,prerelease:false})});
  if(!release.draft)throw new Error('This release is already public. Do not overwrite published assets.');
  const existing=await api('/releases/'+release.id+'/assets');
- const files=[path.resolve(out,checks.portable.path),path.resolve(out,checks['application-update'].path),path.join(out,'Atlas-'+version+'-checksums.json'),path.join(out,'Atlas-'+version+'-UPDATE.txt'),...fs.readdirSync(feed).filter(file=>file.endsWith('.atlas.json')).map(file=>path.join(feed,file))];
+ const files=[path.resolve(out,checks.portable.path),path.resolve(out,checks['application-update'].path),path.resolve(out,checks['full-update'].path),path.join(out,'Atlas-'+version+'-checksums.json'),path.join(out,'Atlas-'+version+'-UPDATE.txt'),...fs.readdirSync(feed).filter(file=>file.endsWith('.atlas.json')).map(file=>path.join(feed,file))];
  for(const file of files){const name=path.basename(file),old=existing.find(asset=>asset.name===name);if(old){
   const digest=crypto.createHash('sha256');for await(const chunk of fs.createReadStream(file))digest.update(chunk);
   if(old.digest!=='sha256:'+digest.digest('hex')||old.size!==fs.statSync(file).size)throw new Error('Draft asset differs or has no verified checksum: '+name);
   console.log('Draft asset checksum matches: '+name);continue;
  }
+  console.log('Uploading '+name+' ('+(fs.statSync(file).size/1000000).toFixed(1)+' MB)');
   const url=release.upload_url.replace(/\{.*$/,'')+'?name='+encodeURIComponent(name),stream=fs.createReadStream(file);
   await api(url,{method:'POST',headers:{'Content-Type':'application/octet-stream','Content-Length':String(fs.statSync(file).size)},body:stream,duplex:'half'});console.log('Uploaded '+name);
  }

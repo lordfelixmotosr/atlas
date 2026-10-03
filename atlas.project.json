@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.5 native source release built and verified",
+  "status": "Atlas 0.2.6 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -149,7 +149,9 @@
     "0.2.2: bulk ModMixer import; steering cancellation; modification reports and publication/update comparisons; signed GitHub updates",
     "0.2.3: task activity progress bar with retry wait and reduced-motion states",
     "0.2.4: shared OpenAI account label validation; compact and hideable editor; virtualized asynchronous file browser; idle polling and refresh reduction",
-    "0.2.5: real application download progress and transfer speed; streamed temporary archives; verification and retry stages; Install and restart button"
+    "0.2.5: real application download progress and transfer speed; streamed temporary archives; verification and retry stages; Install and restart button",
+    "0.2.6: compact application packages and full recovery fallback; persistent resumable downloads; shared activity panel; XML/C# editor with file tabs and project-content search; stable verified OpenAI model context limits",
+    "0.2.6: compact application packages and full recovery fallback; persistent resumable downloads; shared activity panel; XML/C# editor with file tabs and project-content search; stable verified OpenAI model context limits"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -164,7 +166,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.5",
+  "version": "0.2.6",
   "supportedGames": [
     "rimworld"
   ],
@@ -227,19 +229,30 @@
       "0.2.4 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
       "0.2.5 source type checking and 70 automated tests passed; real streamed byte progress, failed-download cleanup, retry reset, concurrent-operation guard and scheduled IPC broadcasts",
       "Native 0.2.5 Electron rendering, portable paths, signed packs, account login validation, asynchronous file browser, library IPC, reference viewer, synthetic bulk import and modification reports; browser UI verified with a temporary signed local download and simulated install; no provider login or real mod edits",
-      "0.2.5 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.5 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.6 source type checking and 80 automated tests passed; real streamed byte progress, failed-download cleanup, retry reset, concurrent-operation guard and scheduled IPC broadcasts",
+      "Native 0.2.6 Electron rendering, portable paths, signed packs, account login validation, asynchronous file browser, library IPC, reference viewer, synthetic bulk import and modification reports; browser UI verified with a temporary signed local download and simulated install; no provider login or real mod edits",
+      "0.2.6 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.6 source type checking and 80 automated tests passed; real streamed byte progress, failed-download cleanup, retry reset, concurrent-operation guard and scheduled IPC broadcasts",
+      "Native 0.2.6 Electron rendering, portable paths, signed packs, account login validation, asynchronous file browser, library IPC, reference viewer, synthetic bulk import and modification reports; browser UI verified with a temporary signed local download and simulated install; no provider login or real mod edits",
+      "0.2.6 portable and application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "portable": {
-      "path": "Atlas-0.2.5-win-x64-portable.zip",
-      "size": 400831912,
-      "sha256": "18746938dc5140ed09e89f1fb47987490cfdeb25ab7ea1e210d093bff0068c95"
+      "path": "Atlas-0.2.6-win-x64-portable.zip",
+      "size": 400992194,
+      "sha256": "26a6129f12d4d49d77416ee4761d72519ec0e502a5da67b75bcab4920e7a110e"
+    },
+    "full-update": {
+      "path": "Atlas-0.2.6-win-x64-full-update.zip",
+      "size": 400630799,
+      "sha256": "6c6a76c80014e7b93fc51358b13a9a6a68ac47e539e0d3364fccb6f27c1ef48b"
     },
     "application-update": {
-      "path": "Atlas-0.2.5-win-x64-application-update.zip",
-      "size": 400470517,
-      "sha256": "ca5288c40b57ade9825be5577e734ac428788235b8e1a6092f49401be1d66eb3"
+      "path": "Atlas-0.2.6-win-x64-application-update.zip",
+      "size": 98426208,
+      "sha256": "8c855fc367827200d0b80ca3e24169f95bb25e4e99a2156a5487b16709cedd39"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"

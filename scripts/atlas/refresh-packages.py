@@ -18,13 +18,16 @@ replacements.update({"LICENSE", "NOTICE"})
 replacements.update(file.relative_to(source).as_posix() for file in (source / "resources/atlas/game-adapter-template").rglob("*") if file.is_file())
 replacements.update(file.relative_to(source).as_posix() for file in (source / "resources/atlas/seed").glob("*.atlas.json"))
 result = {}
-for kind in ("portable", "application-update"):
+for kind in ("portable", "full-update", "application-update"):
     current_replacements = replacements | ({file.relative_to(source).as_posix() for file in (source / "updates").glob("*.atlas.json")} if kind == "portable" else set())
     target = output / f"Atlas-{version}-win-x64-{kind}.zip"
     temporary = target.with_suffix(".zip.refresh.tmp")
-    previous = target if target.exists() else output / f"Atlas-{sys.argv[3]}-win-x64-{kind}.zip"
+    previous_kind = "portable" if kind == "portable" else "full-update"
+    previous = output / f"Atlas-{sys.argv[3]}-win-x64-{previous_kind}.zip"
+    if not previous.exists():
+        previous = output / f"Atlas-{sys.argv[3]}-win-x64-application-update.zip"
     with zipfile.ZipFile(previous) as old, zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as new:
-        entries = old.infolist()
+        entries = [] if kind == "application-update" else old.infolist()
         for index, item in enumerate(entries):
             relative = item.filename.removeprefix("Atlas/")
             if relative in current_replacements:

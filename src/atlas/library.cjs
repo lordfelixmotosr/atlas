@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const VERSION = '0.2.5';
+const VERSION = '0.2.6';
 const ONLINE_SOURCE = 'https://github.com/lordfelixmotosr/atlas/releases/latest/download/';
 const MAX_BYTES = 24 * 1024 * 1024;
 const SAFE_ID = /^[a-z][a-z0-9-]{0,63}$/;
@@ -105,22 +105,25 @@ class Library {
     safeRelative(relative);
     // Optional chunk sink keeps large application archives out of memory.
     const consume=async body=>{
-      const chunks=[];let total=0;
+      const chunks=[];let total=options.startByte??0;
       for await(const chunk of body){
+        options.signal?.throwIfAborted();
         total+=chunk.length;if(total>maxBytes)throw new Error('Update exceeds size limit.');
         if(options.onChunk)await options.onChunk(chunk);else chunks.push(Buffer.from(chunk));
         options.onProgress?.(total);
       }
-      return options.onChunk?total:Buffer.concat(chunks,total);
+      return options.onChunk?total:Buffer.concat(chunks,total-(options.startByte??0));
     };
     if(/^https:\/\//i.test(source)) {
       const base=new URL(source.endsWith('/')?source:source+'/'),url=new URL(relative,base);
       if(url.origin!==base.origin)throw new Error('Update URL changed origin.');
       const github=base.href===ONLINE_SOURCE;
-      const signal=AbortSignal.timeout(maxBytes>MAX_BYTES?1800000:120000);
+      const timeout=AbortSignal.timeout(maxBytes>MAX_BYTES?1800000:120000);
+      const signal=options.signal?AbortSignal.any([timeout,options.signal]):timeout;
+      const headers=options.startByte?{Range:`bytes=${options.startByte}-`}:undefined;
       let target=url,response;
       for(let hop=0;hop<=5;hop++){
-        response=await this.fetch(target,{signal,redirect:github?'manual':'error',credentials:'omit'});
+        response=await this.fetch(target,{signal,redirect:github?'manual':'error',credentials:'omit',headers});
         if(!github||![301,302,303,307,308].includes(response.status))break;
         const location=response.headers.get('location');await response.body?.cancel();
         if(!location||hop===5)throw new Error('Too many or invalid GitHub update redirects.');
@@ -132,12 +135,17 @@ class Library {
         target=next;
       }
       if(!response.ok)throw new Error('Update download failed ('+response.status+').');
-      if(Number(response.headers.get('content-length')??0)>maxBytes)throw new Error('Update exceeds size limit.');
+      if(options.startByte){
+        if(response.status===206){const range=/^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('content-range')??'');if(!range||Number(range[1])!==options.startByte||Number(range[3])!==maxBytes||Number(range[2])<options.startByte||Number(range[2])>=maxBytes)throw new Error('Invalid download resume range.');}
+        else if(response.status===200){await options.onRestart?.();options.startByte=0;}
+        else throw new Error('Download resume was rejected.');
+      }else if(response.status===206)throw new Error('Unexpected partial update response.');
+      if(Number(response.headers.get('content-length')??0)>maxBytes-(options.startByte??0))throw new Error('Update exceeds size limit.');
       return consume(response.body);
     }
     const folder=path.resolve(this.root,source),file=path.resolve(folder,...relative.split('/'));
     if(!inside(folder,file)||!inside(fs.realpathSync(folder),fs.realpathSync(file))||!fs.statSync(file).isFile()||fs.statSync(file).size>maxBytes)throw new Error('Invalid local update file.');
-    return options.onChunk||options.onProgress?consume(fs.createReadStream(file)):fs.readFileSync(file);
+    return options.onChunk||options.onProgress||options.signal?consume(fs.createReadStream(file,{start:options.startByte??0,signal:options.signal})):fs.readFileSync(file);
   }
   async checkInternal(source=this.config.source,allowExpired=false) {
     const index=verifyEnvelope(await this.obtain(source,'index.atlas.json'),this.trust,this.now(),allowExpired);

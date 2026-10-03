@@ -36,6 +36,9 @@ function init(){
     fs.writeFileSync(path.join(copied,'Textures/test.png'),Buffer.from([0,255,71,4,5,6]));
     const changes=await win.webContents.executeJavaScript(`window.modmixer.modChanges(${folder})`);
     const projectFiles=await win.webContents.executeJavaScript(`window.modmixer.projectFiles(${folder})`);
+    await win.webContents.executeJavaScript(`window.modmixer.projectDraftState(${folder},true)`);result.nativeDraftGuard=globalThis.__atlasRuntime.application.restartBlockReason();if(!result.nativeDraftGuard?.includes('file edits'))throw new Error('Native draft guard failed.');await win.webContents.executeJavaScript(`window.modmixer.projectDraftState(${folder},false)`);
+    result.nativeTextSearch=await win.webContents.executeJavaScript(`window.modmixer.projectSearch(${folder},'NativeArmor',{token:'native-test'})`);if(result.nativeTextSearch.matches.length!==1||result.nativeTextSearch.matches[0].line!==1)throw new Error('Native content search failed.');
+    result.nativeTasks=await win.webContents.executeJavaScript(`window.modmixer.atlasTasksStatus()`);if(!Array.isArray(result.nativeTasks))throw new Error('Native tasks API failed.');
     result.nativeFileBrowser={files:projectFiles.files.length,listsDef:projectFiles.files.some(file=>file.path==='Defs/test.xml'),excludesMetadata:projectFiles.files.every(file=>!file.path.startsWith('.')),truncated:projectFiles.truncated};
     if(!result.nativeFileBrowser.listsDef||!result.nativeFileBrowser.excludesMetadata)throw new Error('Native file browser verification failed.');
     const libraryMods=await win.webContents.executeJavaScript('window.modmixer.listWorkspaceMods()');

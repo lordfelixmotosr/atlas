@@ -1,7 +1,7 @@
 import {useEffect,useState} from 'react';
 
-type UpdateProgress={stage:'checking'|'idle'|'downloading'|'verifying'|'ready'|'error';receivedBytes:number;totalBytes:number;bytesPerSecond:number};
-type UpdateState={version:string;available:string|null;ready:string|null;working:boolean;error:string|null;progress?:UpdateProgress|null;source:string;lastCheckedAt:string|null;recovery?:{status:string;reason?:string}|null};
+type UpdateProgress={stage:'checking'|'idle'|'downloading'|'verifying'|'ready'|'error'|'paused'|'cancelled'|'resuming';receivedBytes:number;totalBytes:number;bytesPerSecond:number};
+type UpdateState={version:string;available:string|null;ready:string|null;working:boolean;error:string|null;progress?:UpdateProgress|null;source:string;lastCheckedAt:string|null;downloadKind?:string;fullAvailable?:boolean;recovery?:{status:string;reason?:string}|null};
 const megabytes=(bytes:number)=>(bytes/1_000_000).toLocaleString(undefined,{maximumFractionDigits:1,minimumFractionDigits:1})+' MB';
 
 export function ApplicationUpdateProgress({progress}:{progress?:UpdateProgress|null}){
@@ -9,7 +9,7 @@ export function ApplicationUpdateProgress({progress}:{progress?:UpdateProgress|n
   const {stage,receivedBytes,totalBytes,bytesPerSecond}=progress;
   const determinate=totalBytes>0&&stage!=='checking';
   const percent=determinate?Math.min(100,Math.floor(receivedBytes/totalBytes*100)):0;
-  const label={checking:'Checking for updates…',idle:'',downloading:'Downloading update',verifying:'Verifying download…',ready:'Ready to install',error:'Download needs attention'}[stage];
+  const label={checking:'Checking for updates…',idle:'',downloading:'Downloading update',verifying:'Verifying download…',ready:'Ready to install',error:'Download needs attention',paused:'Download paused',cancelled:'Download cancelled',resuming:'Preparing resume…'}[stage];
   return <section className={'atlas-update-progress atlas-update-'+stage} aria-label="Application update progress">
     <div className="atlas-update-heading"><strong role="status">{label}</strong>{determinate&&<span>{percent}%</span>}</div>
     <progress aria-label={label} max={totalBytes||1} value={determinate?receivedBytes:undefined}/>
@@ -38,11 +38,15 @@ export function AtlasApplicationUpdates(){
     {(error||value?.error)&&<p role="alert" className="atlas-error">{error||value?.error}</p>}
     {value?.ready?<p>Version {value.ready} is verified and ready.</p>:value?.available?<p>Version {value.available} is available.</p>:<p>Updates from {value?.source??'the selected signed feed'}.</p>}
     <ApplicationUpdateProgress progress={value?.progress}/>
+    {value?.available&&<p>{value.downloadKind==='full-update'?'Full application download':'Compact application download'} · Interrupted downloads can resume. Atlas checks the complete archive before installation.</p>}
     {value?.recovery&&<p className={value.recovery.status==='rolled-back'?'atlas-warning':'atlas-notice'}>{value.recovery.reason||'Last update started successfully.'}</p>}
     {value?.lastCheckedAt&&<p>Last check: {new Date(value.lastCheckedAt).toLocaleString()}</p>}
     <div className="atlas-actions">
       <button type="button" className="atlas-action" disabled={working} onClick={()=>void action(()=>window.modmixer.atlasAppCheck())}>{value?.progress?.stage==='checking'?'Checking…':'Check app updates'}</button>
-      {value?.available&&!value?.ready&&<button type="button" className="atlas-action" disabled={working} onClick={()=>void action(()=>window.modmixer.atlasAppDownload())}>{value?.progress?.stage==='downloading'?'Downloading…':value?.progress?.stage==='verifying'?'Verifying…':'Download update'}</button>}
+      {value?.available&&!value?.ready&&<button type="button" className="atlas-action" disabled={working} onClick={()=>void action(()=>window.modmixer.atlasAppDownload())}>{value?.progress?.stage==='downloading'?'Downloading…':value?.progress?.stage==='verifying'?'Verifying…':value?.progress?.stage==='paused'||value?.progress?.stage==='error'?'Resume download':'Download update'}</button>}
+      {value?.working&&['downloading','resuming','verifying'].includes(value.progress?.stage??'')&&<button className="atlas-action" onClick={()=>void window.modmixer.atlasAppPause().catch(e=>setError(e.message))}>Pause download</button>}
+      {!value?.ready&&(value?.working||['paused','error'].includes(value?.progress?.stage??''))&&<button className="atlas-action" onClick={()=>void window.modmixer.atlasAppCancel().then(setValue).catch(e=>setError(e.message))}>Cancel download</button>}
+      {value?.fullAvailable&&!value.ready&&<button className="atlas-action" disabled={working} onClick={()=>void action(()=>window.modmixer.atlasAppDownload({full:true}))}>Download full package</button>}
       {value?.ready&&<button type="button" className="atlas-action atlas-primary" disabled={working} onClick={()=>void action(()=>window.modmixer.atlasAppInstall())}>Install and restart</button>}
     </div>
   </details>;
