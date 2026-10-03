@@ -1,4 +1,4 @@
-# Atlas 0.2.2 portable
+# Atlas 0.2.3 portable
 
 Atlas is a Windows x64 fork of ModMixer 0.10.5 maintained by Felix, with your stag logo, portable storage, and signed knowledge and skill updates. This release supports **RimWorld**. Minecraft is disabled in both game registries and its tools, grammar, bridge JAR and reference pack are excluded. Atlas's application and UI are now compiled from TypeScript/React source.
 
@@ -9,6 +9,10 @@ Atlas is a Windows x64 fork of ModMixer 0.10.5 maintained by Felix, with your st
 3. Open **Knowledge & Skills** in the top toolbar to manage the library.
 
 No installer or administrator access is required. The executable is a locally built, unsigned Windows app. It is separate from the original ModMixer installation. Use one app at a time when using the in-game monitoring or live bridge: those inherited bridges share local ports.
+
+## 0.2.3 task progress
+
+Active chat tasks show a thin animated progress bar below the current agent phase, elapsed time and last activity. It works during model thinking, tool execution, receiving a reply and context compaction. Provider retry waits pause the animation. The bar disappears when the task finishes or is stopped, and respects reduced-motion preferences. Model tasks have no known total, so the bar does not claim a percentage or estimate a finish time.
 
 ## 0.2.2 additions
 
@@ -112,6 +116,6 @@ Upstream licenses and notices are retained. `LICENSE` and `NOTICE` cover the inh
 
 ## Branding and verification
 
-Chat, confirmation, library and provider setup labels use Atlas. Windows product metadata identifies Atlas 0.2.2 maintained by Felix. The local OpenAI/Claude browser callback page uses the stag logo; provider-owned sign-in/consent pages and registered OAuth identities remain controlled by the provider. Legacy internal IPC names, bridge package IDs and project sidecars are retained for compatibility. Required upstream authorship stays in LICENSE, NOTICE and source provenance. Old product website links and leaderboard registration are removed from the Atlas workflow.
+Chat, confirmation, library and provider setup labels use Atlas. Windows product metadata identifies Atlas 0.2.3 maintained by Felix. The local OpenAI/Claude browser callback page uses the stag logo; provider-owned sign-in/consent pages and registered OAuth identities remain controlled by the provider. Legacy internal IPC names, bridge package IDs and project sidecars are retained for compatibility. Required upstream authorship stays in LICENSE, NOTICE and source provenance. Old product website links and leaderboard registration are removed from the Atlas workflow.
 
 Verification: source type checking; 57 automated tests covering signed packs and update validation, restricted GitHub redirects, startup recovery, source-file boundaries and conflicts, bulk replacement and backups, account/steering/compaction lifecycle, metadata migration, bulk ModMixer import and cancellation, withdrawing queued steering, and content comparisons across publications and updates; native Electron rendering, library IPC, reference viewer, synthetic mod import and change-report IPC; browser UI checks with synthetic projects. No live model request, provider account sign-in, or Steam upload was performed for this release.
