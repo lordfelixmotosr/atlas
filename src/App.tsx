@@ -1,6 +1,6 @@
 import {AtlasActivityButton} from './atlas/activity-center';
 import {confirmProjectDrafts} from './atlas/files-view';
-import logo from "../assets/atlas/logo-source.png";
+import { AtlasLogo } from './components/atlas-logo';
 import {AtlasKnowledgeButton} from "./atlas/library-ui";
 import {ModMixerImportDialog} from './atlas/modmixer-import-ui';
 import { useCallback, useEffect, useState } from 'react';
@@ -9,7 +9,6 @@ import type { WorkspaceMod } from './agent/workspace';
 import type { ModelOption } from './agent/models';
 import type { ActiveSession } from './agent/registry';
 import type { RegistryEnvelope } from './preload';
-import { GridMark } from './components/grid-mark';
 import { AppSettingsDialog, type SettingsSection } from './components/app-settings-dialog';
 import { GameSetupGate } from './components/game-setup-gate';
 import { TabNav, type AppView, type ModTabDescriptor } from './components/tab-nav';
@@ -719,7 +718,7 @@ export function App() {
       <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
         <div className="flex min-w-0 flex-1 items-center gap-4">
           <div className="flex shrink-0 items-center gap-2.5">
-            <img src={logo} alt="" className="atlas-logo" />
+            <AtlasLogo />
             <span className="font-display text-sm font-medium tracking-tight">
               Atlas
             </span>

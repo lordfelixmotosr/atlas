@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.9 native source release built and verified",
+  "status": "Atlas 0.2.10 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -155,7 +155,8 @@
     "0.2.6: compact application packages and full recovery fallback; persistent resumable downloads; shared activity panel; XML/C# editor with file tabs and project-content search; stable verified OpenAI model context limits",
     "0.2.7: fixed Windows update launcher; preflight acknowledgement before closing; independent pinned helpers and persistent installer diagnostics; verified real Electron install and restart",
     "0.2.8: soft forest green accent and player-facing feature descriptions; bounded comparison evidence, independent AI completion, editable saved notes and cancellation",
-    "0.2.9: preserve enabled Odyssey in isolated RimWorld tests; official DLC detection and load order; flowing virtualized chat rows and persistent Jump to latest control"
+    "0.2.9: preserve enabled Odyssey in isolated RimWorld tests; official DLC detection and load order; flowing virtualized chat rows and persistent Jump to latest control",
+    "0.2.10: Atlas globe logo in the app header, window and Windows executable; reproducible icon generation and icon resources in every update package"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -170,7 +171,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.9",
+  "version": "0.2.10",
   "supportedGames": [
     "rimworld"
   ],
@@ -251,24 +252,27 @@
       "0.2.8 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
       "0.2.9 source type checking and 96 automated tests passed; active/disabled/uninstalled Odyssey, transitive DLC dependency, canonical load order and official registry detection verified",
       "0.2.9 native official-content registry, chat layout (wide/narrow, expanded tools, streaming and Jump to latest) and production startup health verified",
-      "0.2.9 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.9 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.10 source type checking passed; supplied logo verified in the production archive and native Electron header; executable icon resources match all seven generated sizes",
+      "0.2.10 production startup health verified",
+      "0.2.10 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "portable": {
-      "path": "Atlas-0.2.9-win-x64-portable.zip",
-      "size": 401001320,
-      "sha256": "c21efb9e5bbadd4bd62e6f894f987fc7e0a4042c9aef6830c2ea400f3a48a8a7"
+      "path": "Atlas-0.2.10-win-x64-portable.zip",
+      "size": 401054579,
+      "sha256": "7ffc5a7256ba8a45567c554d12287ae9d53558a1107b2217a55d3d2d1a3c934a"
     },
     "full-update": {
-      "path": "Atlas-0.2.9-win-x64-full-update.zip",
-      "size": 400639925,
-      "sha256": "830c4529f0fa3b6f46114acdde888b8cd27dfe524907b0fc33fcdc2ffea311b8"
+      "path": "Atlas-0.2.10-win-x64-full-update.zip",
+      "size": 400693184,
+      "sha256": "dc746e754273ca74097eaacfce969f02b26b4c85a65ad06b8e9dfb59374e4903"
     },
     "application-update": {
-      "path": "Atlas-0.2.9-win-x64-application-update.zip",
-      "size": 98435334,
-      "sha256": "a5f2a239887492085b2eaad5134a7ad3acf4f9430ca155f6aed2ec6d047634ea"
+      "path": "Atlas-0.2.10-win-x64-application-update.zip",
+      "size": 98604719,
+      "sha256": "c95da1c0fb89beeb96a53191300801e6db95bbeadb4c377691d725e48f1e2fe5"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"

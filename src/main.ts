@@ -318,13 +318,11 @@ monitor.on('message', (msg: BridgeMessage) => {
 });
 
 const createWindow = () => {
-  // In dev the .icns/.ico baked in by Forge isn't available, so set the
-  // icon at runtime so the dock/window match the packaged app.
-  const devIconPath = MAIN_WINDOW_VITE_DEV_SERVER_URL
-    ? path.resolve(__dirname, '../../assets/icon.png')
-    : null;
-  if (devIconPath && process.platform === 'darwin') {
-    app.dock?.setIcon(nativeImage.createFromPath(devIconPath));
+  const iconPath = MAIN_WINDOW_VITE_DEV_SERVER_URL
+    ? path.resolve(__dirname, '../../assets/atlas/logo-source.png')
+    : path.join(process.resourcesPath, 'atlas', 'icon.png');
+  if (process.platform === 'darwin') {
+    app.dock?.setIcon(nativeImage.createFromPath(iconPath));
   }
 
   // Match the active theme so the empty window doesn't flash the wrong colour
@@ -348,7 +346,7 @@ const createWindow = () => {
       ? { frame: false, resizable: false, useContentSize: true }
       : {}),
     backgroundColor: bg,
-    icon: devIconPath ?? undefined,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },

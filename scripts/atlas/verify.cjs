@@ -18,6 +18,12 @@ function init(){
   win.webContents.once('did-finish-load',()=>{if(win.webContents.getURL().startsWith('data:'))return;setTimeout(async()=>{
    try{
     const result=await win.webContents.executeJavaScript(`(async()=>({version:await window.modmixer.getAppVersion(),library:await window.modmixer.atlasLibraryStatus(),app:await window.modmixer.atlasAppStatus(),modelIds:(await window.modmixer.listModels()).map(model=>({id:model.id,contextWindow:model.contextWindow})),body:document.body.innerText,title:document.title,hasLibraryApi:typeof window.modmixer.atlasLibrarySearch==='function'}))()`);
+    if(process.env.ATLAS_VERIFY_BRANDING_ONLY){
+     result.nativeBranding=await win.webContents.executeJavaScript(`(async()=>{const deadline=Date.now()+10000;let image;while(!(image=document.querySelector('.atlas-logo'))&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));if(!image)throw new Error('Atlas header logo is missing');await image.decode();const box=image.getBoundingClientRect();return {loaded:image.complete,width:image.naturalWidth,height:image.naturalHeight,displayWidth:box.width,displayHeight:box.height,source:image.currentSrc}})()`);
+     if(!result.nativeBranding.loaded||result.nativeBranding.width<=0||result.nativeBranding.height<=0)throw new Error('The supplied Atlas globe logo did not load.');
+     fs.writeFileSync(path.join(root,'data/Atlas-logo-ui.png'),(await win.webContents.capturePage()).toPNG());
+     write(result);app.exit(0);return;
+    }
     const verifyGameRoot=process.env.ATLAS_VERIFY_GAME_ROOT;
     if(verifyGameRoot){const picker=require('electron').dialog,originalPicker=picker.showOpenDialog;try{picker.showOpenDialog=async()=>({canceled:false,filePaths:[verifyGameRoot]});await win.webContents.executeJavaScript('window.modmixer.browseRimWorldInstall()');}finally{picker.showOpenDialog=originalPicker;}}
     result.nativeOdyssey=await win.webContents.executeJavaScript(`(async()=>{const env=await window.modmixer.refreshRegistry(),mod=env.snapshot.mods.find(entry=>entry.about.packageIdLc==='ludeon.rimworld.odyssey');return {installed:!!mod,official:mod?.source==='official',activeInNormalProfile:env.snapshot.activeOrder.includes('ludeon.rimworld.odyssey')}})()`);

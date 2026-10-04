@@ -46,5 +46,8 @@
     "update-electron-app": "^3.1.2",
     "vite": "^5.4.21",
     "web-tree-sitter": "^0.24.5"
+  },
+  "devDependencies": {
+    "sharp": "0.34.5"
   }
 }

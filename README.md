@@ -1,4 +1,8 @@
-# Atlas 0.2.9 portable
+# Atlas 0.2.10 portable
+
+## 0.2.10 Atlas globe logo
+
+The cream and forest-green A with a globe replaces the previous mark in the app and setup headers, window icon and Windows executable. Native builds generate all Windows icon sizes from the same transparent source image, and update packages carry both icon resources.
 
 ## 0.2.9 Odyssey and chat layout fixes
 
@@ -16,7 +20,7 @@ In **Changes**, choose **Write description with AI** to create player-facing rel
 
 The Windows updater now uses a separate launcher and waits for the installer to validate and stage the update before Atlas closes. Installer startup failures keep Atlas open and display an error. The helpers run from an independent copy, write diagnostics to `data/updates/installer.log`, and retain startup recovery. A complete real Electron install, exit and healthy restart was verified in an isolated portable copy.
 
-Atlas is a Windows x64 fork of ModMixer 0.10.5 maintained by Felix, with your stag logo, portable storage, and signed knowledge and skill updates. This release supports **RimWorld**. Minecraft is disabled in both game registries and its tools, grammar, bridge JAR and reference pack are excluded. Atlas's application and UI are now compiled from TypeScript/React source.
+Atlas is a Windows x64 fork of ModMixer 0.10.5 maintained by Felix, with the Atlas globe logo, portable storage, and signed knowledge and skill updates. This release supports **RimWorld**. Minecraft is disabled in both game registries and its tools, grammar, bridge JAR and reference pack are excluded. Atlas's application and UI are now compiled from TypeScript/React source.
 
 ## Run it
 

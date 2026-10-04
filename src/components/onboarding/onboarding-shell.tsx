@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { GridMark } from '../grid-mark';
+import { AtlasLogo } from '../atlas-logo';
 
 /**
  * Common chrome for an onboarding step: header, scrollable body, and a
@@ -49,7 +49,7 @@ export function OnboardingStep({
     <div className="fixed inset-0 z-[100] flex flex-col bg-paper">
       <header className="flex items-center justify-between border-b border-line px-6 py-4">
         <div className="flex items-center gap-2.5">
-          <GridMark />
+          <AtlasLogo />
           <span className="font-display text-lg font-medium tracking-tight text-ink">
             Atlas
           </span>

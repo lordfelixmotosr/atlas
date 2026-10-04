@@ -15,6 +15,7 @@ replacements = {"resources/app.asar", "Atlas.exe", "atlas-build.json", "README-A
 replacements.add("resources/atlas/watch-update.ps1")
 replacements.add("resources/atlas/launch-update.ps1")
 replacements.add("resources/atlas/distribution.json")
+replacements.update({"resources/atlas/icon.png", "resources/atlas/Atlas.ico"})
 replacements.update({"LICENSE", "NOTICE"})
 replacements.update(file.relative_to(source).as_posix() for file in (source / "resources/atlas/game-adapter-template").rglob("*") if file.is_file())
 replacements.update(file.relative_to(source).as_posix() for file in (source / "resources/atlas/seed").glob("*.atlas.json"))
