@@ -216,6 +216,7 @@ class ModRegistry {
     //   ludeon.rimworld.ideology
     //   ludeon.rimworld.biotech
     //   ludeon.rimworld.anomaly
+    //   ludeon.rimworld.odyssey
     if (paths.dataDir && fs.existsSync(paths.dataDir)) {
       mods.push(...(await scanRoot(paths.dataDir, 'official')));
     }
@@ -389,6 +390,7 @@ const OFFICIAL_PACKAGE_IDS: Record<string, { name: string; packageId: string }> 
   Ideology: { name: 'Ideology', packageId: 'ludeon.rimworld.ideology' },
   Biotech: { name: 'Biotech', packageId: 'ludeon.rimworld.biotech' },
   Anomaly: { name: 'Anomaly', packageId: 'ludeon.rimworld.anomaly' },
+  Odyssey: { name: 'Odyssey', packageId: 'ludeon.rimworld.odyssey' },
 };
 
 function officialSynthesis(folder: string): {

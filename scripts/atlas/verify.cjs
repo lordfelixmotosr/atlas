@@ -18,6 +18,11 @@ function init(){
   win.webContents.once('did-finish-load',()=>{if(win.webContents.getURL().startsWith('data:'))return;setTimeout(async()=>{
    try{
     const result=await win.webContents.executeJavaScript(`(async()=>({version:await window.modmixer.getAppVersion(),library:await window.modmixer.atlasLibraryStatus(),app:await window.modmixer.atlasAppStatus(),modelIds:(await window.modmixer.listModels()).map(model=>({id:model.id,contextWindow:model.contextWindow})),body:document.body.innerText,title:document.title,hasLibraryApi:typeof window.modmixer.atlasLibrarySearch==='function'}))()`);
+    const verifyGameRoot=process.env.ATLAS_VERIFY_GAME_ROOT;
+    if(verifyGameRoot){const picker=require('electron').dialog,originalPicker=picker.showOpenDialog;try{picker.showOpenDialog=async()=>({canceled:false,filePaths:[verifyGameRoot]});await win.webContents.executeJavaScript('window.modmixer.browseRimWorldInstall()');}finally{picker.showOpenDialog=originalPicker;}}
+    result.nativeOdyssey=await win.webContents.executeJavaScript(`(async()=>{const env=await window.modmixer.refreshRegistry(),mod=env.snapshot.mods.find(entry=>entry.about.packageIdLc==='ludeon.rimworld.odyssey');return {installed:!!mod,official:mod?.source==='official',activeInNormalProfile:env.snapshot.activeOrder.includes('ludeon.rimworld.odyssey')}})()`);
+    if(verifyGameRoot&&fs.existsSync(path.join(verifyGameRoot,'Data/Odyssey'))&&!result.nativeOdyssey.installed)throw new Error('Installed Odyssey was not detected through the native registry.');
+    if(result.nativeOdyssey.installed&&!result.nativeOdyssey.official)throw new Error('Installed Odyssey must be recognized as official content.');
     result.nativeOpenAILogin=await win.webContents.executeJavaScript(`(async()=>{let message='';try{await window.modmixer.loginOpenAIAccount(undefined,'')}catch(error){message=error.message}const accounts=await window.modmixer.getOpenAIAccounts();return {validationReached:message.includes('Account names must be'),noMissingHelper:!message.includes('is not defined'),busyCleared:!accounts.busy,accounts:accounts.accounts.length,providerSignInPerformed:false}})()`);
     if(!result.nativeOpenAILogin.validationReached||!result.nativeOpenAILogin.noMissingHelper||!result.nativeOpenAILogin.busyCleared)throw new Error('Native account login preparation failed.');
     await win.webContents.executeJavaScript("window.modmixer.atlasLibraryOpenReference('rimworld-forge','references/source/__init__.py')");result.referenceWindowOpened=require('electron').BrowserWindow.getAllWindows().some(window=>window.getTitle().includes('__init__.py'));
@@ -58,12 +63,22 @@ function init(){
     const libraryMods=await win.webContents.executeJavaScript('window.modmixer.listWorkspaceMods()');
     result.nativeChanges={started:tracked.status,marked:clean.status,status:changes.status,count:changes.count,describesDef:changes.files.some(file=>file.description.includes('Added ThingDef NativeArmor')),librarySummary:libraryMods.find(mod=>mod.folder===JSON.parse(folder))?.changes?.count===2,baselineOutsideMod:fs.existsSync(path.join(path.dirname(copied),'.atlas/mod-changes',imported.imported[0].folder,'state.json'))};
     if(tracked.status!=='tracking'||clean.status!=='clean'||changes.status!=='modified'||changes.count!==2||Object.values(result.nativeChanges).includes(false))throw new Error('Native change report verification failed.');
+    if(process.env.ATLAS_VERIFY_CHAT_BUNDLE){
+     const layoutWin=new (require('electron').BrowserWindow)({show:false,width:1200,height:800,webPreferences:{contextIsolation:true,nodeIntegration:false}});
+     try{
+      await layoutWin.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<!doctype html><html><head></head><body><div id="root" style="display:flex;flex-direction:column;width:1000px;height:650px"></div></body></html>'));
+      const cssRoot=path.join(__dirname,'../../renderer/main_window/assets'),css=fs.readdirSync(cssRoot).filter(name=>name.endsWith('.css')).map(name=>fs.readFileSync(path.join(cssRoot,name),'utf8')).join('\n');
+      await layoutWin.webContents.executeJavaScript(`document.documentElement.classList.add('dark');document.head.appendChild(Object.assign(document.createElement('style'),{textContent:${JSON.stringify(css)}}));window.modmixer=new Proxy({onEvent:()=>()=>{},getAgentStatus:async()=>({busy:false,compacting:false}),getContextUsage:async()=>null},{get:(target,key)=>key in target?target[key]:String(key).startsWith('on')?()=>()=>{}:async()=>null});void 0;`);
+      await layoutWin.webContents.executeJavaScript(fs.readFileSync(process.env.ATLAS_VERIFY_CHAT_BUNDLE,'utf8'));
+      result.nativeChatLayout=await layoutWin.webContents.executeJavaScript('window.__atlasChatLayoutTest.run()');
+     }finally{layoutWin.destroy();}
+    }
     result.profile=app.getPath('userData');result.cache=app.getPath('sessionData');
     write(result);try{const picture=await win.webContents.capturePage();fs.writeFileSync(path.join(root,'data','Atlas-first-run.png'),picture.toPNG());}catch(error){result.screenshotError=error.message;}
     write(result);app.exit(0);
    }catch(error){write({error:error.stack});app.exit(1);}
   },2500);});
  });
- setTimeout(()=>{write({error:'Atlas did not finish loading within 50 seconds.'});app.exit(1);},50000).unref();
+ setTimeout(()=>{write({error:'Atlas did not finish loading within 75 seconds.'});app.exit(1);},75000).unref();
 }
 module.exports={init};

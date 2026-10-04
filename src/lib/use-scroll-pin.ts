@@ -89,8 +89,9 @@ export function useScrollPin(
       const el = ref.current;
       if (!el) return;
       programmatic.current = true;
+      const animated = smooth && !scrollToEnd;
       if (scrollToEnd) {
-        scrollToEnd(smooth);
+        scrollToEnd(false);
       } else {
         el.scrollTo({
           top: el.scrollHeight,
@@ -104,11 +105,14 @@ export function useScrollPin(
         () => {
           programmatic.current = false;
           programmaticTimer.current = null;
+          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < slack;
+          setPinned(atBottom);
+          if (atBottom) setHasNewBelow(false);
         },
-        smooth ? 600 : 50,
+        animated ? 600 : 50,
       );
     },
-    [ref, scrollToEnd],
+    [ref, scrollToEnd, slack],
   );
 
   useEffect(() => {
@@ -126,7 +130,9 @@ export function useScrollPin(
   }, deps);
 
   const jumpToBottom = useCallback(() => {
-    scrollToBottom(true);
+    // An instant jump lets virtualized rows settle at the destination rather
+    // than following a changing height estimate through a long animation.
+    scrollToBottom(false);
     setPinned(true);
     setHasNewBelow(false);
   }, [scrollToBottom]);

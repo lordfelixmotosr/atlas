@@ -15,6 +15,7 @@ const OFFICIAL_PIDS = [
   'ludeon.rimworld.ideology',
   'ludeon.rimworld.biotech',
   'ludeon.rimworld.anomaly',
+  'ludeon.rimworld.odyssey',
 ];
 
 export interface TestSetResult {
@@ -51,7 +52,7 @@ export function computeTestSet(args: {
   if (byPid.has('ludeon.rimworld')) required.add('ludeon.rimworld');
   for (const pid of OFFICIAL_PIDS) {
     if (pid === 'ludeon.rimworld') continue;
-    if (snapshot.activeOrder.includes(pid)) required.add(pid);
+    if (byPid.has(pid) && snapshot.activeOrder.includes(pid)) required.add(pid);
   }
 
   const missing: string[] = [];

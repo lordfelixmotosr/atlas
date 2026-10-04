@@ -5,6 +5,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -274,16 +275,22 @@ export function ChatPanel({
   const rowVirtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: visible.length,
     getScrollElement: () => scrollRef.current,
+    getItemKey: (index) => `${conversation.id}:${visible[index].role}:${visible[index].timestamp}:${index}`,
     estimateSize: () => 140,
     overscan: 6,
   });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  // Keep mounted rows in normal flow: delayed measurements during streaming,
+  // font loading or panel resizing must never put one message over another.
+  const topSpace = virtualRows[0]?.start ?? 0;
+  const bottomSpace = Math.max(0, rowVirtualizer.getTotalSize() - (virtualRows.at(-1)?.end ?? 0));
   const scrollToEnd = useCallback(
-    (smooth: boolean) => {
+    (_smooth: boolean) => {
       const count = rowVirtualizer.options.count;
       if (count === 0) return;
       rowVirtualizer.scrollToIndex(count - 1, {
         align: 'end',
-        behavior: smooth ? 'smooth' : 'auto',
+        behavior: 'auto',
       });
     },
     [rowVirtualizer],
@@ -309,6 +316,15 @@ export function ChatPanel({
     [visible.length, streaming, toolStates, compacting],
     { scrollToEnd },
   );
+  useLayoutEffect(() => {
+    // Once the final row is mounted, its real height is available. Finish the
+    // jump using the actual bottom rather than the virtualizer's estimate,
+    // and follow growth only while the reader has opted to stay at the end.
+    const el = scrollRef.current;
+    if (pinned && el && virtualRows.at(-1)?.index === visible.length - 1) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [pinned, messages, streaming, toolStates, visible.length, virtualRows.at(-1)?.index, virtualRows.at(-1)?.size]);
 
   const submit = async () => {
     const text = draft.trim();
@@ -548,6 +564,7 @@ export function ChatPanel({
       <div className="relative min-h-0 flex-1">
       <div
         ref={scrollRef}
+        data-atlas-chat-scroll=""
         className="absolute inset-0 overflow-auto px-6 py-4"
       >
         {loading ? (
@@ -556,18 +573,18 @@ export function ChatPanel({
           <ScopeEmptyState scope={effectiveScope} />
         ) : (
           <div
-            className="relative w-full"
-            style={{ height: rowVirtualizer.getTotalSize() }}
+            className="w-full"
+            style={{ paddingTop: topSpace, paddingBottom: bottomSpace }}
           >
-            {rowVirtualizer.getVirtualItems().map((vi) => {
+            {virtualRows.map((vi) => {
               const m = visible[vi.index];
               return (
                 <div
                   key={vi.key}
                   data-index={vi.index}
                   ref={rowVirtualizer.measureElement}
-                  className="absolute left-0 top-0 w-full pb-3"
-                  style={{ transform: `translateY(${vi.start}px)` }}
+                  className="w-full pb-3"
+                  data-atlas-chat-row=""
                 >
                   <MessageBubble
                     message={m}
@@ -634,13 +651,15 @@ export function ChatPanel({
           </div>
         )}
       </div>
-      {!pinned && hasNewBelow && (
+      {!pinned && visible.length > 0 && (
         <button
+          type="button"
+          aria-label="Jump to latest message"
           onClick={jumpToBottom}
-          className="juicy-bubble-in absolute left-1/2 bottom-3 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-accent/60 bg-paper px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-accent shadow-md transition-colors hover:bg-surface hover:text-ink"
+          className="absolute left-1/2 bottom-3 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-accent/60 bg-paper px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-accent shadow-md transition-colors hover:bg-surface hover:text-ink"
         >
-          <span className="juicy-bounce-dot inline-block h-1.5 w-1.5 rounded-full bg-accent" />
-          <span>New messages</span>
+          {hasNewBelow && <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />}
+          <span>{hasNewBelow ? 'New messages' : 'Jump to latest'}</span>
           <DownArrowIcon />
         </button>
       )}
@@ -1467,7 +1486,7 @@ function ToolBadge({
     <div
       data-demo="tool-badge"
       className={cn(
-        'mt-2 flex items-center gap-2 rounded border border-line bg-surface/60 px-2 py-1.5 font-mono text-[11px] text-muted',
+        'mt-2 flex min-w-0 items-center gap-2 rounded border border-line bg-surface/60 px-2 py-1.5 font-mono text-[11px] text-muted',
         // Sliding shimmer says "this is actively running". It clears as
         // soon as the status flips to done/error.
         status === 'running' && 'juicy-shimmer-bar',
@@ -1475,10 +1494,10 @@ function ToolBadge({
         transition === 'error' && 'juicy-flash-error juicy-shake',
       )}
     >
-      <span className={cn('h-1.5 w-1.5 rounded-full', dot)} />
-      <span className="text-ink">{name}</span>
-      <span className="truncate text-subtle">{previewArgs(args)}</span>
-      <span className="ml-auto uppercase tracking-[0.18em] text-subtle">
+      <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', dot)} />
+      <span className="shrink-0 text-ink">{name}</span>
+      <span className="min-w-0 flex-1 truncate text-subtle">{previewArgs(args)}</span>
+      <span className="shrink-0 uppercase tracking-[0.18em] text-subtle">
         {label}
       </span>
     </div>

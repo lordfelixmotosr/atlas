@@ -1,4 +1,10 @@
-# Atlas 0.2.8 portable
+# Atlas 0.2.9 portable
+
+## 0.2.9 Odyssey and chat layout fixes
+
+Isolated RimWorld tests preserve Odyssey when it is installed and enabled in the normal game profile. Official content detection and load priority include Odyssey after Anomaly. Installed DLCs that are disabled in the normal profile stay disabled unless explicitly required by the target mod. Normal saves and the normal active-mod list are retained.
+
+Visible chat rows flow naturally so growing replies, tool results and panel resizing cannot overlap neighboring messages. Long transcripts remain virtualized. Jump to latest stays available whenever you are away from the newest message, including idle chats. New replies keep your reading position until you jump back.
 
 ## 0.2.8 feature descriptions and forest accents
 

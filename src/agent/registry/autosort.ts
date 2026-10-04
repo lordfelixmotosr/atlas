@@ -50,6 +50,7 @@ const LOAD_PRIORITY = [
   'ludeon.rimworld.ideology',
   'ludeon.rimworld.biotech',
   'ludeon.rimworld.anomaly',
+  'ludeon.rimworld.odyssey',
 ];
 
 export function autosort(opts: AutosortOptions): AutosortResult {
