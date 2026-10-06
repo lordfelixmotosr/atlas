@@ -44,7 +44,7 @@ import type {
   AttachmentInput,
   PreparedAttachment,
 } from '../agent/attachments/types';
-import { Markdown } from './markdown';
+import { Markdown, MarkdownImageScope } from './markdown';
 import { ModelPicker } from './model-picker';
 import { ThinkingPicker } from './thinking-picker';
 import { ToolResultBubble } from './tool-result-renderer';
@@ -547,6 +547,7 @@ export function ChatPanel({
   const showBalance = balance !== null && !hasUncostableTurns;
 
   return (
+    <MarkdownImageScope folder={conversation.scope.type === 'mod' ? conversation.scope.modFolder : undefined}>
     <div
       className="relative flex min-h-0 flex-1 flex-col"
       onDragEnter={onDragOver}
@@ -669,11 +670,8 @@ export function ChatPanel({
         <FelixSteeringQueue lines={steering} items={steeringItems} busy={busy} resuming={retryAction.busy} cancelling={steerCanceller.busy} onResume={()=>void retry()} onCancel={(ids:string[])=>void cancelSteering(ids)} />
         {notice&&<p className="atlas-inline-notice" role="status">{notice}</p>}
         {hasAi && (
-          // This chat's model + reasoning toolbar on the left, live
-          // telemetry on the right. Per-conversation: changing these here
-          // only affects this chat.
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">
+          <div className="felix-toolbar" data-atlas-composer-toolbar="">
+            <div className="felix-toolbar-controls" data-atlas-composer-controls="">
               <ModelPicker
                 models={availableModels}
                 current={model}
@@ -681,11 +679,12 @@ export function ChatPanel({
                 onConnect={onConnect}
               />
               <ThinkingPicker current={thinkingLevel} onChange={changeThinking} />
-              <FelixSpeedControl model={model} /><FelixAccountControl model={model} busy={busy||compacting} onConnect={onConnect} /><FelixUsageControl model={model} />
-              <button type="button" className="atlas-button" disabled={busy||loading||compacting||compactor.busy||!messages.length} onClick={()=>void compact()}>{compacting||compactor.busy?"Compacting…":"Compact now"}</button>
+              <FelixSpeedControl model={model} />
+              <FelixAccountControl model={model} busy={busy||compacting} onConnect={onConnect} />
             </div>
-            {(showCost || showBalance || contextUsage) && (
-              <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 font-mono text-[11px] text-subtle">
+            <div className="felix-toolbar-status" data-atlas-composer-status="">
+              <FelixUsageControl model={model} />
+              <div className="felix-context-actions">
                 {contextUsage && contextUsage.tokens !== null && (() => {
                   // Color escalates as the context window fills up — at >95%
                   // the next turn is about to compact, so we want the user
@@ -699,30 +698,31 @@ export function ChatPanel({
                         ? 'text-accent'
                         : '';
                   return (
-                    <span className={cn('inline-flex items-center gap-1', cls)}>
-                      Context {contextUsage.estimated?'~':''}{' '}
-                      <OdometerNumber
-                        value={contextUsage.tokens}
-                        format={formatTokens}
-                      />
-                      /{formatCapacity(contextUsage.contextWindow)}
+                    <span className={cn('felix-context', cls)}>
+                      <span className="felix-status-label">Context</span>
+                      <span className="felix-context-value">
+                        {contextUsage.estimated?'~':''}<OdometerNumber value={contextUsage.tokens} format={formatTokens} />
+                        {' / '}{formatCapacity(contextUsage.contextWindow)}
+                      </span>
+                      <span className="felix-context-track" aria-hidden><span style={{width:`${Math.min(100,Math.max(0,ratio*100))}%`}} /></span>
                     </span>
                   );
                 })()}
                 {showCost && (
                   <span className="inline-flex items-center gap-1">
-                    chat cost ={' '}
+                    Chat cost{' '}
                     <OdometerNumber value={chatCost} format={formatCost} />
                   </span>
                 )}
                 {showBalance && (
                   <span className="inline-flex items-center gap-1">
-                    balance ={' '}
+                    Balance{' '}
                     <OdometerNumber value={balance!} format={formatCost} />
                   </span>
                 )}
+                <button type="button" className="felix-compact-button" disabled={busy||loading||compacting||compactor.busy||!messages.length} onClick={()=>void compact()}>{compacting||compactor.busy?"Compacting…":"Compact now"}</button>
               </div>
-            )}
+            </div>
           </div>
         )}
         {hasAi ? (
@@ -845,6 +845,7 @@ export function ChatPanel({
         )}
       </div>
     </div>
+    </MarkdownImageScope>
   );
 }
 

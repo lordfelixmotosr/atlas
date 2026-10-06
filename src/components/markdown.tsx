@@ -1,8 +1,28 @@
-import { memo } from 'react';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import { createContext, memo, useContext, useState, type ReactNode } from 'react';
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { markdownImageUrl } from '../lib/markdown-image';
+
+const ImageFolder = createContext<string | undefined>(undefined);
+
+/** The conversation's mod folder, independent of whichever project tab is active. */
+export function MarkdownImageScope({ folder, children }: { folder?: string; children: ReactNode }) {
+  return <ImageFolder.Provider value={folder}>{children}</ImageFolder.Provider>;
+}
+
+function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return (
+    <span role="status" className="my-2 inline-block rounded-md border border-line bg-raised px-3 py-2 text-xs text-muted">
+      Image unavailable{alt ? `: ${alt}` : ''}
+    </span>
+  );
+  return <img src={src} alt={alt ?? ''} loading="lazy" decoding="async" onError={() => setFailed(true)}
+    className="my-2 block h-auto max-h-[32rem] max-w-full rounded-md border border-line object-contain" />;
+}
 
 const components: Components = {
+  img: ({ src, alt }) => <MarkdownImage key={src} src={src} alt={alt} />,
   p: ({ children }) => (
     <p className="text-sm leading-relaxed text-ink [&:not(:last-child)]:mb-2">
       {children}
@@ -99,8 +119,11 @@ export const Markdown = memo(function Markdown({
 }: {
   children: string;
 }) {
+  const imageFolder = useContext(ImageFolder);
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}
+      urlTransform={(value, key, node) => node.tagName === 'img' && key === 'src'
+        ? markdownImageUrl(value, imageFolder) : defaultUrlTransform(value)}>
       {children}
     </ReactMarkdown>
   );

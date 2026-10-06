@@ -24,6 +24,49 @@ function init(){
      fs.writeFileSync(path.join(root,'data/Atlas-logo-ui.png'),(await win.webContents.capturePage()).toPNG());
      write(result);app.exit(0);return;
     }
+    if(process.env.ATLAS_VERIFY_COMPOSER_ONLY){
+     const {BrowserWindow}=require('electron'),{pathToFileURL}=require('node:url');
+     const rendererRoot=path.join(__dirname,'../../renderer/main_window');
+     const builtHtml=fs.readFileSync(path.join(rendererRoot,'index.html'),'utf8');
+     const csp=builtHtml.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"\s*\/?\s*>/i);
+     if(!csp)throw new Error('Production image policy is missing.');
+     const cssRoot=path.join(rendererRoot,'assets'),css=fs.readdirSync(cssRoot).filter(name=>name.endsWith('.css')).map(name=>fs.readFileSync(path.join(cssRoot,name),'utf8')).join('\n');
+     const createFixture=async()=>{
+      const fixtureWin=new BrowserWindow({show:false,width:1200,height:800,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false,offscreen:true}});
+      await fixtureWin.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<!doctype html><html><head>'+csp[0]+'</head><body><div id="root" style="display:flex;flex-direction:column;width:1100px;height:650px"></div></body></html>'));
+      await fixtureWin.webContents.executeJavaScript(`document.documentElement.setAttribute('data-theme','dark');document.head.appendChild(Object.assign(document.createElement('style'),{textContent:${JSON.stringify(css)}}));window.modmixer=new Proxy({onEvent:()=>()=>{}},{get:(target,key)=>key in target?target[key]:String(key).startsWith('on')?()=>()=>{}:async()=>null});void 0;`);
+      return fixtureWin;
+     };
+     if(!process.env.ATLAS_VERIFY_TOOLBAR_BUNDLE||!process.env.ATLAS_VERIFY_IMAGE_BUNDLE)throw new Error('Composer verification bundles are missing.');
+     const toolbarWin=await createFixture();
+     try{
+      await toolbarWin.webContents.executeJavaScript(fs.readFileSync(process.env.ATLAS_VERIFY_TOOLBAR_BUNDLE,'utf8'));
+      result.nativeComposer=await toolbarWin.webContents.executeJavaScript('window.__atlasToolbarTest.run()');
+      for(const [name,width] of [['credits',1100],['zero',650],['unavailable',360]]){
+       await toolbarWin.webContents.executeJavaScript(`window.__atlasToolbarTest.state(${JSON.stringify(name)},${width})`);
+       toolbarWin.webContents.invalidate();
+       await new Promise(resolve=>setTimeout(resolve,500));
+       fs.writeFileSync(path.join(root,'data','Atlas-toolbar-'+name+'.png'),(await toolbarWin.webContents.capturePage()).toPNG());
+      }
+      await toolbarWin.webContents.executeJavaScript('window.__atlasToolbarTest.close()');
+     }finally{toolbarWin.destroy();}
+     const fixtureMod=path.join(app.getPath('userData'),'workspace/Mods/atlas-image-fixture'),previewDir=path.join(fixtureMod,'Tests/Previews');
+     fs.mkdirSync(path.join(fixtureMod,'About'),{recursive:true});fs.mkdirSync(previewDir,{recursive:true});
+     fs.writeFileSync(path.join(fixtureMod,'About/About.xml'),'<ModMetaData><name>Atlas image fixture</name><packageId>felix.imagefixture</packageId></ModMetaData>');
+     const sample=path.join(previewDir,'sample.png'),outside=path.join(root,'data/image-outside.png'),imageBytes=fs.readFileSync(path.join(process.resourcesPath,'atlas/icon.png'));
+     for(const destination of [sample,path.join(previewDir,'sample image.png'),outside])fs.writeFileSync(destination,imageBytes);
+     const imageWin=await createFixture();
+     try{
+      await imageWin.webContents.executeJavaScript(`window.__atlasImagePaths=${JSON.stringify({absolute:sample,fileUrl:pathToFileURL(sample).href,outside})};void 0;`);
+      await imageWin.webContents.executeJavaScript(fs.readFileSync(process.env.ATLAS_VERIFY_IMAGE_BUNDLE,'utf8'));
+      result.nativeChatImages=await imageWin.webContents.executeJavaScript('window.__atlasImageTest.run()');
+      await imageWin.webContents.executeJavaScript("document.getElementById('root').style.width='1100px';void 0;");
+      imageWin.webContents.invalidate();
+      await new Promise(resolve=>setTimeout(resolve,500));
+      fs.writeFileSync(path.join(root,'data/Atlas-chat-images.png'),(await imageWin.webContents.capturePage()).toPNG());
+     }finally{imageWin.destroy();}
+     write(result);app.exit(0);return;
+    }
     const verifyGameRoot=process.env.ATLAS_VERIFY_GAME_ROOT;
     if(verifyGameRoot){const picker=require('electron').dialog,originalPicker=picker.showOpenDialog;try{picker.showOpenDialog=async()=>({canceled:false,filePaths:[verifyGameRoot]});await win.webContents.executeJavaScript('window.modmixer.browseRimWorldInstall()');}finally{picker.showOpenDialog=originalPicker;}}
     result.nativeOdyssey=await win.webContents.executeJavaScript(`(async()=>{const env=await window.modmixer.refreshRegistry(),mod=env.snapshot.mods.find(entry=>entry.about.packageIdLc==='ludeon.rimworld.odyssey');return {installed:!!mod,official:mod?.source==='official',activeInNormalProfile:env.snapshot.activeOrder.includes('ludeon.rimworld.odyssey')}})()`);

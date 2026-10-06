@@ -16,7 +16,7 @@ export function ModelPicker({
     return (
       <button
         onClick={onConnect}
-        className="rounded-md border border-line bg-paper px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.18em] text-muted transition-colors hover:border-ink/40 hover:text-ink"
+        className="felix-connect"
       >
         Connect AI
       </button>
@@ -45,12 +45,12 @@ export function ModelPicker({
   };
 
   return (
-    <label className="relative inline-flex items-center">
+    <label className="felix-control felix-model-control">
       <span className="sr-only">Model</span>
       <select
         value={effectiveKey}
         onChange={(e) => onSelect(e.target.value)}
-        className="appearance-none rounded-md border border-line bg-paper px-2.5 py-1 pr-7 font-mono text-[11px] uppercase tracking-[0.18em] text-ink transition-colors hover:border-ink/40 focus:outline-none focus:border-accent"
+        className="felix-select felix-model-select"
       >
         {sorted.map((m) => (
           <option key={m.key} value={m.key} className="font-mono">
@@ -61,7 +61,7 @@ export function ModelPicker({
       </select>
       <svg
         aria-hidden
-        className="pointer-events-none absolute right-2 h-3 w-3 text-muted"
+        className="felix-chevron"
         viewBox="0 0 12 12"
         fill="none"
         stroke="currentColor"

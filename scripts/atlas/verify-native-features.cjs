@@ -16,7 +16,8 @@ async function main(){
  if(!report)throw new Error('Native verification did not finish: '+root);if(report.error)throw new Error(report.error);
  if(report.version!==version)throw new Error('Native verification version differs from production.');
  if(process.env.ATLAS_VERIFY_BRANDING_ONLY){if(!report.nativeBranding?.loaded)throw new Error('Native logo verification failed.');}
+ else if(process.env.ATLAS_VERIFY_COMPOSER_ONLY){if(!report.nativeComposer?.accountSwitchLoadsNewCredits||!report.nativeChatImages?.toolImageRendered)throw new Error('Native composer or image checks failed.');}
  else if(Object.values(report.nativeFeatureDescriptions||{}).some(value=>value===false)||!report.nativeFeatureDescriptions?.descriptionSaved)throw new Error('Native feature-description checks failed.');
- fs.writeFileSync(path.join(repository,'build-check/native-features-'+version+'.json'),JSON.stringify({...report,root},null,2));console.log(JSON.stringify({version,branding:report.nativeBranding,odyssey:report.nativeOdyssey,features:report.nativeFeatureDescriptions,productionArchiveUnchanged:true,root}));
+ fs.writeFileSync(path.join(repository,'build-check/native-features-'+version+'.json'),JSON.stringify({...report,root},null,2));console.log(JSON.stringify({version,branding:report.nativeBranding,composer:report.nativeComposer,images:report.nativeChatImages,odyssey:report.nativeOdyssey,features:report.nativeFeatureDescriptions,productionArchiveUnchanged:true,root}));
 }
 main().catch(error=>{console.error(error.stack);process.exitCode=1}).finally(()=>{const owned="'"+exe.replaceAll("'","''")+"'";cp.spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Get-CimInstance Win32_Process -Filter "Name='Atlas.exe'" | Where-Object {$_.ExecutablePath -eq ${owned}} | ForEach-Object {Stop-Process -Id $_.ProcessId -Force}`],{stdio:'ignore',windowsHide:true});});

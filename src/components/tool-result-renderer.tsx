@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { cn } from '@/lib/cn';
-import { extractText } from '@/lib/agent-utils';
+import { extractImages, extractText } from '@/lib/agent-utils';
 
 type ToolResultMessage = Extract<AgentMessage, { role: 'toolResult' }>;
 
@@ -122,6 +122,7 @@ export function ToolResultBubble({
   args: Record<string, unknown> | undefined;
 }) {
   const output = extractText(message.content);
+  const images = extractImages(message.content).filter(image => /^image\/(?:png|jpeg|jpg|webp|gif|avif|bmp|x-icon)$/i.test(image.mimeType));
   const renderer = getToolRenderer(message.toolName);
   const isError = !!message.isError;
   const [expanded, setExpanded] = useState(
@@ -153,7 +154,8 @@ export function ToolResultBubble({
           {message.toolName} {isError ? '✗' : '✓'}
         </span>
         <span className="min-w-0 flex-1 truncate">
-          {renderer.summary(renderArgs)}
+          {output || images.length === 0 ? renderer.summary(renderArgs) : `${images.length} image${images.length === 1 ? '' : 's'}`}
+          {output && images.length > 0 && ` · ${images.length} image${images.length === 1 ? '' : 's'}`}
         </span>
         <span className="font-mono text-[10px] text-subtle">
           {expanded ? '▾' : '▸'}
@@ -161,13 +163,16 @@ export function ToolResultBubble({
       </button>
       {expanded && (
         <div className="border-t border-line/60 px-3 py-2 font-mono text-[11px] leading-relaxed">
+          {images.map((image, index) => <img key={index} src={`data:${image.mimeType};base64,${image.data}`}
+            alt={`Image preview ${index + 1}`} loading="lazy" decoding="async"
+            className="my-2 block h-auto max-h-[32rem] max-w-full rounded-md border border-line object-contain" />)}
           {renderer.body ? (
             renderer.body(renderArgs)
-          ) : (
+          ) : (output || images.length === 0) ? (
             <pre className="whitespace-pre-wrap break-words">
               {output || '(no output)'}
             </pre>
-          )}
+          ) : null}
         </div>
       )}
     </div>

@@ -28,20 +28,20 @@ function FelixSpeedControl({model}) {
     finally { setSaving(false); }
   }
   return s.jsxs("label", {
-    className: "relative inline-flex items-center",
+    className: "felix-control felix-speed-control",
     title: "GPT speed for all chats. Fast uses more usage. Applies from the next request; availability depends on your account.",
     children: [
       s.jsx("span", {className:"sr-only", children:"GPT speed for all chats"}),
       s.jsxs("select", {
         "aria-label":"GPT speed for all chats",
         value:mode, onChange:change, disabled:!ready || saving,
-        className:"appearance-none rounded-md border border-line bg-paper px-2.5 py-1 pr-7 font-mono text-[11px] uppercase tracking-[0.18em] text-ink transition-colors hover:border-ink/40 focus:outline-none focus:border-accent disabled:opacity-40",
+        className:"felix-select",
         children:[
           s.jsx("option", {value:"standard", children:"Speed: Standard"}),
           s.jsx("option", {value:"fast", children:"Speed: Fast (more usage)"}),
         ],
       }),
-      s.jsx("svg", {"aria-hidden":true,className:"pointer-events-none absolute right-2 h-3 w-3 text-muted",viewBox:"0 0 12 12",fill:"none",stroke:"currentColor",strokeWidth:"1.5",children:s.jsx("path",{d:"M3 5l3 3 3-3"})}),
+      s.jsx("svg", {"aria-hidden":true,className:"felix-chevron",viewBox:"0 0 12 12",fill:"none",stroke:"currentColor",strokeWidth:"1.5",children:s.jsx("path",{d:"M3 5l3 3 3-3"})}),
     ],
   });
 }
@@ -66,16 +66,19 @@ function felixUsageView(usage, model, now = Date.now()) {
     remaining:window.resetsAt && now >= window.resetsAt * 1000 ? null : Math.max(0,Math.min(100,100-window.usedPercent)),
     resetsAt:window.resetsAt,
   })) : [];
-  let text;
-  if (windows.length) text = windows.map(window=>window.label + " left " + (window.remaining === null ? "—" : Math.round(window.remaining) + "%")).join(" · ");
-  else if (usage?.credits) text = usage.credits.unlimited ? "Credits: unlimited" : "Credits: " + usage.credits.balance.toLocaleString();
-  else text = usage?.status === "loading" ? "Usage: loading…" : usage?.status === "disconnected" ? "Usage: sign in" : "Usage unavailable";
-  if (usage?.status === "stale" && (windows.length || usage?.credits)) text += " (stale)";
+  const validBalance=typeof usage?.credits?.balance === "number" && Number.isFinite(usage.credits.balance) && usage.credits.balance >= 0;
+  const credits={label:"Credits",available:usage?.credits?.unlimited === true || validBalance,
+    value:usage?.credits?.unlimited === true ? "Unlimited" : validBalance ? usage.credits.balance>0&&usage.credits.balance<0.000001 ? "<0.000001" : usage.credits.balance.toLocaleString(undefined,{maximumFractionDigits:6}) : usage?.status === "loading" ? "Loading…" : usage?.status === "disconnected" ? "Sign in" : "Unavailable"};
+  const stale=usage?.status === "stale";
+  const planText=windows.length ? windows.map(window=>window.label + " left " + (window.remaining === null ? "—" : Math.round(window.remaining) + "%")).join(" · ") : usage?.status === "loading" ? "Usage: loading…" : usage?.status === "disconnected" ? "Usage: sign in" : "Usage unavailable";
+  const text=planText+" · Credits: "+credits.value+(stale?" (stale)":"");
   const title = [bucket?.name || "ChatGPT plan usage",...windows.map(window=>window.label + ": " + (window.remaining === null ? "reset time passed; refresh for current usage" : Math.round(window.remaining) + "% remaining") + (window.resetsAt ? "; resets " + new Date(window.resetsAt*1000).toLocaleString() : ""))];
   if (usage?.updatedAt) title.push("Last updated " + new Date(usage.updatedAt).toLocaleTimeString());
   if (usage?.status === "stale") title.push("Refresh failed. Showing the last known usage.");
+  title.push(credits.available ? "ChatGPT credits: "+credits.value : usage?.status === "loading" ? "Loading this account’s credit balance." : "OpenAI did not return a credit balance for this account.");
+  title.push("Credits are separate from the included plan limits; this is not an API dollar balance.");
   title.push("Shared with other apps using this ChatGPT account. Refreshes every minute. Click to refresh.");
-  return {text,title:title.join("\n"),low:windows.some(window=>window.remaining !== null && window.remaining <= 10)};
+  return {text,title:title.join("\n"),windows,credits,stale,low:windows.some(window=>window.remaining !== null && window.remaining <= 10)};
 }
 function FelixUsageControl({model}) {
   const enabled = model?.provider === "openai-codex";
@@ -83,6 +86,7 @@ function FelixUsageControl({model}) {
   const [refreshing,setRefreshing] = v.useState(false);
   const refreshRef = v.useRef(()=>{});
   v.useEffect(()=>{
+    setUsage({status:"loading",buckets:[],credits:null});
     if (!enabled) return;
     let active = true, requestId = 0;
     async function refresh(force=false) {
@@ -98,7 +102,8 @@ function FelixUsageControl({model}) {
     const visible = ()=>{if(!document.hidden) refresh();};
     document.addEventListener("visibilitychange",visible);
     const unsubscribe = window.modmixer.onOAuthEvent(event=>{
-      if ((event.providerId === "openai-codex" && ["login-success","logout"].includes(event.type)) || event.type === "links-changed") {
+      if ((event.providerId === "openai-codex" && ["login-success","logout","accounts-changed"].includes(event.type)) || event.type === "links-changed") {
+        requestId++;
         setUsage({status:"loading",buckets:[],credits:null});refresh(true);
       }
     });
@@ -106,10 +111,13 @@ function FelixUsageControl({model}) {
   },[enabled]);
   if (!enabled) return null;
   const view = felixUsageView(usage,model);
-  return s.jsx("button",{type:"button",onClick:()=>refreshRef.current(true),disabled:refreshing,
+  return s.jsxs("button",{type:"button",onClick:()=>refreshRef.current(true),disabled:refreshing,
     title:view.title,"aria-label":"ChatGPT usage: " + view.text,"aria-busy":refreshing,
-    className:"ml-1 rounded px-1 py-1 font-mono text-[11px] transition-colors hover:text-ink disabled:opacity-60 " + (view.low ? "text-failed" : "text-subtle"),
-    children:view.text});
+    className:"felix-usage","data-atlas-usage":"",
+    children:[...(view.windows.length ? view.windows.map((window,index)=>s.jsxs("span",{className:"felix-usage-item"+(window.remaining!==null&&window.remaining<=10?" felix-usage-low":""),children:[s.jsx("span",{className:"felix-status-label",children:window.label}),s.jsx("strong",{children:window.remaining===null?"—":Math.round(window.remaining)+"% left"})]},index)) : [s.jsx("span",{className:"felix-status-label",children:usage.status === "loading" ? "Usage loading…" : usage.status === "disconnected" ? "Sign in for usage" : "Usage unavailable"},"usage")]),
+      s.jsxs("span",{className:"felix-usage-item felix-credit-balance"+(view.credits.available?"":" felix-usage-unknown"),children:[s.jsx("span",{className:"felix-status-label",children:"Credits"}),s.jsx("strong",{children:view.credits.value})]}),
+      view.stale&&s.jsx("span",{className:"felix-usage-stale",children:"Stale"}),
+      s.jsx("svg",{"aria-hidden":true,className:"felix-usage-refresh",viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.5,children:s.jsx("path",{d:"M20 11a8 8 0 1 0-2 6M20 4v7h-7"})})]});
 }
 
 

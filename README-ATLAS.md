@@ -1,4 +1,10 @@
-# Atlas 0.2.10 portable
+# Atlas 0.2.11 portable
+
+## 0.2.11 credits, composer and image previews
+
+The chat toolbar groups model, thinking, speed and account controls above plan usage, credits, context and compaction. It wraps to suit the chat pane width. ChatGPT credit balances are displayed alongside included plan limits, including zero and unlimited balances when supplied by OpenAI. Unavailable balances are labeled explicitly; stale data is marked. Switching accounts clears old usage immediately, and late responses cannot display the previous account's balance.
+
+Chat image paths resolve inside the conversation's mod. Relative paths, encoded paths with spaces, Windows absolute paths, file URLs and existing asset URLs are supported for image files in the workspace or registered mod roots. Remote HTTPS images and image tool results can also be displayed. Missing or inaccessible images have a labeled fallback. Local preview requests validate file types and canonical paths, so links cannot grant access to unrelated folders.
 
 ## 0.2.10 Atlas globe logo
 

@@ -93,7 +93,7 @@ async function felixGetUsage(host, force = false) {const accountEpoch=felixOpenA
     } catch {
       value = cache.value?.updatedAt ? {...cache.value,status:"stale"} : {status:"unavailable",buckets:[],credits:null};
     }
-    if (felixUsageCache !== cache) return {status:"loading",buckets:[],credits:null};
+    if (felixUsageCache !== cache || accountEpoch !== felixOpenAIAccountEpoch || host.felixAccountOperation) return {status:"loading",buckets:[],credits:null};
     cache.value = value; cache.checkedAt = Date.now(); return value;
   })();
   try { return await cache.inflight; } finally { cache.inflight = null; }
