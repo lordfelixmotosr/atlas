@@ -100,3 +100,51 @@ export function isSpriteArtApproved(project: SpriteProject, slot: SpriteDirectio
   // Old revisions without hashes still share the same immutable file paths.
   return saved.preview === visible.preview && JSON.stringify(saved.frames) === JSON.stringify(visible.frames);
 }
+
+export interface SpriteGalleryEntry {
+  id: string; slot: SpriteDirection; path: string; kind: 'preview' | 'frame'; frame?: number;
+  revisionId: string; revisionIndex: number; originRevisionId: string; originIndex: number;
+  source: SpriteCandidate['source']; model: string; createdAt: string; carried: boolean;
+}
+function artworkOrigin(project: SpriteProject, revision: SpriteCandidate, slot: SpriteDirection, art: SpriteArt): SpriteCandidate {
+  const end = project.candidates.findIndex(item => item.id === revision.id);
+  if (art.originCandidateId) {
+    const explicit = project.candidates.findIndex(item => item.id === art.originCandidateId);
+    if (explicit === end) return revision;
+    if (explicit >= 0 && explicit < end) {
+      const prior = project.candidates[explicit], priorArt = prior.directions[slot];
+      return priorArt ? artworkOrigin(project, prior, slot, priorArt) : prior;
+    }
+  }
+  // A genuine generated revision remains a distinct result even if its pixels
+  // happen to equal earlier artwork. Legacy flat imports are kept distinct too.
+  if (revision.source === 'generated' && art.source !== 'imported' || revision.source === 'imported' && art.source !== 'generated') return revision;
+  for (let index = end - 1; index >= 0; index--) {
+    const prior = project.candidates[index], priorArt = prior.directions[slot];
+    if (priorArt && (priorArt.source ?? prior.source) === (art.source ?? revision.source) && priorArt.frames.length === art.frames.length && (priorArt.previewHash && art.previewHash && priorArt.frameHashes && art.frameHashes ? priorArt.previewHash === art.previewHash && JSON.stringify(priorArt.frameHashes) === JSON.stringify(art.frameHashes) : priorArt.preview === art.preview && JSON.stringify(priorArt.frames) === JSON.stringify(art.frames))) return artworkOrigin(project, prior, slot, priorArt);
+  }
+  return revision;
+}
+/** Collect files for a working revision, or unique files across its history. */
+export function getSpriteGalleryEntries(project: SpriteProject, selected: SpriteCandidate | undefined, allRevisions = false): SpriteGalleryEntry[] {
+  const rows: SpriteGalleryEntry[] = [], seen = new Set<string>();
+  const slots = getSpriteSlots(project.recipe), revisions = allRevisions ? project.candidates : selected ? [selected] : [];
+  for (const revision of revisions) {
+    for (const slot of slots) {
+      const view = allRevisions ? revision.directions[slot] ? { art: revision.directions[slot]!, candidateId: revision.id } : null : getSpriteCandidateView(project, revision, slot);
+      if (!view) continue;
+      const sourceRevision = project.candidates.find(item => item.id === view.candidateId) ?? revision;
+      const origin = artworkOrigin(project, sourceRevision, slot, view.art);
+      const revisionIndex = project.candidates.findIndex(item => item.id === revision.id) + 1;
+      const originIndex = project.candidates.findIndex(item => item.id === origin.id) + 1;
+      const files = [{ path: view.art.preview, kind: 'preview' as const, hash: view.art.previewHash }, ...view.art.frames.map((path, index) => ({ path, kind: 'frame' as const, frame: index + 1, hash: view.art.frameHashes?.[index] }))].filter((file, index) => !index || file.path !== view.art.preview);
+      for (const file of files) {
+        const key = origin.id + ':' + slot + ':' + file.kind + ':' + ('frame' in file ? file.frame : 0);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rows.push({ ...file, id: key, slot, revisionId: revision.id, revisionIndex, originRevisionId: origin.id, originIndex, source: view.art.source ?? origin.source, model: origin.model, createdAt: origin.createdAt, carried: origin.id !== revision.id });
+      }
+    }
+  }
+  return allRevisions ? rows.sort((a, b) => b.originIndex - a.originIndex || slots.indexOf(a.slot) - slots.indexOf(b.slot) || (a.frame ?? 0) - (b.frame ?? 0)) : rows;
+}

@@ -162,8 +162,46 @@ test('a 16-slot apparel family is validated in four batches and saved once atomi
   await f.call('generate', { ...f.request, directions: slots });
   assert.equal(batches.length, 4); assert.equal(saved, 1);
   assert.deepEqual(batches.flat(), slots);
-  assert.deepEqual(f.taskUpdates.filter(update => /^Designing asset batch/.test(update[1].phase)).map(update => update[1].fraction), [0, 0.25, 0.5, 0.75]);
+  const modelUpdates = f.taskUpdates.filter(update => update[1].spriteProgress?.stage === 'designing');
+  assert.deepEqual(modelUpdates.map(update => update[1].fraction), Array(8).fill(null));
+  assert.deepEqual(modelUpdates.map(update => update[1].spriteProgress.completed), [0, 1, 1, 2, 2, 3, 3, 4]);
+  assert(modelUpdates.every(update => update[1].spriteProgress.total === 4));
   assert.equal(f.host.atlasSpriteJobs, 0); assert.equal(f.timers.size, 0);
+});
+
+test('one, two and three requested views keep model timing indeterminate and expose actual PNG render counts', async () => {
+  for (const slots of [['south'], ['south', 'east'], ['south', 'east', 'north']]) {
+    const f = fixture(), modelStarted = deferred(), modelFinished = deferred();
+    let forwarded;
+    f.host.generateSpriteScenes = async args => { forwarded = Array.from(args.directions); modelStarted.resolve(); return modelFinished.promise; };
+    f.store.saveGeneration = async (id, response, _model, directions, version, signal, onProgress) => {
+      assert.equal(id, f.project.id); assert.equal(version, 4); assert.equal(signal.aborted, false);
+      assert.deepEqual(Object.keys(response.directions), slots); assert.deepEqual(Array.from(directions), slots);
+      const total = slots.length * 9;
+      for (const progress of [
+        { stage: 'rendering', completed: 0, total },
+        { stage: 'rendering', completed: 3, total, direction: slots[0], frame: 2 },
+        { stage: 'rendering', completed: total, total, direction: slots.at(-1), frame: 8 },
+        { stage: 'saving', completed: total, total },
+      ]) onProgress(progress);
+      f.writes.push('candidate'); return { ...f.project, version: 5 };
+    };
+    const pending = f.call('generate', { ...f.request, directions: slots }); await modelStarted.promise;
+    assert.deepEqual(forwarded, slots);
+    const waiting = f.taskUpdates.at(-1)[1];
+    assert.equal(waiting.fraction, null); assert.equal(waiting.spriteProgress.stage, 'designing');
+    assert.equal(waiting.spriteProgress.completed, 0); assert.equal(waiting.spriteProgress.total, 1);
+    assert.equal(f.writes.length, 0);
+    modelFinished.resolve({ response: responseFor(slots), model: 'Fixture model' }); await pending;
+    const rendering = f.taskUpdates.filter(update => update[1].spriteProgress?.stage === 'rendering').map(update => update[1]);
+    assert.deepEqual(rendering.map(update => update.spriteProgress.completed), [0, 3, slots.length * 9]);
+    assert.deepEqual(rendering.map(update => update.fraction), [0, 3 / (slots.length * 9), 1]);
+    assert.match(rendering[1].phase, /South flight frame 2/);
+    const saving = f.taskUpdates.find(update => update[1].spriteProgress?.stage === 'saving')[1]; assert.equal(saving.fraction, null);
+    const completed = f.taskUpdates.at(-1)[1]; assert.equal(completed.status, 'completed'); assert.equal(completed.fraction, 1);
+    assert.equal(completed.spriteProgress.completed, slots.length); assert.equal(completed.spriteProgress.stage, 'complete');
+    assert.deepEqual(f.writes, ['candidate']);
+  }
 });
 
 test('cancelling or returning unsafe SVG in a later apparel batch commits no partial revision', async () => {

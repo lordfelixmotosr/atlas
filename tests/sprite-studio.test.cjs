@@ -304,7 +304,7 @@ test('an unapproved imported bird master guides requested flight views without b
   const masterArt = project.candidates[0].directions.east, masterPath = path.join(f.store.projectDir(project.id), masterArt.preview);
   assert.deepEqual(project.approved, {}); assert.equal(masterArt.frames.length, 0);
   let prepared = f.store.prepareGeneration(project.id, ['south', 'east', 'north'], 'Create the matching flight design.', project.version);
-  assert.deepEqual(prepared.approvedPaths, [masterPath]); assert.equal(prepared.referencePaths.length, 0); assert(prepared.prompt.includes('Imported identity views may be unapproved')); assert.deepEqual(f.store.read(project.id).approved, {});
+  assert.deepEqual(prepared.approvedPaths, [masterPath]); assert.equal(prepared.referencePaths.length, 0); assert.match(prepared.prompt, /identity views may be unapproved/); assert.deepEqual(f.store.read(project.id).approved, {});
   assert.deepEqual(f.store.prepareGeneration(project.id, ['south'], '', project.version).approvedPaths, [masterPath]);
   project = await f.store.importPng(project.id, 'east', file, project.version); const latestPath = path.join(f.store.projectDir(project.id), project.candidates.at(-1).directions.east.preview);
   assert.deepEqual(f.store.prepareGeneration(project.id, ['east'], '', project.version).approvedPaths, [latestPath]);

@@ -303,6 +303,11 @@ class SpriteStudio {
         const prefix = `candidates/${candidate.id}/`;
         if (art.preview !== prefix + direction + '-preview.png' || art.frames.some((value, i) => value !== prefix + direction + `/frame-${i + 1}.png`)) fail('Invalid sprite candidate path.');
         if (!/^[a-f0-9]{64}$/.test(art.previewHash) || !Array.isArray(art.frameHashes) || art.frameHashes.length !== art.frames.length || art.frameHashes.some(value => !/^[a-f0-9]{64}$/.test(value))) fail('Invalid sprite candidate integrity hashes.');
+        if (art.originCandidateId !== undefined) {
+          checkedId(art.originCandidateId);
+          const origin = project.candidates.find(item => item.id === art.originCandidateId)?.directions[direction];
+          if (!ids.has(art.originCandidateId) || !origin || origin.previewHash !== art.previewHash || JSON.stringify(origin.frameHashes) !== JSON.stringify(art.frameHashes)) fail('Invalid sprite artwork origin.');
+        }
         this._file(projectId, art.preview); for (const frame of art.frames) this._file(projectId, frame);
       }
     }
@@ -408,9 +413,9 @@ class SpriteStudio {
           const frame = `candidates/${candidateId}/${slot}/frame-${index + 1}.png`;
           atomicWrite(this._file(projectId, frame), readRegular(this._file(projectId, art.frames[index]))); frames.push(frame);
         }
-        collected[slot] = { ...clone(art), preview, frames, source: art.source ?? origin.source };
+        collected[slot] = { ...clone(art), preview, frames, source: art.source ?? origin.source, originCandidateId: art.originCandidateId ?? origin.id };
       }
-      collected[direction] = { preview: relative, previewHash: hash(png), frames: [], frameHashes: [], hasWingRig: false, source: 'imported', warnings: [...pngInfo(png).warnings, ...(project.recipe.kind === 'bird' ? ['A flat PNG has no wing rig. Generate layered wings before exporting Odyssey flight.'] : [])] };
+      collected[direction] = { preview: relative, previewHash: hash(png), frames: [], frameHashes: [], hasWingRig: false, source: 'imported', originCandidateId: candidateId, warnings: [...pngInfo(png).warnings, ...(project.recipe.kind === 'bird' ? ['A flat PNG has no wing rig. Generate layered wings before exporting Odyssey flight.'] : [])] };
       current.candidates.push({ id: candidateId, createdAt: new Date().toISOString(), model: 'Imported PNG · collected views', source: 'imported', directions: collected });
       this._changed(current); return this._save(current);
     } catch (error) { this._removeCandidate(projectId, candidateId); throw error; }
@@ -420,17 +425,18 @@ class SpriteStudio {
     if (project.candidates.length >= 24) fail('This project has 24 candidates. Create a new sprite project to continue.');
     if (typeof instruction !== 'string' || instruction.length > 12000) fail('Keep revision instructions under 12,000 characters.');
     // API compatibility keeps the approvedPaths name; this list also carries
-    // imported identity views so an unapproved master can guide new artwork.
+    // saved identity views so an unapproved master or earlier design can guide
+    // the next direction without changing its approval status.
     const approvedPaths = [], included = new Set(), covered = new Set();
     const include = art => { this._verifyArt(projectId, art); const file = this._file(projectId, art.preview); if (!included.has(file)) { included.add(file); approvedPaths.push(file); } };
     for (const direction of getSlots(project.recipe)) {
       const candidate = project.candidates.find(x => x.id === project.approved[direction]);
       if (candidate) { include(candidate.directions[direction]); covered.add(direction); }
     }
-    for (const direction of directions) {
+    for (const direction of getSlots(project.recipe)) {
       if (covered.has(direction)) continue;
-      const imported = [...project.candidates].reverse().find(candidate => candidate.source === 'imported' && candidate.directions[direction]);
-      if (imported) { include(imported.directions[direction]); covered.add(direction); }
+      const saved = [...project.candidates].reverse().find(candidate => candidate.directions[direction]);
+      if (saved) { include(saved.directions[direction]); covered.add(direction); }
     }
     if (directions.some(direction => !covered.has(direction))) {
       const master = project.candidates.find(candidate => candidate.source === 'imported' && Object.keys(candidate.directions).length);
@@ -440,29 +446,43 @@ class SpriteStudio {
     const guidance = project.recipe.kind === 'apparel' ? 'Draw the garment alone, without a painted pawn, skin, face or mannequin. Preserve one garment identity across Male/Female/Thin/Fat/Hulk adult body shapes and south/east/north views. The item slot is a separate inventory illustration. Match approved body-type alignment; do not merely stretch one body type into every other.' : project.recipe.kind === 'hat' ? 'Draw the hat alone with no head, face or hair. The item slot is the inventory illustration; south/east/north are worn head-aligned views, independent of body-type suffixes. West mirrors east.' : ['building', 'furniture'].includes(project.recipe.kind) ? 'Draw the structure alone. Keep design, materials, lighting and details consistent across all explicit cardinal views. item means one complete single graphic, not a pawn view. Physical footprint is separate from drawn width/height; horizontal directional views swap the drawn dimensions. Do not invent functional building behavior.' : 'Preserve species identity, anatomy and markings. Keep the body/head/tail at the same anchor across views and animation frames. West mirrors east.';
     const example = { directions: { [directions[0]]: { body: { svg: '<path .../>' }, ...(project.recipe.kind === 'bird' ? { wingNear: { svg: '<path .../>', pivot: { x: project.recipe.canvasSize / 2, y: project.recipe.canvasSize / 2 } }, wingFar: { svg: '<path .../>', pivot: { x: project.recipe.canvasSize / 2, y: project.recipe.canvasSize / 2 } } } : {}) } } };
     const promptRecipe = clone(project.recipe); delete promptRecipe.palette;
-    const prompt = `Create one consistent RimWorld artwork family, using the attached saved identity artwork and master references. Imported identity views may be unapproved; use them as visual references without treating them as approved output.\nProject recipe: ${JSON.stringify(promptRecipe)}\nRequested artwork slots: ${directions.join(', ')}.\nRevision: ${instruction}\n${guidance}\nMatch colors from the master/reference artwork and descriptive brief; preserve outline width, materials, proportions and identity. Use the exact square canvas, transparent background, orthographic game perspective, no floor, text, shadow or scenery.\nReturn only JSON following this structure: ${JSON.stringify(example)} with exactly the requested slot keys under directions. The body layer is the complete static artwork for each slot. ${project.recipe.kind === 'bird' ? 'Both wing layers are required. Wings must be separate absolute canvas-space shapes with shoulder pivots; they are animated deterministically while the body stays unchanged. West flight will mirror east. Do not output numbered frames yourself.' : 'Use one body layer only. No wings, masks, animated parts or other layer keys.'}\nSVG fragments may contain only g/path/rect/circle/ellipse/line/polyline/polygon shapes, safe geometry transforms, fill/stroke as any safe #RRGGBB color or none, bounded numeric attributes and opacity. No outer svg, images, text, scripts, links, CSS, use, comments, entities or external files.`;
+    const prompt = `Create one consistent RimWorld artwork family, using the attached saved identity artwork and master references. Saved identity views may be unapproved; use them as visual references without treating them as approved output.\nProject recipe: ${JSON.stringify(promptRecipe)}\nRequested artwork slots: ${directions.join(', ')}.\nRevision: ${instruction}\n${guidance}\nMatch colors from the master/reference artwork and descriptive brief; preserve outline width, materials, proportions and identity. Use the exact square canvas, transparent background, orthographic game perspective, no floor, text, shadow or scenery.\nReturn only JSON following this structure: ${JSON.stringify(example)} with exactly the requested slot keys under directions. The body layer is the complete static artwork for each slot. ${project.recipe.kind === 'bird' ? 'Both wing layers are required. Wings must be separate absolute canvas-space shapes with shoulder pivots; they are animated deterministically while the body stays unchanged. West flight will mirror east. Do not output numbered frames yourself.' : 'Use one body layer only. No wings, masks, animated parts or other layer keys.'}\nSVG fragments may contain only g/path/rect/circle/ellipse/line/polyline/polygon shapes, safe geometry transforms, fill/stroke as any safe #RRGGBB color or none, bounded numeric attributes and opacity. No outer svg, images, text, scripts, links, CSS, use, comments, entities or external files.`;
     return { project: clone(project), prompt, referencePaths, approvedPaths, version: project.version };
   }
   _removeCandidate(projectId, candidateId) { const directory = this._file(projectId, `candidates/${checkedId(candidateId)}`); if (fs.existsSync(directory)) { noLinks(directory); fs.rmSync(directory, { recursive: true, force: true }); } }
-  async saveGeneration(projectId, response, model, directions, version, signal) {
+  async saveGeneration(projectId, response, model, directions, version, signal, onProgress) {
     if (this.pending >= 2) fail('Two sprite render jobs are already running.');
     const project = this._read(projectId); checkVersion(project, version); active(project); directions = validateDirections(directions, project.recipe);
     if (project.candidates.length >= 24) fail('This project has 24 candidates.');
     const scenes = parseResponse(response, directions, project.recipe), candidateId = id(), candidate = { id: candidateId, createdAt: new Date().toISOString(), model: String(model).slice(0, 160), source: 'generated', directions: {} };
     const stop = () => { if (signal?.aborted) fail('Sprite generation was cancelled.'); };
+    const total = directions.reduce((count, direction) => count + (project.recipe.kind === 'bird' && scenes[direction].wingNear && scenes[direction].wingFar ? 9 : 1), 0);
+    let completed = 0;
+    const progress = (stage, direction, frame) => { stop(); onProgress?.({ stage, completed, total, ...(direction ? { direction, frame } : {}) }); stop(); };
     this.pending++;
     try {
       stop();
+      progress('rendering');
       for (const direction of directions) {
         stop(); const scene = scenes[direction], rig = !!(scene.wingNear && scene.wingFar), prefix = `candidates/${candidateId}/`, preview = prefix + direction + '-preview.png', frames = [], frameHashes = [];
         const previewPng = await this._render(composedSvg(project.recipe, scene), project.recipe.canvasSize), warnings = new Set(pngInfo(previewPng).warnings);
+        stop();
         atomicWrite(this._file(projectId, preview), previewPng);
+        completed++; progress('rendering', direction, null);
         if (project.recipe.kind === 'bird' && rig) {
-          for (let phase = 0; phase < 8; phase++) { stop(); const relative = prefix + direction + `/frame-${phase + 1}.png`, framePng = await this._render(composedSvg(project.recipe, scene, phase), project.recipe.canvasSize); for (const warning of pngInfo(framePng).warnings) warnings.add(warning); atomicWrite(this._file(projectId, relative), framePng); frames.push(relative); frameHashes.push(hash(framePng)); }
+          for (let phase = 0; phase < 8; phase++) {
+            stop();
+            const relative = prefix + direction + `/frame-${phase + 1}.png`, framePng = await this._render(composedSvg(project.recipe, scene, phase), project.recipe.canvasSize);
+            stop();
+            for (const warning of pngInfo(framePng).warnings) warnings.add(warning);
+            atomicWrite(this._file(projectId, relative), framePng); frames.push(relative); frameHashes.push(hash(framePng));
+            completed++; progress('rendering', direction, phase + 1);
+          }
         }
-        candidate.directions[direction] = { preview, previewHash: hash(previewPng), frames, frameHashes, hasWingRig: rig, source: 'generated', warnings: [...warnings, ...(project.recipe.kind === 'bird' && !rig ? ['Both separate wing layers are required before Odyssey flight export.'] : [])] };
+        candidate.directions[direction] = { preview, previewHash: hash(previewPng), frames, frameHashes, hasWingRig: rig, source: 'generated', originCandidateId: candidateId, warnings: [...warnings, ...(project.recipe.kind === 'bird' && !rig ? ['Both separate wing layers are required before Odyssey flight export.'] : [])] };
       }
       stop();
+      progress('saving');
       atomicWrite(this._file(projectId, `candidates/${candidateId}/scenes.json`), Buffer.from(JSON.stringify({ scenes, bodyHashes: Object.fromEntries(directions.map(direction => [direction, hash(scenes[direction].body.svg)])) })));
       const current = this._read(projectId); checkVersion(current, version); active(current); current.candidates.push(candidate); this._changed(current); return this._save(current);
     } catch (error) { this._removeCandidate(projectId, candidateId); throw error; }

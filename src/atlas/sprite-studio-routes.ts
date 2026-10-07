@@ -75,30 +75,40 @@ export function registerSpriteStudioRoutes(ctx, { runtime, jobs, busy, modRoot }
     host.atlasSpriteJobs = jobs.size;
     const task = 'sprite:' + id;
     let timer;
-    runtime.tasks.update(task, { kind: 'sprite', projectId: id, title: 'Generate sprite family', status: 'running', phase: 'Preparing locked recipe and references', fraction: null, canRetry: false, restart: true }, 'Generating a candidate; approved artwork stays in place');
+    runtime.tasks.update(task, { kind: 'sprite', projectId: id, title: 'Design selected sprite views', status: 'running', phase: 'Preparing recipe and artwork references', fraction: null, spriteProgress: { stage: 'preparing', completed: 0, total: 0 }, canRetry: false, restart: true }, 'Generating a candidate; approved artwork stays in place');
     try {
       const prepared = await store.prepareGeneration(id, request.directions, request.instruction, request.version);
       if (controller.signal.aborted) throw new Error('Sprite generation cancelled.');
       const slots = core.validateDirections(request.directions, prepared.project.recipe);
       const batches = Array.from({length:Math.ceil(slots.length/4)},(_,index)=>slots.slice(index*4,index*4+4));
       const combined = {directions:{}}, modelNames = new Set();
+      const label = slot => slot.replace(/_/g, ' · ').replace(/\b(south|east|north|west|item)\b/g, word => word[0].toUpperCase() + word.slice(1));
       for (let index=0;index<batches.length;index++) {
         const batch=batches[index];
         if (controller.signal.aborted) throw new Error('Sprite generation cancelled.');
         timer=setTimeout(()=>controller.abort(),240000);
         const chosen=prepared.approvedPaths.filter(file=>batch.some(slot=>path.basename(file)===slot+'-preview.png'));
         for(const file of prepared.approvedPaths) if(chosen.length<4&&!chosen.includes(file))chosen.push(file);
-        runtime.tasks.update(task, {phase:batches.length>1?`Designing asset batch ${index+1} of ${batches.length}`:'Designing asset views with your model',fraction:batches.length>1?index/batches.length:null}, 'Using the selected connected account for '+batch.join(', '));
+        runtime.tasks.update(task, { phase: `Designing ${batch.map(label).join(', ')} · model request ${index + 1} of ${batches.length}`, fraction: null, spriteProgress: { stage: 'designing', completed: index, total: batches.length } }, 'Using the selected connected account for '+batch.join(', '));
         const result=await host.generateSpriteScenes({...prepared,approvedPaths:chosen.slice(0,4),directions:batch,instruction:request.instruction,model:request.model},controller.signal);
         clearTimeout(timer);
         if(controller.signal.aborted)throw new Error('Sprite generation cancelled.');
         Object.assign(combined.directions,core.parseResponse(result.response,batch,prepared.project.recipe));
         modelNames.add(result.model);
+        runtime.tasks.update(task, { phase: `Model request ${index + 1} of ${batches.length} validated`, fraction: null, spriteProgress: { stage: 'designing', completed: index + 1, total: batches.length } });
       }
-      runtime.tasks.update(task, { phase: 'Validating artwork and rendering PNG frames' }, 'Checking safe geometry, canvas and palette; composing fixed-body frames');
-      const project = await store.saveGeneration(id, combined, [...modelNames].join(', '), slots, request.version, controller.signal);
+      runtime.tasks.update(task, { phase: 'Validating artwork for PNG rendering', fraction: null }, 'Checking safe geometry and canvas; composing fixed-body frames');
+      const project = await store.saveGeneration(id, combined, [...modelNames].join(', '), slots, request.version, controller.signal, progress => {
+        const detail = progress.direction ? ` · ${label(progress.direction)} ${progress.frame == null ? 'preview' : 'flight frame ' + progress.frame}` : '';
+        runtime.tasks.update(task, {
+          phase: progress.stage === 'saving' ? 'Saving the completed revision' : `Rendering PNGs · ${progress.completed} of ${progress.total}${detail}`,
+          fraction: progress.stage === 'rendering' && progress.total ? progress.completed / progress.total : null,
+          spriteProgress: progress,
+        });
+      });
       if (controller.signal.aborted) throw new Error('Sprite generation cancelled.');
-      runtime.tasks.update(task, { status: 'completed', phase: 'Candidate ready for review', fraction: 1 }, 'Review directions and flight before approving or exporting');
+      const pngCount = slots.reduce((count, slot) => count + (prepared.project.recipe.kind === 'bird' && combined.directions[slot].wingNear && combined.directions[slot].wingFar ? 9 : 1), 0);
+      runtime.tasks.update(task, { status: 'completed', phase: `${slots.length} selected ${slots.length === 1 ? 'view' : 'views'} ready for review`, fraction: 1, spriteProgress: { stage: 'complete', completed: pngCount, total: pngCount } }, 'Review directions and flight before approving or exporting');
       return project;
     } catch (error) {
       runtime.tasks.update(task, { status: controller.signal.aborted ? 'cancelled' : 'failed', phase: controller.signal.aborted ? 'Generation stopped' : 'Generation needs attention', fraction: null }, controller.signal.aborted ? 'No new candidate was approved or exported' : error.message);

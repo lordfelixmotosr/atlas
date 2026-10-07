@@ -1,4 +1,12 @@
-# Atlas 0.2.14 portable
+# Atlas 0.2.15 portable
+
+## 0.2.15 selected directions, sprite gallery and progress
+
+Choose one, two or all three directions beside the **Design flight frames** button. All design actions use the same selected views. Other profiles let you select their required asset slots. Earlier views and approvals stay in place, and saved artwork guides later directions even before approval.
+
+The **Gallery** tab shows individual sprites and flight frames from the working revision or all revisions. Filter by direction and artwork type, browse pages, and inspect a larger preview with its revision label. Copied unchanged artwork is grouped to avoid repeated thumbnails; the original revision history remains available.
+
+Generation displays the selected views, model request count, elapsed time, and a Stop action. Model reply time uses an indeterminate bar. PNG rendering shows actual completed files and a percentage for that stage, followed by saving and review-ready status. Progress does not estimate remaining model time. Generated art still requires review and in-game visual testing.
 
 ## 0.2.14 apparel, hats, buildings and furniture
 

@@ -24,6 +24,7 @@ function assetScene(kind, slot) {
   return { body: { svg } };
 }
 async function run(win, root, result) {
+  const layoutOnly = process.env.ATLAS_VERIFY_SPRITES_LAYOUT_ONLY === '1';
   assert(process.env.ATLAS_VERIFY_SPRITE_BUNDLE, 'Sprite UI verification bundle is missing');
   const { SpriteStudio, pngInfo, getSlots } = require('./sprite-studio.cjs');
   const studioRoot = path.join(root, 'data/profile/sprite-studio');
@@ -150,6 +151,20 @@ async function run(win, root, result) {
   assert(importSequence.candidates.every(candidate => Object.values(candidate.directions).every(art => fs.existsSync(path.join(studioRoot, importSequence.id, art.preview)))), 'Sequential imports deleted earlier artwork files');
   const sequenceIdentity = store.prepareGeneration(importSequence.id, ['south', 'east', 'north'], '', importSequence.version);
   assert(sequenceIdentity.approvedPaths.length === 3, 'Sequential imported views were not retained as model identity references');
+  let partialProject = await call('spriteCreate', [{ ...recipe, name: 'Atlas QA selection and gallery', textureName: 'AtlasSelectionGallery' }]);
+  partialProject = await store.saveGeneration(partialProject.id, response(false), 'Native gallery baseline', directions, partialProject.version, new AbortController().signal);
+  partialProject = await call('spriteApprove', [partialProject.id, partialProject.candidates[0].id, directions, partialProject.version]);
+  const oldApprovals = JSON.stringify(partialProject.approved), baselineArt = partialProject.candidates[0].directions, partialProgress = [];
+  for (const selection of [['south'], ['east', 'north'], directions]) {
+    const progress = [];
+    partialProject = await store.saveGeneration(partialProject.id, { directions: Object.fromEntries(selection.map(slot => [slot, scene(slot, true)])) }, 'Native selected views', selection, partialProject.version, new AbortController().signal, event => progress.push(event));
+    assert(Object.keys(partialProject.candidates.at(-1).directions).join(',') === selection.join(','), 'Native partial generation created unrequested views');
+    assert(JSON.stringify(partialProject.approved) === oldApprovals, 'Native partial generation changed previous approvals');
+    assert(progress.filter(event => event.stage === 'rendering').map(event => event.completed).join(',') === Array.from({ length: selection.length * 9 + 1 }, (_, index) => index).join(','), 'Native rendering progress skipped completed PNG counts');
+    assert(progress.every(event => event.total === selection.length * 9) && progress.at(-1).stage === 'saving', 'Native progress totals or saving stage are inaccurate');
+    partialProgress.push({ selectedViews: selection.length, pngs: selection.length * 9, countedWrites: true });
+  }
+  assert(partialProject.candidates.length === 4 && Object.values(baselineArt).every(art => fs.existsSync(path.join(studioRoot, partialProject.id, art.preview)) && art.frames.every(file => fs.existsSync(path.join(studioRoot, partialProject.id, file)))), 'Partial generation deleted prior gallery files');
   const archived = await call('spriteArchive', [master.id, true, master.version]);
   assert(archived.archivedAt && (await call('spriteList')).some(item => item.id === master.id && item.archivedAt), 'Native family archive is missing');
   master = await call('spriteArchive', [master.id, false, archived.version]);
@@ -162,19 +177,23 @@ async function run(win, root, result) {
   const fixture = new BrowserWindow({ show: false, width: 1440, height: 900, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, offscreen: true } });
   try {
     await fixture.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<!doctype html><html><head>' + csp[0] + '<style>html,body,#root{margin:0;width:100%;height:100%;}#root{display:flex;flex-direction:column;}</style></head><body><div id="root"></div></body></html>'));
-    await fixture.webContents.executeJavaScript(`document.documentElement.setAttribute('data-theme','dark');document.head.appendChild(Object.assign(document.createElement('style'),{textContent:${JSON.stringify(css)}}));window.__atlasSpriteSnapshot=${JSON.stringify({ project, plan, profiles, profilePlans, master, importedSlot, importSequence, disposable, gifPreview })};void 0;`);
+    await fixture.webContents.executeJavaScript(`document.documentElement.setAttribute('data-theme','dark');document.head.appendChild(Object.assign(document.createElement('style'),{textContent:${JSON.stringify(css)}}));window.__atlasSpriteSnapshot=${JSON.stringify({ project, plan, profiles, profilePlans, master, importedSlot, importSequence, partialProject, disposable, gifPreview })};void 0;`);
     await fixture.webContents.executeJavaScript(fs.readFileSync(process.env.ATLAS_VERIFY_SPRITE_BUNDLE, 'utf8'));
-    const ui = await fixture.webContents.executeJavaScript('window.__atlasSpriteTest.run()');
-    const layouts = [];
+    const ui = layoutOnly ? (await fixture.webContents.executeJavaScript('window.__atlasSpriteTest.open()'), { layoutOnly: true, paidProviderRequests: 0 }) : await fixture.webContents.executeJavaScript('window.__atlasSpriteTest.run()');
+    const layouts = [], galleryLayouts = [];
     for (const width of [1440, 1024, 768, 480]) {
       fixture.setContentSize(width, 900);
       await fixture.webContents.executeJavaScript('window.__atlasSpriteTest.state("directions")');
       layouts.push(await fixture.webContents.executeJavaScript('window.__atlasSpriteTest.layout()'));
       fixture.webContents.invalidate(); await pause(500);
       fs.writeFileSync(path.join(root, 'data/Atlas-sprites-directions-' + width + '.png'), (await fixture.webContents.capturePage()).toPNG());
+      await fixture.webContents.executeJavaScript('window.__atlasSpriteTest.state("gallery")');
+      galleryLayouts.push(await fixture.webContents.executeJavaScript('window.__atlasSpriteTest.layout()'));
+      fixture.webContents.invalidate(); await pause(500);
+      fs.writeFileSync(path.join(root, 'data/Atlas-sprites-gallery-' + width + '.png'), (await fixture.webContents.capturePage()).toPNG());
     }
     fixture.setContentSize(1440, 900);
-    for (const name of ['animation', 'compare', 'export', 'apparel', 'hat', 'building', 'furniture', 'master', 'imports']) {
+    for (const name of layoutOnly ? [] : ['animation', 'compare', 'export', 'apparel', 'hat', 'building', 'furniture', 'master', 'imports', 'gallery', 'progress-designing', 'progress-rendering', 'progress-saving']) {
       await fixture.webContents.executeJavaScript(`window.__atlasSpriteTest.state(${JSON.stringify(name)})`);
       fixture.webContents.invalidate(); await pause(500);
       fs.writeFileSync(path.join(root, 'data/Atlas-sprites-' + name + '.png'), (await fixture.webContents.capturePage()).toPNG());
@@ -183,7 +202,8 @@ async function run(win, root, result) {
     assert(denied, 'Native sprite protocol exposed metadata or an escaped/missing file');
     await call('spriteDelete', [disposable.id, disposable.version]);
     assert(!fs.existsSync(path.join(studioRoot, disposable.id)) && plan.rows.every(row => fs.existsSync(path.join(mod, row.path))), 'Family deletion damaged exported mod PNGs');
-    result.nativeSprites = { ...ui, ...actualApp, realWasmRasterized: true, nativePersistence: true, canvasAlphaAndPadding: canvases && transparent && unclipped, eightDistinctFrames: distinctFrames, expectedFlightFiles: true, approvedNativeExport: true, exportTokenSingleUse: true, metadataProtocolDenied: true, masterReferencePixelsPreserved: true, masterPickerCancellationClean: true, masterSlotNeedsReview: true, sequentialNativeImportsRetainViews: true, sequentialNativeImportsRetainHistory: true, nativeArchiveRestore: true, nativeDeletePreservesModAssets: true, animatedWorkshopPreviewBytesPreserved: true, workshopFirstFramePngCreated: true, workshopPngReplacementClearsGif: true, steamUploadPerformed: false, assetProfiles: profileResults, exportedFiles: exported.files, layouts, screenshots: ['actual-app', 'directions-1440', 'directions-1024', 'directions-768', 'directions-480', 'animation', 'compare', 'export', 'apparel', 'hat', 'building', 'furniture', 'master', 'imports'] };
+    result.nativeSprites = { ...ui, ...actualApp, realWasmRasterized: true, nativePersistence: true, canvasAlphaAndPadding: canvases && transparent && unclipped, eightDistinctFrames: distinctFrames, expectedFlightFiles: true, approvedNativeExport: true, exportTokenSingleUse: true, metadataProtocolDenied: true, masterReferencePixelsPreserved: true, masterPickerCancellationClean: true, masterSlotNeedsReview: true, sequentialNativeImportsRetainViews: true, sequentialNativeImportsRetainHistory: true, nativePartialViewsPreserveHistory: true, nativeRenderProgress: partialProgress, nativeArchiveRestore: true, nativeDeletePreservesModAssets: true, animatedWorkshopPreviewBytesPreserved: true, workshopFirstFramePngCreated: true, workshopPngReplacementClearsGif: true, steamUploadPerformed: false, assetProfiles: profileResults, exportedFiles: exported.files, layouts, galleryLayouts, familyListNoteSeparated: true, screenshots: ['actual-app', 'directions-1440', 'directions-1024', 'directions-768', 'directions-480', 'gallery-1440', 'gallery-1024', 'gallery-768', 'gallery-480', 'animation', 'compare', 'export', 'apparel', 'hat', 'building', 'furniture', 'master', 'imports', 'gallery', 'progress-designing', 'progress-rendering', 'progress-saving'] };
+    if (layoutOnly) result.nativeSprites.screenshots = ['actual-app', 'directions-1440', 'directions-1024', 'directions-768', 'directions-480', 'gallery-1440', 'gallery-1024', 'gallery-768', 'gallery-480'];
     await fixture.webContents.executeJavaScript('window.__atlasSpriteTest.close()');
   } finally { fixture.destroy(); }
 }

@@ -30,7 +30,13 @@ Archive a selected family to retain it outside the active list. Use the archived
 7. Preview export into a RimWorld workspace mod. Read the file list and XML fragment. Export only approved artwork. Atlas creates backups and refuses a stale export plan; it does not rewrite definitions automatically.
 8. Integrate the suggested XML into the intended PawnKindDef and visually test grounded and flying sprites in RimWorld. Static checks and a Studio preview cannot prove runtime correctness.
 
-The design action stays at the top of the workspace. **Design flight frames** requests all three bird views using saved reference/import artwork, even before that artwork is approved. Each imported view is added to the working set; partial revisions retain earlier views. Current and historical files remain available until you delete the family. Artwork references preserve PNG transparency when sent to a model that supports image input.
+The design action stays at the top of the workspace. Select one, two or all three bird directions, then choose **Design flight frames**. Every design action honors the same selection. Existing reference, imported and generated artwork can guide later directions even before approval. Each imported view is added to the working set; partial revisions retain earlier views. Current and historical files remain available until you delete the family. Artwork references preserve PNG transparency when sent to a model that supports image input.
+
+## Gallery and generation progress
+
+Open **Gallery** to inspect every standing sprite and individual flight frame. Choose the working revision or all revisions, filter by view and artwork type, and browse bounded pages. An enlarged preview identifies its revision and frame. Copied unchanged artwork is grouped without removing its revision history.
+
+Model generation shows the current requested views and completed model requests with an indeterminate bar while awaiting a reply. PNG rendering shows the actual completed file count and a percentage for that stage. Saving follows rendering; a candidate becomes reviewable only after the entire selected request commits. Stop or a failed request preserves earlier candidates and approvals. Elapsed time is displayed; remaining model time is not guessed.
 
 ## Bird texture profile
 

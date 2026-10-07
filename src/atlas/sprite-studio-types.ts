@@ -33,6 +33,8 @@ export interface SpriteArt {
   hasWingRig: boolean;
   warnings: string[];
   source?: 'generated' | 'imported';
+  /** Original revision for artwork copied into an imported working snapshot. */
+  originCandidateId?: string;
 }
 export interface SpriteCandidate {
   id: string;
@@ -63,6 +65,15 @@ export interface SpriteGeneration {
   directions: SpriteDirection[];
   instruction: string;
   model: ModelSelection | null;
+}
+/** Counts completed work in the current stage; model reply time is indeterminate. */
+export interface SpriteGenerationProgress {
+  stage: 'preparing' | 'designing' | 'rendering' | 'saving' | 'complete';
+  completed: number;
+  total: number;
+  direction?: SpriteDirection;
+  /** null means the standing/static preview; flight frames use 1 through 8. */
+  frame?: number | null;
 }
 export interface SpriteLayer { svg: string; pivot?: { x: number; y: number } }
 export interface SpriteScene {
