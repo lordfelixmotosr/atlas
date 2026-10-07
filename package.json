@@ -1,7 +1,7 @@
 {
   "name": "atlas",
   "productName": "Atlas",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "description": "Portable RimWorld modding workbench with signed knowledge and skill packs",
   "main": ".vite/build/main.js",
   "private": true,

@@ -1,4 +1,8 @@
-# Atlas 0.2.11 portable
+# Atlas 0.2.12 portable
+
+## 0.2.12 Windows startup settings recovery
+
+Startup keeps an unchanged agent settings file in place. When the portable folder moves, shell-path updates retry temporary Windows file locks; a persistent lock preserves the existing settings and records a diagnostic in `data/logs/startup.log`. The bundled shell is also selected in memory, so agent commands can use the current Atlas folder even when its new path cannot be saved yet. This repairs the startup `EPERM` error replacing `pi-agent/settings.json`.
 
 ## 0.2.11 credits, composer and image previews
 

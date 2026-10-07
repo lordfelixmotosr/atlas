@@ -31,7 +31,7 @@ const MAX_TIMEOUT_SECONDS = 600;
  * matching how the built-in tool is constructed in pi.
  */
 export function createGuardedBashTool(cwd: string): AgentTool<any> {
-  const inner = createBashTool(cwd);
+  const inner = createBashTool(cwd, { shellPath: process.env.ATLAS_SHELL_PATH });
 
   return {
     ...inner,

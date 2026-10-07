@@ -1159,6 +1159,9 @@ export class AgentHost {
     // 'max' is Atlas's own top rung — lower it onto pi's scale here (see
     // lib/thinking-levels.ts). The persisted value stays 'max'.
     const piThinking = toPiThinking(model, thinkingLevel);
+    // Portable shell selection must work even if Windows temporarily prevents
+    // updating its persisted path after the Atlas folder has moved.
+    if(process.env.ATLAS_SHELL_PATH)this.settingsManager.applyOverrides({shellPath:process.env.ATLAS_SHELL_PATH});
     const { session } = await createAgentSession({
       cwd: sessionCwd,
       agentDir: this.agentDir,

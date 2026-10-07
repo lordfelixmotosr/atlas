@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.11 native source release built and verified",
+  "status": "Atlas 0.2.12 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -157,7 +157,8 @@
     "0.2.8: soft forest green accent and player-facing feature descriptions; bounded comparison evidence, independent AI completion, editable saved notes and cancellation",
     "0.2.9: preserve enabled Odyssey in isolated RimWorld tests; official DLC detection and load order; flowing virtualized chat rows and persistent Jump to latest control",
     "0.2.10: Atlas globe logo in the app header, window and Windows executable; reproducible icon generation and icon resources in every update package",
-    "0.2.11: ChatGPT credits alongside plan usage, responsive composer groups and mod-scoped chat/tool image previews"
+    "0.2.11: ChatGPT credits alongside plan usage, responsive composer groups and mod-scoped chat/tool image previews",
+    "0.2.12: Windows startup avoids unchanged settings writes, retries temporary locks and selects the current portable shell in memory"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -172,7 +173,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.11",
+  "version": "0.2.12",
   "supportedGames": [
     "rimworld"
   ],
@@ -260,24 +261,28 @@
       "0.2.11 source type checking and local regression tests passed; native composer verified at 1100, 650 and 360 pixels; zero, unavailable, stale and account-switch credit states verified",
       "0.2.11 native image previews verified under the production content policy, including relative, encoded, absolute, file and inline paths; traversal and outside files blocked; expanded tool images rendered",
       "0.2.11 production startup health verified",
-      "0.2.11 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.11 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.12 source type checking and local regression tests passed; repeated-launch, temporary-lock and persistent-lock settings preservation verified",
+      "0.2.12 native Electron startup verified with a Windows file handle blocking agent settings replacement; existing settings preserved and runtime fallback recorded",
+      "0.2.12 production startup health verified",
+      "0.2.12 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "portable": {
-      "path": "Atlas-0.2.11-win-x64-portable.zip",
-      "size": 401058145,
-      "sha256": "ed86c0da46d4ae94b0b2b3fc19eedef5fe5b0a1d0b1962c601ce5cc764b5fe5a"
+      "path": "Atlas-0.2.12-win-x64-portable.zip",
+      "size": 401058929,
+      "sha256": "22ea51da7922a2c7dc10affbdcb225fd483e964cd8489b1e72e18cbc032c7b39"
     },
     "full-update": {
-      "path": "Atlas-0.2.11-win-x64-full-update.zip",
-      "size": 400696750,
-      "sha256": "c7999d426cf3ea6672d8d989d35d1c8591d56aa3720ffaf96f2994c2a22edd6a"
+      "path": "Atlas-0.2.12-win-x64-full-update.zip",
+      "size": 400697534,
+      "sha256": "fff9e63f3bbd9e687de15c51d7aeef227b0c7768f8a968287eda1e88e39a46b0"
     },
     "application-update": {
-      "path": "Atlas-0.2.11-win-x64-application-update.zip",
-      "size": 98608285,
-      "sha256": "f07b494dbf0a508dcd7f012c86703cb73a32178ed3418bf17100f7927866593d"
+      "path": "Atlas-0.2.12-win-x64-application-update.zip",
+      "size": 98609069,
+      "sha256": "71f4e28f89ee8976dbbba48780a76b1253491d59af53af5970247a69efe385f1"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"
