@@ -53,23 +53,27 @@ export function ConsentGate() {
   const quitPromptOpen = useRef(false);
   useEffect(() => {
     return window.modmixer.onQuitRequested(() => {
-      if (!anyConversationBusy()) {
-        window.modmixer.confirmQuit();
-        return;
-      }
       if (quitPromptOpen.current) return;
       quitPromptOpen.current = true;
-      void appConfirm(
-        'An agent is still responding. Quitting now will end any responses in progress.',
+      void (async () => {
+        const tasks = await window.modmixer.atlasTasksStatus().catch(() => []);
+        const spriteBusy = tasks.some((task: {kind:string;status:string}) => ['sprite','sprite-export'].includes(task.kind) && task.status === 'running');
+        if (!anyConversationBusy() && !spriteBusy) {
+          window.modmixer.confirmQuit();
+          return;
+        }
+        const ok = await appConfirm(
+        'A task is still running. Quitting now will stop any responses or sprite generation in progress.',
         {
           title: 'Quit Atlas?',
           okLabel: 'Quit',
           cancelLabel: 'Keep working',
           tone: 'danger',
         },
-      ).then((ok) => {
-        quitPromptOpen.current = false;
+        );
         if (ok) window.modmixer.confirmQuit();
+      })().finally(() => {
+        quitPromptOpen.current = false;
       });
     });
   }, []);

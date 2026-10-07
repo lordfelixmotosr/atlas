@@ -26,7 +26,7 @@ function hasImageHeader(header: Buffer, type: string): boolean {
 }
 
 /** Resolve image requests only inside owned workspace or live registry mod roots. */
-export async function resolveAssetRequest(rawUrl: string, workspaceDir: string, mods: readonly AssetModRoot[]): Promise<ResolvedAsset | null> {
+export async function resolveAssetRequest(rawUrl: string, workspaceDir: string, mods: readonly AssetModRoot[], studioRoot?: string): Promise<ResolvedAsset | null> {
   let url: URL, segments: string[];
   try {
     url = new URL(rawUrl);
@@ -51,6 +51,14 @@ export async function resolveAssetRequest(rawUrl: string, workspaceDir: string, 
     const relative = segments[0];
     if (path.isAbsolute(relative) || /^[a-z]:/i.test(relative)) return null;
     roots = [workspaceDir]; candidate = path.resolve(workspaceDir, relative.replace(/\\/g, path.sep));
+  } else if (url.hostname === 'studio' && studioRoot && segments.length === 2) {
+    const [id, relative] = segments;
+    if (!/^[a-f0-9]{24}$/.test(id) || path.isAbsolute(relative) || relative.includes(':') || relative.includes('\0')) return null;
+    const projectRoot = path.join(studioRoot, id);
+    candidate = path.resolve(projectRoot, relative.replace(/\\/g, path.sep));
+    if (!inside(projectRoot, candidate)) return null;
+    // Only this project may serve a candidate or reference, including through junctions.
+    roots = [projectRoot]; immutable = true;
   } else if (url.hostname === 'image' && segments.length === 1) {
     if (!path.isAbsolute(segments[0])) return null;
     candidate = path.resolve(segments[0]); roots = [workspaceDir, ...mods.map(mod => mod.path)];
@@ -62,6 +70,10 @@ export async function resolveAssetRequest(rawUrl: string, workspaceDir: string, 
     // Both lexical and canonical containment are required. A workspace symlink
     // must not grant image access to an unrelated directory outside its root.
     const realFile = await fs.realpath(candidate);
+    if (url.hostname === 'studio' && studioRoot) {
+      const studioReal = await fs.realpath(studioRoot);
+      if (!inside(studioReal, realFile) || !(await fs.realpath(roots[0])).startsWith(studioReal + path.sep)) return null;
+    }
     let permitted = false;
     for (const root of roots) {
       const absoluteRoot = path.resolve(root);

@@ -1,4 +1,16 @@
-# Atlas 0.2.12 portable
+# Atlas 0.2.13 portable
+
+## 0.2.13 Sprite Studio
+
+Open **Sprite Studio** beside Library to create a saved RimWorld sprite family. Choose a static sprite or Odyssey bird, describe its identity, choose a palette and canvas, and import PNG references. **Generate selected views** uses your selected connected GPT/Claude model and normal account usage to design SVG layers, which Atlas validates and renders into transparent PNGs. It uses no separate image API. Small, graphic art is the focus; model quality and visual consistency still require review.
+
+Review south, east and north together, compare a candidate with the approved view, and approve each direction. Candidates and approvals are saved separately so a revision preserves earlier artwork. West previews mirror east, matching native RimWorld flight. Palette, canvas and animation structure stay locked after artwork exists. Recipes, reference hashes, sources, asset manifests and candidates live in `data/profile/sprite-studio`, outside your mods. That folder travels with the portable app.
+
+Bird candidates use separate body and wing layers. Atlas holds the body, head, tail and markings fixed and poses the wings into eight full-body PNG frames per direction. The preview follows RimWorld's `(frameCount + 1) * ticksPerFrame` timing, including its final-frame hold. Grounded draw size is set separately from flight draw size. A flat imported PNG can be approved as a static direction; it cannot supply a layered flight rig. North/east/south approval is required before export. Native flight does not provide an independent west animation.
+
+**Preview export** lists the exact PNG paths and replacement actions. Export applies only that reviewed plan, checks for intervening changes, backs up replacements outside the mod, and rolls back on a write failure. Bird exports include three grounded sprites and 24 flight textures. The suggested XML fragment is displayed for review and copying; existing definitions are not overwritten. PNG, canvas and geometry checks do not prove in-game appearance or animation quality: test the exported textures in RimWorld before publishing.
+
+Generation has its own cancellation and Activity status. It does not steer or interrupt a mod chat. Account switching and application restart wait for sprite work to settle.
 
 ## 0.2.12 Windows startup settings recovery
 

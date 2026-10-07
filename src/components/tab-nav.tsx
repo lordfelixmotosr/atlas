@@ -4,7 +4,7 @@ import { GameIcon } from './game-icon';
 import { useConversationRuntime } from '../conversations-store';
 
 /** Home, Library, or a focused mod tab. */
-export type AppView = 'mods' | 'library' | 'mod';
+export type AppView = 'mods' | 'library' | 'sprites' | 'mod';
 
 /** One open mod tab, as the nav needs to render it. */
 export interface ModTabDescriptor {
@@ -21,6 +21,7 @@ export function TabNav({
   sessionActive,
   onSelectMods,
   onSelectLibrary,
+  onSelectSprites,
   onSelectTab,
   onCloseTab,
 }: {
@@ -30,6 +31,7 @@ export function TabNav({
   sessionActive?: boolean;
   onSelectMods: () => void;
   onSelectLibrary: () => void;
+  onSelectSprites: () => void;
   onSelectTab: (folder: string) => void;
   onCloseTab: (folder: string) => void;
 }) {
@@ -42,6 +44,7 @@ export function TabNav({
         onClick={onSelectLibrary}
         indicator={sessionActive ? 'session' : undefined}
       />
+      <TabButton label="Sprite Studio" active={view === 'sprites'} onClick={onSelectSprites} />
       {tabs.length > 0 && (
         <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line" />
       )}

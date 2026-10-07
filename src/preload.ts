@@ -15,6 +15,17 @@ export type {
 } from './preload/typed-ipc.js';
 
 const api = {
+  spriteList: ():Promise<import('./atlas/sprite-studio-types').SpriteProjectSummary[]>=>ipcRenderer.invoke('atlas:sprites:list'),
+  spriteCreate: (recipe:import('./atlas/sprite-studio-types').SpriteRecipe):Promise<import('./atlas/sprite-studio-types').SpriteProject>=>ipcRenderer.invoke('atlas:sprites:create',recipe),
+  spriteRead: (id:string):Promise<import('./atlas/sprite-studio-types').SpriteProject>=>ipcRenderer.invoke('atlas:sprites:read',id),
+  spriteSaveRecipe: (id:string,recipe:import('./atlas/sprite-studio-types').SpriteRecipe,version:number):Promise<import('./atlas/sprite-studio-types').SpriteProject>=>ipcRenderer.invoke('atlas:sprites:recipe',id,recipe,version),
+  spriteImport: (id:string,direction:import('./atlas/sprite-studio-types').SpriteDirection|'reference',version:number):Promise<import('./atlas/sprite-studio-types').SpriteProject|null>=>ipcRenderer.invoke('atlas:sprites:import',id,direction,version),
+  spriteGenerate: (request:import('./atlas/sprite-studio-types').SpriteGeneration):Promise<import('./atlas/sprite-studio-types').SpriteProject>=>ipcRenderer.invoke('atlas:sprites:generate',request),
+  spriteCancel: (id:string):Promise<void>=>ipcRenderer.invoke('atlas:sprites:cancel',id),
+  spriteApprove: (id:string,candidate:string,directions:import('./atlas/sprite-studio-types').SpriteDirection[],version:number):Promise<import('./atlas/sprite-studio-types').SpriteProject>=>ipcRenderer.invoke('atlas:sprites:approve',id,candidate,directions,version),
+  spriteExportPlan: (id:string,folder:string,version:number):Promise<import('./atlas/sprite-studio-types').SpriteExportPlan>=>ipcRenderer.invoke('atlas:sprites:export-plan',id,folder,version),
+  spriteExportApply: (token:string):Promise<{files:number;backup:string|null}>=>ipcRenderer.invoke('atlas:sprites:export-apply',token),
+  spriteReveal: (id:string):Promise<void>=>ipcRenderer.invoke('atlas:sprites:reveal',id),
   modChanges:(folder:string,comparison:'latest'|'published'|'updated'='latest'):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:changes',folder,comparison),
   markModUpdated:(folder:string,note:string):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:mark-updated',folder,note),
   saveModDescription:(folder:string,comparison:'latest'|'published'|'updated',key:string,text:string):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:description-save',folder,comparison,key,text),
