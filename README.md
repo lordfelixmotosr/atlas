@@ -1,4 +1,14 @@
-# Atlas 0.2.15 portable
+# Atlas 0.2.16 portable
+
+## 0.2.16 connection recovery and accurate chat activity
+
+Codex chats now default to HTTP server-sent events instead of automatic WebSocket connections. Fast still selects priority service; Standard still selects default service. Model, thinking, context, prompt caching, account and output-limit settings are preserved. An explicitly configured transport remains respected. Claude and other providers retain their existing transport.
+
+The chat distinguishes connecting, waiting for the model, receiving reasoning, receiving a reply and preparing a tool. After 60 seconds without response data, it displays a waiting notice. Silence alone is not treated as a lost connection. Polling the status cannot reset the response-data clock. Tool execution and context compaction have their own states; tools are not subject to the model stream inactivity timeout. Model activity has no known completion percentage.
+
+Recognized connection failures show an actionable message and keep received text in chat history. Retry or Resume requires an explicit click; active requests and mod-writing tools are not automatically replayed. Deep thinking can still take minutes, and HTTP streaming cannot guarantee that a provider never disconnects. The existing ten-minute model stream inactivity guard remains in place. This release does not lower thinking or automatically compact conversations.
+
+Verification uses local stream fixtures and a mocked bundled Codex provider at both speeds, plus the real Electron chat and progress components. No paid model requests are made during development tests. Transport reliability with the account and network still needs normal use after installation.
 
 ## 0.2.15 selected directions, sprite gallery and progress
 

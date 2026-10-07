@@ -13,10 +13,14 @@ function felixSupportsFast(model) {
   return model?.provider === "openai-codex" && ["gpt-6-astra","gpt-6-sol","gpt-6-luna","gpt-6.1-sol","gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna","gpt-5.5","gpt-5.4"].includes(model.id ?? model.modelId);
 }
 function felixWithSpeed(stream, getSettings) {
-  return (model, context, options) => stream(model, context,
-    felixSupportsFast(model) && model.api === "openai-codex-responses"
-      ? {...options, serviceTier: getSettings().openaiSpeed === "fast" ? "priority" : "default"}
-      : options);
+  return (model, context, options) => {
+    if (model?.provider !== "openai-codex" || model.api !== "openai-codex-responses") return stream(model, context, options);
+    // The automatic WebSocket path can close after a request has started. Use
+    // supported HTTP streaming for new requests; never replay an in-flight turn.
+    const next = {...options, transport: options?.transport && options.transport !== "auto" ? options.transport : "sse"};
+    if (felixSupportsFast(model)) next.serviceTier = getSettings().openaiSpeed === "fast" ? "priority" : "default";
+    return stream(model, context, next);
+  };
 }
 function felixSetSpeed(mode) {
   if (mode !== "standard" && mode !== "fast") throw new Error("Invalid speed setting");
@@ -110,16 +114,28 @@ function felixSetShortcut(value) {
   for(const win of k.BrowserWindow.getAllWindows()) if(!win.isDestroyed()&&!win.webContents.isDestroyed()) win.webContents.send("modmixer:settings:sentence-shortcut",shortcut);
   return settings;
 }
+function felixConnectionMessage(message) {
+  if (!/WebSocket.*closed|\bECONNRESET\b|\bECONNREFUSED\b|\bETIMEDOUT\b|fetch failed|socket hang up|network error|premature close|SSE.*timed out|^terminated$/i.test(message ?? "")) return message;
+  return `Connection interrupted: ${String(message).slice(0,500)}. Any received text has been kept in chat history. Use Retry to continue when ready.`;
+}
 // Bound only provider streams, never the execution time of file-editing tools.
-function felixGuardStream(stream, idleMs=600000) {
+function felixGuardStream(stream, idleMs=600000, observe=(..._activity)=>{}) {
   return (model,context,options={})=>{
     const controller=new AbortController(),queue=[],waiting=[];
     let done=false,partial=null,timer,iterator,resolveResult;
+    let activity={state:"connecting",phase:"Connecting to model",requestStartedAt:Date.now(),lastEventAt:null,lastContentAt:null};
+    const report=patch=>{activity={...activity,...patch};try{observe({...activity});}catch{/* A status observer must never interrupt a model request. */}};
+    report({});
     const result=new Promise(resolve=>{resolveResult=resolve;});
     const cleanup=()=>{clearTimeout(timer);options.signal?.removeEventListener("abort",onAbort);};
     const push=event=>{
       if(done)return;
       if(event.partial)partial=event.partial;
+      const now=Date.now(),delta=typeof event.delta==="string"&&event.delta.length>0;
+      if(event.type==="error")event={...event,error:{...event.error,errorMessage:felixConnectionMessage(event.error?.errorMessage)}};
+      const state=event.type==="done"?"done":event.type==="error"?(event.error?.stopReason==="aborted"?"cancelled":"error"):delta&&event.type==="text_delta"?"reply":delta&&event.type==="thinking_delta"?"thinking":event.type.startsWith("toolcall_")?"tool":event.type==="start"?"waiting":activity.state;
+      const phase={connecting:"Connecting to model",waiting:"Waiting for model",thinking:"Receiving reasoning",reply:"Receiving reply",tool:"Preparing tool",done:"Response received",error:"Request failed",cancelled:"Stopped"}[state];
+      report({state,phase,lastEventAt:now,...(delta?{lastContentAt:now}:{})});
       if(event.type==="done"||event.type==="error"){
         done=true;resolveResult(event.type==="done"?event.message:event.error);cleanup();
       }
@@ -135,7 +151,7 @@ function felixGuardStream(stream, idleMs=600000) {
       if(iterator?.return)Promise.resolve(iterator.return()).catch(()=>{});
     };
     const onAbort=()=>fail("Stopped. You can resume this request when ready.");
-    const arm=()=>{clearTimeout(timer);timer=setTimeout(()=>fail("No model activity for 10 minutes. The request was stopped. Use Resume to try again."),idleMs);timer.unref?.();};
+    const arm=()=>{clearTimeout(timer);timer=setTimeout(()=>fail("No response data for 10 minutes. The request was stopped. Use Resume to try again."),idleMs);timer.unref?.();};
     const output={result:()=>result,async *[Symbol.asyncIterator](){try{while(true){if(queue.length)yield queue.shift();else if(done)return;else{const event=await new Promise(resolve=>waiting.push(resolve));if(event.done)return;yield event.value;}}}finally{if(!done)fail("Stopped reading the model response.");}}};
     options.signal?.addEventListener("abort",onAbort,{once:true});
     if(options.signal?.aborted)onAbort();else{
@@ -158,15 +174,21 @@ function felixGuardStream(stream, idleMs=600000) {
 }
 const felixSessionActivity=new Map();
 function felixObserveSession(id,event){
-  const now=Date.now(),old=felixSessionActivity.get(id)??{startedAt:now,phase:"Thinking",lastEventAt:now};
+  const now=Date.now(),old=felixSessionActivity.get(id)??{startedAt:now,phase:"Waiting for model",lastEventAt:now};
   let phase=old.phase;
-  if(event.type==="agent_start")phase="Thinking";
+  if(event.type==="agent_start")phase="Starting request";
   else if(event.type==="tool_execution_start")phase="Running "+event.toolName;
-  else if(event.type==="tool_execution_end")phase="Thinking";
+  else if(event.type==="tool_execution_end")phase="Waiting for next response";
   else if(event.type==="compaction_start")phase="Compacting context";
   else if(event.type==="auto_retry_start")phase="Waiting to retry";
-  else if(event.type==="message_update")phase=event.assistantMessageEvent?.type?.startsWith("text_")?"Receiving reply":"Thinking";
-  felixSessionActivity.set(id,{startedAt:event.type==="agent_start"?now:old.startedAt,lastEventAt:now,phase});
+  else if(event.type==="message_update")phase=old.stream?.phase??(event.assistantMessageEvent?.type==="text_delta"?"Receiving reply":event.assistantMessageEvent?.type==="thinking_delta"?"Receiving reasoning":old.phase);
+  else if(event.type==="agent_end")phase="Finished";
+  const resetStream=["agent_start","agent_end","tool_execution_start","tool_execution_end","compaction_start","compaction_end","auto_retry_start"].includes(event.type);
+  felixSessionActivity.set(id,{...old,startedAt:event.type==="agent_start"?now:old.startedAt,lastEventAt:now,phase,...(resetStream?{stream:null}:{})});
+}
+function felixObserveModelStream(id,stream){
+  const now=Date.now(),old=felixSessionActivity.get(id)??{startedAt:now};
+  felixSessionActivity.set(id,{...old,phase:stream.phase,lastEventAt:stream.lastEventAt??stream.requestStartedAt,stream});
 }
 function felixSessionStatus(host,id,includeMessages=false){
   const entry=host.sessions.get(id),session=entry?.session;
@@ -373,4 +395,4 @@ async function felixCompactContext(host,id){
   }finally{session.agent.streamFunction=originalStream;session.felixManualCompacting=false;felixAccountEvent(host);}
 }
 
-export {felixWithSpeed,felixSetSpeed,felixNormalizeShortcut,felixSetShortcut,felixGuardStream,felixObserveSession,felixSessionStatus,felixInterrupt,felixAgentWorking,felixContinueSession,felixCheckIdleSteering,felixSteer,felixSteeringItems,felixCancelSteering,felixAccountsInfo,felixChangeOpenAIAccount,felixLoginOpenAIAccount,felixAccountEvent,felixSendWithAccount,felixAssertAccountReady,felixGateAccountSession,felixRefreshIdleModels,felixGetUsage,felixClearUsage,felixCompactContext,felixCheckCompacting,felixContextUsage};
+export {felixWithSpeed,felixSetSpeed,felixNormalizeShortcut,felixSetShortcut,felixGuardStream,felixObserveSession,felixObserveModelStream,felixConnectionMessage,felixSessionStatus,felixInterrupt,felixAgentWorking,felixContinueSession,felixCheckIdleSteering,felixSteer,felixSteeringItems,felixCancelSteering,felixAccountsInfo,felixChangeOpenAIAccount,felixLoginOpenAIAccount,felixAccountEvent,felixSendWithAccount,felixAssertAccountReady,felixGateAccountSession,felixRefreshIdleModels,felixGetUsage,felixClearUsage,felixCompactContext,felixCheckCompacting,felixContextUsage};

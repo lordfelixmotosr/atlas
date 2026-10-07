@@ -25,6 +25,23 @@ function init(){
      fs.writeFileSync(path.join(root,'data/Atlas-logo-ui.png'),(await win.webContents.capturePage()).toPNG());
      write(result);app.exit(0);return;
     }
+    if(process.env.ATLAS_VERIFY_CONNECTION_ONLY){
+     const {BrowserWindow}=require('electron'),rendererRoot=path.join(__dirname,'../../renderer/main_window');
+     const html=fs.readFileSync(path.join(rendererRoot,'index.html'),'utf8'),csp=html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"\s*\/?\s*>/i);
+     if(!csp||!process.env.ATLAS_VERIFY_CONNECTION_BUNDLE)throw new Error('Connection fixture or production content policy is missing.');
+     const cssRoot=path.join(rendererRoot,'assets'),css=fs.readdirSync(cssRoot).filter(name=>name.endsWith('.css')).map(name=>fs.readFileSync(path.join(cssRoot,name),'utf8')).join('\n');
+     const fixtureWin=new BrowserWindow({show:false,width:1200,height:800,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false,offscreen:true}});
+     try{
+      await fixtureWin.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<!doctype html><html><head>'+csp[0]+'</head><body><div id="root" style="display:flex;flex-direction:column;width:1100px;height:650px"></div></body></html>'));
+      await fixtureWin.webContents.executeJavaScript(`document.documentElement.setAttribute('data-theme','dark');document.head.appendChild(Object.assign(document.createElement('style'),{textContent:${JSON.stringify(css)}}));window.modmixer=new Proxy({onEvent:()=>()=>{}},{get:(target,key)=>key in target?target[key]:String(key).startsWith('on')?()=>()=>{}:async()=>null});void 0;`);
+      await fixtureWin.webContents.executeJavaScript(fs.readFileSync(process.env.ATLAS_VERIFY_CONNECTION_BUNDLE,'utf8'));
+      result.nativeConnection=await fixtureWin.webContents.executeJavaScript('window.__atlasConnectionTest.run()');
+      await fixtureWin.webContents.executeJavaScript('window.__atlasConnectionTest.show()');fixtureWin.webContents.invalidate();
+      fs.writeFileSync(path.join(root,'data/Atlas-connection-status.png'),(await fixtureWin.webContents.capturePage()).toPNG());
+      await fixtureWin.webContents.executeJavaScript('window.__atlasConnectionTest.close()');
+     }finally{fixtureWin.destroy();}
+     write(result);app.exit(0);return;
+    }
     if(process.env.ATLAS_VERIFY_COMPOSER_ONLY){
      const {BrowserWindow}=require('electron'),{pathToFileURL}=require('node:url');
      const rendererRoot=path.join(__dirname,'../../renderer/main_window');

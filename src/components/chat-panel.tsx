@@ -1389,7 +1389,7 @@ function ThinkingIndicator() {
           />
         ))}
       </span>
-      <span>Thinking…</span>
+      <span>Waiting for response…</span>
     </div>
   );
 }

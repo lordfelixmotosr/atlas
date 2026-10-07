@@ -3,7 +3,7 @@ import { SPRITE_GENERATION_SYSTEM, spriteGenerationPrompt } from '../atlas/sprit
 import type { SpriteDirection, SpriteProject } from '../atlas/sprite-studio-types';
 import { getSpriteSlots } from '../atlas/sprite-profiles';
 import { readSpriteReference, MAX_SPRITE_REFERENCE_TOTAL_BYTES } from '../atlas/sprite-reference';
-import {felixWithSpeed,felixGuardStream,felixGateAccountSession,felixObserveSession,felixAccountEvent,felixInterrupt,felixAgentWorking,felixCheckCompacting,felixCheckIdleSteering,felixSendWithAccount,felixContinueSession,felixLoginOpenAIAccount,felixChangeOpenAIAccount,felixRefreshIdleModels,felixClearUsage,felixContextUsage,felixAssertAccountReady,felixSteeringItems} from "../atlas/agent-features";
+import {felixWithSpeed,felixGuardStream,felixGateAccountSession,felixObserveSession,felixObserveModelStream,felixAccountEvent,felixInterrupt,felixAgentWorking,felixCheckCompacting,felixCheckIdleSteering,felixSendWithAccount,felixContinueSession,felixLoginOpenAIAccount,felixChangeOpenAIAccount,felixRefreshIdleModels,felixClearUsage,felixContextUsage,felixAssertAccountReady,felixSteeringItems} from "../atlas/agent-features";
 import { app, shell, type BrowserWindow } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -1182,7 +1182,10 @@ export class AgentHost {
       customTools,
     });
     sessionRef = session;
-    session.agent.streamFunction = felixGuardStream(felixWithSpeed(session.agent.streamFunction, loadSettings)) as any;
+    session.agent.streamFunction = felixGuardStream(felixWithSpeed(session.agent.streamFunction, loadSettings),600000,activity=>{
+      felixObserveModelStream(convo.id,activity);
+      (globalThis as any).__atlasRuntime?.tasks?.observeStream(convo.id,activity);
+    }) as any;
     felixGateAccountSession(this,session);
 
     const unsubscribe = session.subscribe((event) =>
