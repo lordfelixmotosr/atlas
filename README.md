@@ -1,4 +1,18 @@
-# Atlas 0.2.13 portable
+# Atlas 0.2.14 portable
+
+## 0.2.14 apparel, hats, buildings and furniture
+
+Sprite Studio now includes apparel, hats, buildings and furniture profiles. Apparel has one inventory icon and 15 worn overlays for the five vanilla adult body types. Hats have an inventory icon and three worn views; west mirrors east. Apparel previews offer schematic body/head fit guides. These guides assist alignment and do not prove fit in RimWorld. Juvenile and custom race body types and worn masks require additional artwork and configuration.
+
+Buildings and furniture support four explicit rotations, including west, or a single nonrotating texture. Set the occupied tile footprint separately from the image's drawn width and height. The preview shows a schematic footprint grid. Export suggests graphics, footprint and rotation XML fields for an existing definition; gameplay behavior, materials, costs and recipes remain a separate modding step.
+
+Choose **Import master art** when creating a family to copy an existing PNG as a reference or a selected asset view. Cancelling the picker creates no family; failed imports roll back the new family. References guide newly generated SVG artwork, while direct view imports keep the PNG's colors and still require approval. The palette control and restriction have been removed: describe colors in the design brief or use your master artwork as the reference. Large apparel requests run in batches of four views and commit one candidate only when every batch validates. Normal model usage applies to every batch.
+
+**Archive** hides a family from the active list while retaining its artwork and history. Choose the archived filter and **Restore** to resume it. **Delete family** asks for confirmation and removes that saved family; exported mod textures and export backups are retained. Existing bird and pawn families remain compatible.
+
+Design controls are now visible at the top of the workspace. **Design flight frames** uses the existing bird family and imported artwork to request all three layered views. Flat artwork has an explicit design action in Animation. Partial imports and revisions keep earlier working views visible; their approvals point to the actual source revision. Sprite references are sent as PNGs to preserve transparency. A selected model that cannot view images asks you to choose an image-capable model before designing from reference artwork.
+
+Workshop preview browsing accepts animated GIFs up to 1 MiB. Atlas retains the animation for the Publish panel and Steam preview, and creates a static first-frame `About/Preview.png` for RimWorld. Static replacement clears the older GIF after a successful write; a newer generated PNG also takes precedence. Preview imports keep backups and roll back failed writes. Steam upload/display still needs testing on the target Workshop item; development verification performs no Steam publishing.
 
 ## 0.2.13 Sprite Studio
 

@@ -4,6 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('../build-tools/native/node_modules/typescript');
+const realCore = require('../src/atlas/sprite-studio.cjs');
+const profileModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/atlas/sprite-profiles.ts'), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, { exports: profileModule.exports, module: profileModule });
+const responseFor = directions => JSON.stringify({ directions: Object.fromEntries(directions.map(slot => [slot, { body: { svg: '<rect x="30" y="30" width="50" height="50" fill="#f1e9d0"/>' } }])) });
 
 const source = fs.readFileSync(path.resolve(__dirname, '../src/atlas/sprite-studio-routes.ts'), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText;
@@ -11,15 +15,19 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
 function fixture() {
   const handlers = new Map(), jobs = new Map(), events = [], taskUpdates = [], writes = [], timers = new Map();
   let now = 1000000, token = 0, consent = 0, busy = false;
-  const project = { id: 'family-id', version: 4, recipe: { kind: 'bird' } };
+  const project = { id: 'family-id', version: 4, recipe: { name: 'Fixture family', kind: 'bird', brief: 'Fixture art', palette: ['#f1e9d0', '#414c39'], canvasSize: 128, frameCount: 8, ticksPerFrame: 2, drawSize: 1.5, groundedDrawSize: 0.7, textureName: 'FixtureFamily' }, approved: {} };
+  let deleted = false;
   class Store {
     constructor(options) { this.options = options; }
-    read(id) { if (id !== project.id) throw new Error('Unknown sprite project'); return project; }
+    read(id) { if (deleted || id !== project.id) throw new Error('Unknown sprite project'); return project; }
     list() { return [project]; }
     create(recipe) { return { recipe }; }
     saveRecipe(id, recipe, version) { this.checkVersion(id, version); return { ...project, recipe }; }
     approve(id, _candidate, _directions, version) { this.checkVersion(id, version); return project; }
     importPng(id, _direction, _source, version) { this.checkVersion(id, version); return project; }
+    importMaster(recipe, mode, source, slot) { writes.push({ master: { recipe, mode, source, slot } }); return { ...project, recipe }; }
+    archive(id, archived, version) { this.checkVersion(id, version); project.archived = archived; project.version++; return project; }
+    deleteProject(id, version) { this.checkVersion(id, version); deleted = true; writes.push('deleted'); }
     projectDir(id) { this.read(id); return path.join('fixture', id); }
     checkVersion(id, version) { this.read(id); if (version !== project.version) throw new Error('Sprite project changed; reload'); }
     async prepareGeneration(id, _directions, _instruction, version) { this.checkVersion(id, version); return { project, referencePaths: [], approvedPaths: [] }; }
@@ -29,7 +37,7 @@ function fixture() {
     async planExport(id, projectRoot, version) { this.checkVersion(id, version); return { projectRoot, rows: [{ path: 'Textures/Bird.png', bytes: 100, action: 'create' }], xml: '<PawnKindDef/>', warnings: [] }; }
     async applyExport(plan, backup) { writes.push({ plan, backup }); return { files: 1, backup: null }; }
   }
-  const host = { generateSpriteScenes: async () => ({ response: '{}', model: 'Fixture model' }) };
+  const host = { generateSpriteScenes: async args => ({ response: responseFor(args.directions), model: 'Fixture model' }) };
   const electron = {
     app: { on: (name, fn) => events.push({ name, fn }) },
     dialog: { showOpenDialog: async () => ({ canceled: false, filePaths: ['fixture.png'] }) },
@@ -49,7 +57,14 @@ function fixture() {
       if (name.endsWith('resvg-init')) return { rasterizeSvg: () => { throw new Error('unexpected rasterizer call'); } };
       if (name.endsWith('mod-prefs')) return { readModPrefs: async () => ({ game: 'rimworld' }) };
       if (name.endsWith('mod-events')) return { emitModChanged: folder => events.push({ changed: folder }) };
-      if (name.endsWith('sprite-studio.cjs')) return { SpriteStudio: Store };
+      if (name.endsWith('sprite-studio.cjs')) return {
+        SpriteStudio: Store, validateRecipe: realCore.validateRecipe, getSlots: profileModule.exports.getSpriteSlots,
+        validateDirections: (slots, recipe) => {
+          const allowed = profileModule.exports.getSpriteSlots(recipe);
+          if (!Array.isArray(slots) || !slots.length || new Set(slots).size !== slots.length || slots.some(slot => !allowed.includes(slot))) throw new Error('Invalid sprite slots');
+          return allowed.filter(slot => slots.includes(slot));
+        }, parseResponse: realCore.parseResponse,
+      };
       throw new Error('Unexpected dependency: ' + name);
     },
   });
@@ -112,7 +127,7 @@ test('save receives the request version and abort signal, and stale recipes fail
   assert.equal(f.host.atlasSpriteJobs, 0);
   let receivedSignal;
   f.store.saveGeneration = async (id, response, model, directions, version, signal) => {
-    assert.equal(id, f.project.id); assert.equal(version, 4); assert.equal(response, '{}'); assert.equal(model, 'Fixture model');
+    assert.equal(id, f.project.id); assert.equal(version, 4); assert.deepEqual(Object.keys(response.directions), f.request.directions); assert.equal(model, 'Fixture model');
     assert.deepEqual(Array.from(directions), f.request.directions);
     receivedSignal = signal; f.call('cancel', id);
     if (signal.aborted) throw new Error('cancelled');
@@ -120,6 +135,79 @@ test('save receives the request version and abort signal, and stale recipes fail
   await assert.rejects(f.call('generate', f.request), /stopped or timed out/);
   assert.equal(receivedSignal.aborted, true);
   assert.equal(f.writes.length, 0);
+});
+
+test('a 16-slot apparel family is validated in four batches and saved once atomically', async () => {
+  const f = fixture();
+  Object.assign(f.project.recipe, { kind: 'apparel', frameCount: 1, apparelLayer: 'Shell', apparelCoverage: 'upper' });
+  const slots = Array.from(profileModule.exports.getSpriteSlots(f.project.recipe));
+  const approvedPaths = slots.map(slot => path.join('C:/owned/revisions', slot + '-preview.png'));
+  f.store.prepareGeneration = async () => ({ project: f.project, referencePaths: ['C:/owned/master.png'], approvedPaths });
+  const batches = [];
+  f.host.generateSpriteScenes = async args => {
+    assert.equal(f.host.atlasSpriteJobs, 1);
+    assert.equal(f.jobs.size, 1);
+    assert.equal(args.approvedPaths.length, 4);
+    for (const slot of args.directions) assert(args.approvedPaths.some(file => path.basename(file) === slot + '-preview.png'), 'Current batch lost its approved identity view');
+    assert.equal(f.writes.length, 0, 'Earlier batches were committed before the family completed');
+    batches.push(Array.from(args.directions));
+    return { response: responseFor(args.directions), model: 'Fixture model' };
+  };
+  let saved = 0;
+  f.store.saveGeneration = async (id, combined, _model, directions, version, signal) => {
+    saved++; assert.equal(id, f.project.id); assert.equal(version, 4); assert.equal(signal.aborted, false);
+    assert.deepEqual(Object.keys(combined.directions), slots); assert.deepEqual(Array.from(directions), slots);
+    f.writes.push('candidate'); return { ...f.project, version: 5 };
+  };
+  await f.call('generate', { ...f.request, directions: slots });
+  assert.equal(batches.length, 4); assert.equal(saved, 1);
+  assert.deepEqual(batches.flat(), slots);
+  assert.deepEqual(f.taskUpdates.filter(update => /^Designing asset batch/.test(update[1].phase)).map(update => update[1].fraction), [0, 0.25, 0.5, 0.75]);
+  assert.equal(f.host.atlasSpriteJobs, 0); assert.equal(f.timers.size, 0);
+});
+
+test('cancelling or returning unsafe SVG in a later apparel batch commits no partial revision', async () => {
+  for (const mode of ['cancel', 'unsafe']) {
+    const f = fixture(); Object.assign(f.project.recipe, { kind: 'apparel', frameCount: 1, apparelLayer: 'Shell', apparelCoverage: 'upper' });
+    const slots = Array.from(profileModule.exports.getSpriteSlots(f.project.recipe));
+    const approvedBefore = JSON.stringify(f.project.approved); let calls = 0;
+    f.host.generateSpriteScenes = async args => {
+      calls++;
+      if (calls === 2 && mode === 'cancel') f.call('cancel', f.project.id);
+      if (calls === 2 && mode === 'unsafe') return { response: JSON.stringify({ directions: Object.fromEntries(args.directions.map(slot => [slot, { body: { svg: '<script>bad()</script>' } }])) }), model: 'Fixture' };
+      return { response: responseFor(args.directions), model: 'Fixture' };
+    };
+    await assert.rejects(f.call('generate', { ...f.request, directions: slots }), mode === 'cancel' ? /stopped or timed out/ : /SVG|Unsupported|forbidden|permitted/i);
+    assert.equal(calls, 2); assert.equal(f.writes.length, 0); assert.equal(JSON.stringify(f.project.approved), approvedBefore);
+    assert.equal(f.host.atlasSpriteJobs, 0); assert.equal(f.jobs.size, 0); assert.equal(f.timers.size, 0);
+  }
+});
+
+test('master import validates the target slot and cancelled file selection creates nothing', async () => {
+  const f = fixture();
+  f.electron.dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] });
+  assert.equal(await f.call('create-master', f.project.recipe, 'reference'), null);
+  assert.equal(f.writes.length, 0);
+  await assert.rejects(f.call('create-master', f.project.recipe, 'slot', 'west'), /required asset view/);
+  f.electron.dialog.showOpenDialog = async () => ({ canceled: false, filePaths: ['master.png'] });
+  const imported = await f.call('create-master', f.project.recipe, 'slot', 'east');
+  assert.equal(imported.recipe.kind, 'bird'); assert.equal(f.writes.length, 1);
+  assert.equal(f.writes[0].master.mode, 'slot'); assert.equal(f.writes[0].master.slot, 'east');
+});
+
+test('archive and deletion check versions, block active jobs and invalidate reviewed exports', async () => {
+  const f = fixture();
+  f.jobs.set(f.project.id, new AbortController());
+  assert.throws(() => f.call('archive', f.project.id, true, 4), /Stop or finish/);
+  assert.throws(() => f.call('delete', f.project.id, 4), /Stop or finish/);
+  f.jobs.clear();
+  assert.throws(() => f.call('archive', f.project.id, true, 3), /changed; reload/);
+  const archived = f.call('archive', f.project.id, true, 4); assert.equal(archived.archived, true);
+  const restored = f.call('archive', f.project.id, false, 5); assert.equal(restored.archived, false);
+  const plan = await f.call('export-plan', f.project.id, 'OwnedMod', 6);
+  f.call('delete', f.project.id, 6);
+  await assert.rejects(f.call('export-apply', plan.token), /Preview this export again/);
+  assert.deepEqual(f.writes, ['deleted']);
 });
 
 test('task cancellation and quitting abort an in-flight job, and sign-in blocks generation', async () => {

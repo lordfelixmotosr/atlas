@@ -3,14 +3,14 @@ import { useAsyncAction } from '@/lib/use-async-action';
 import { ErrorBanner, Field } from './ui';
 
 /**
- * About/Preview.png viewer + browse/regenerate buttons. Loads the image
- * via readAssetDataUrl (so we don't need a custom file:// scheme handler)
+ * Workshop GIF/static preview viewer + browse/regenerate buttons. Loads the
+ * selected preview through the scoped preview API
  * and re-fetches when the asset watcher fires.
  *
  * Also exposes a "Background" drop zone for an optional user-supplied image
  * (typically a game screenshot) that the agent will use as the BG layer when
  * regenerating. The source is stored in a workspace sidecar dir
- * (`.modmixer/preview-bg/<folder>/source.png`) so it doesn't ship with the
+ * (`.atlas/preview-bg/<folder>/source.png`) so it doesn't ship with the
  * published mod, only with the rendered preview.
  */
 export function PreviewImage({
@@ -23,16 +23,18 @@ export function PreviewImage({
   onGeneratePreview: () => void;
 }) {
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
+  const [previewReadError, setPreviewReadError] = useState<string | null>(null);
   const [bgDataUrl, setBgDataUrl] = useState<string | null>(null);
 
   const browse = useAsyncAction(async () => {
-    const sourceAbs = await window.modmixer.pickAssetFile('texture');
+    const sourceAbs = await window.modmixer.pickPreviewImage();
     if (!sourceAbs) return;
     // Run through setPreviewImage (not addAsset) so the file is normalized
     // to fit Steam's 1 MiB preview cap before it lands on disk.
     await window.modmixer.setPreviewImage(modFolder, sourceAbs);
-    const url = await window.modmixer.readAssetDataUrl(modFolder, 'About/Preview.png');
+    const url = await window.modmixer.readPreviewImage(modFolder);
     setPreviewDataUrl(url);
+    setPreviewReadError(null);
   });
 
   const refreshBg = async () => {
@@ -67,8 +69,10 @@ export function PreviewImage({
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
-      const url = await window.modmixer.readAssetDataUrl(modFolder, 'About/Preview.png');
-      if (!cancelled) setPreviewDataUrl(url);
+      try {
+        const url = await window.modmixer.readPreviewImage(modFolder);
+        if (!cancelled) { setPreviewDataUrl(url); setPreviewReadError(null); }
+      } catch (error) { if (!cancelled) setPreviewReadError(error instanceof Error ? error.message : String(error)); }
     };
     void refresh();
     void refreshBg();
@@ -106,10 +110,10 @@ export function PreviewImage({
     <>
       <Field
         label="Preview image"
-        hint="Shown on the Workshop page and in the in-game browser. 1280×720 recommended."
+        hint="PNG, JPEG or animated GIF. GIFs must fit Steam’s 1 MiB limit; RimWorld uses a static first frame. 1280×720 recommended."
       >
         <div className="flex items-start gap-3">
-          <div className="aspect-video w-40 shrink-0 overflow-hidden rounded-md border border-line bg-surface/60">
+          <div data-atlas-workshop-preview className="aspect-video w-40 shrink-0 overflow-hidden rounded-md border border-line bg-surface/60">
             {previewDataUrl ? (
               <img src={previewDataUrl} alt="Preview" className="h-full w-full object-cover" />
             ) : (
@@ -136,7 +140,8 @@ export function PreviewImage({
                 {previewDataUrl ? 'Regenerate' : 'Generate'}
               </button>
             </div>
-            {browse.error && <ErrorBanner>{browse.error}</ErrorBanner>}
+            {previewDataUrl?.startsWith('data:image/gif;') && <p className="text-xs text-muted">GIF preserved for Workshop. The in-game browser shows its first frame.</p>}
+            {(browse.error || previewReadError) && <ErrorBanner>{browse.error || previewReadError}</ErrorBanner>}
           </div>
         </div>
       </Field>

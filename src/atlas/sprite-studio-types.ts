@@ -1,18 +1,29 @@
 import type { ModelSelection } from '../agent/settings';
 
-export type SpriteDirection = 'south' | 'east' | 'north';
-export type SpriteKind = 'sprite' | 'bird';
+export type SpriteBodyType = 'Male' | 'Female' | 'Thin' | 'Fat' | 'Hulk';
+export type SpriteDirection = 'south' | 'east' | 'north' | 'west' | 'item' | `${SpriteBodyType}_${'south' | 'east' | 'north'}`;
+export type SpriteKind = 'sprite' | 'bird' | 'apparel' | 'hat' | 'building' | 'furniture';
 export interface SpriteRecipe {
   name: string;
   kind: SpriteKind;
   brief: string;
-  palette: string[];
+  /** Legacy family metadata; colors now come from artwork references and the brief. */
+  palette?: string[];
   canvasSize: 128 | 256 | 512;
   frameCount: number;
   ticksPerFrame: number;
   drawSize: number;
   groundedDrawSize?: number;
   textureName: string;
+  apparelLayer?: 'OnSkin' | 'Middle' | 'Shell';
+  apparelCoverage?: 'upper' | 'lower' | 'full';
+  hatCoverage?: 'upper' | 'full';
+  graphicMode?: 'single' | 'multi';
+  footprintX?: number;
+  footprintZ?: number;
+  drawWidth?: number;
+  drawHeight?: number;
+  rotatable?: boolean;
 }
 export interface SpriteArt {
   preview: string;
@@ -21,6 +32,7 @@ export interface SpriteArt {
   frameHashes?: string[];
   hasWingRig: boolean;
   warnings: string[];
+  source?: 'generated' | 'imported';
 }
 export interface SpriteCandidate {
   id: string;
@@ -39,10 +51,11 @@ export interface SpriteProject {
   references: SpriteReference[];
   candidates: SpriteCandidate[];
   approved: Partial<Record<SpriteDirection, string>>;
+  archivedAt?: string | null;
 }
 export interface SpriteProjectSummary {
   id: string; name: string; kind: SpriteKind; updatedAt: string;
-  approvedCount: number; preview: string | null;
+  approvedCount: number; preview: string | null; requiredCount?: number; archivedAt?: string | null;
 }
 export interface SpriteGeneration {
   projectId: string;
@@ -69,6 +82,7 @@ export interface SpriteExportPlan {
 export interface SpriteStudioApi {
   spriteList: () => Promise<SpriteProjectSummary[]>;
   spriteCreate: (recipe: SpriteRecipe) => Promise<SpriteProject>;
+  spriteCreateFromMaster: (recipe: SpriteRecipe, mode: 'reference' | 'slot', slot?: SpriteDirection) => Promise<SpriteProject | null>;
   spriteRead: (id: string) => Promise<SpriteProject>;
   spriteSaveRecipe: (id: string, recipe: SpriteRecipe, version: number) => Promise<SpriteProject>;
   spriteImport: (id: string, direction: SpriteDirection | 'reference', version: number) => Promise<SpriteProject | null>;
@@ -78,6 +92,8 @@ export interface SpriteStudioApi {
   spriteExportPlan: (id: string, folder: string, version: number) => Promise<SpriteExportPlan>;
   spriteExportApply: (token: string) => Promise<{ files: number; backup: string | null }>;
   spriteReveal: (id: string) => Promise<void>;
+  spriteArchive: (id: string, archived: boolean, version: number) => Promise<SpriteProject>;
+  spriteDelete: (id: string, version: number) => Promise<void>;
 }
 export function spriteAssetUrl(id: string, relative: string): string {
   return `modmixer-asset://studio/${encodeURIComponent(id)}/${encodeURIComponent(relative)}`;

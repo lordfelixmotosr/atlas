@@ -4,6 +4,7 @@ import fsp from 'node:fs/promises';
 import { getWorkspacePaths } from '../workspace.js';
 import { normalizePreviewToFile } from './preview-normalize.js';
 import { metadataReadPath, metadataWritePath } from '../mod-metadata.js';
+import { assertPreviewPathSafe, readWorkshopPreviewDataUrl, setWorkshopPreviewSource } from './workshop-preview.js';
 
 /** Absolute path of a workspace mod folder — no existence check. */
 function resolveModDir(folder: string): string {
@@ -42,8 +43,8 @@ export async function addAssetFile(
 }
 
 /**
- * Writes a user-supplied source image to About/Preview.png after running it
- * through the Steam Workshop normalizer (≤ ~975 KiB, dimension-clamped).
+ * Stores a Workshop PNG/JPEG preview or preserves an animated GIF alongside
+ * its normalized first frame in About/Preview.png for RimWorld's mod browser.
  * Use this rather than addAssetFile when the user picks a preview image —
  * Steam rejects oversize previews with k_EResultLimitExceeded at publish.
  */
@@ -51,9 +52,19 @@ export async function setPreviewImageFile(
   folder: string,
   sourceAbsPath: string,
 ): Promise<void> {
-  const modDir = modRoot(folder);
-  const dest = safeJoin(modDir, path.join('About', 'Preview.png'));
-  await normalizePreviewToFile(sourceAbsPath, dest);
+  const modDir = previewModRoot(folder), { workspaceDir } = getWorkspacePaths();
+  const backupRoot = path.dirname(metadataWritePath(workspaceDir, 'preview-import-backups/' + folder + '/index.json'));
+  await setWorkshopPreviewSource(modDir, sourceAbsPath, backupRoot);
+}
+
+function previewModRoot(folder: string): string {
+  if (!folder || folder === '.' || folder === '..' || /[\/\\\x00]/.test(folder)) throw new Error('Invalid mod folder for a preview image.');
+  return assertPreviewPathSafe(modRoot(folder));
+}
+
+/** Selected animated Workshop preview, or the newer static game preview. */
+export function readPreviewImageDataUrl(folder: string): string | null {
+  return readWorkshopPreviewDataUrl(previewModRoot(folder));
 }
 
 export async function removeAssetFile(folder: string, relPath: string): Promise<void> {

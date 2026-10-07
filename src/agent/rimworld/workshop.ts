@@ -10,6 +10,7 @@ import { readModPrefs, writeModPrefs } from '../mod-prefs.js';
 import { syncLicenseFile } from '../license-file.js';
 import { DEFAULT_LICENSE_ID } from '../licenses.js';
 import { STEAM_PREVIEW_LIMIT_BYTES } from '../assets/preview-normalize.js';
+import { selectWorkshopPreviewPath } from '../assets/workshop-preview.js';
 import { commitTurn } from '../snapshots.js';
 import { track } from '../telemetry.js';
 
@@ -330,8 +331,8 @@ async function stageContentForPublish(srcFolder: string): Promise<{
 
 function previewPathFor(folder: string): string | undefined {
   const { workspaceDir } = getWorkspacePaths();
-  const candidate = path.join(workspaceDir, folder, 'About', 'Preview.png');
-  return fs.existsSync(candidate) ? candidate : undefined;
+  if (!folder || folder === '.' || folder === '..' || /[\/\\\x00]/.test(folder)) throw new Error('Invalid mod folder for a Workshop preview.');
+  return selectWorkshopPreviewPath(path.join(workspaceDir, folder));
 }
 
 function autoChangeNote(): string {

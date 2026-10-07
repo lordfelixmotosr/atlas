@@ -10,7 +10,8 @@ import { emitModChanged } from '../agent/mod-events';
 export function registerSpriteStudioRoutes(ctx, { runtime, jobs, busy, modRoot }) {
   const { ipc, host, getWindow, requireConsent } = ctx;
   const atlasRoot = process.env.ATLAS_ROOT;
-  const store = new (require('./atlas/sprite-studio.cjs').SpriteStudio)({
+  const core = require('./atlas/sprite-studio.cjs');
+  const store = new core.SpriteStudio({
     root: path.join(atlasRoot, 'data/profile/sprite-studio'), rasterize: rasterizeSvg,
   });
   const plans = new Map();
@@ -21,12 +22,27 @@ export function registerSpriteStudioRoutes(ctx, { runtime, jobs, busy, modRoot }
   };
   h('list', () => store.list());
   h('create', recipe => store.create(recipe));
+  h('create-master', async (recipe, mode = 'reference', slot) => {
+    const normalized = core.validateRecipe(recipe);
+    if (!['reference', 'slot'].includes(mode) || mode === 'slot' && !core.getSlots(normalized).includes(slot)) throw new Error('Choose a reference or a required asset view for the master artwork.');
+    const selected = await electron.dialog.showOpenDialog(getWindow(), {
+      title: 'Import master artwork into a new sprite family',
+      filters: [{ name: 'PNG artwork', extensions: ['png'] }], properties: ['openFile'],
+    });
+    if (selected.canceled) return null;
+    return store.importMaster(normalized, mode, selected.filePaths[0], slot);
+  });
   h('read', id => store.read(id));
+  h('archive', (id, archived, version) => { editable(id); return store.archive(id, archived, version); });
+  h('delete', (id, version) => {
+    editable(id); store.deleteProject(id, version);
+    for (const [token, item] of plans) if (item.id === id) plans.delete(token);
+  });
   h('recipe', (id, recipe, version) => { editable(id); return store.saveRecipe(id, recipe, version); });
   h('approve', (id, candidate, directions, version) => { editable(id); return store.approve(id, candidate, directions, version); });
   h('import', async (id, direction, version) => {
     editable(id);
-    if (!['reference', 'south', 'east', 'north'].includes(direction)) throw new Error('Choose a sprite direction or reference.');
+    if (direction !== 'reference' && !core.getSlots(store.read(id).recipe).includes(direction)) throw new Error('Choose an asset view or reference for this family.');
     const selected = await electron.dialog.showOpenDialog(getWindow(), {
       title: direction === 'reference' ? 'Add a PNG style or identity reference' : 'Import ' + direction + ' sprite (PNG)',
       filters: [{ name: 'PNG images', extensions: ['png'] }], properties: ['openFile'],
@@ -58,16 +74,29 @@ export function registerSpriteStudioRoutes(ctx, { runtime, jobs, busy, modRoot }
     // Reserve before reading references, so switching accounts cannot race preparation.
     host.atlasSpriteJobs = jobs.size;
     const task = 'sprite:' + id;
-    const timer = setTimeout(() => controller.abort(), 240000);
+    let timer;
     runtime.tasks.update(task, { kind: 'sprite', projectId: id, title: 'Generate sprite family', status: 'running', phase: 'Preparing locked recipe and references', fraction: null, canRetry: false, restart: true }, 'Generating a candidate; approved artwork stays in place');
     try {
       const prepared = await store.prepareGeneration(id, request.directions, request.instruction, request.version);
       if (controller.signal.aborted) throw new Error('Sprite generation cancelled.');
-      runtime.tasks.update(task, { phase: 'Designing directional layers with your model' }, 'Using the selected connected account');
-      const result = await host.generateSpriteScenes({ ...prepared, directions: request.directions, instruction: request.instruction, model: request.model }, controller.signal);
-      if (controller.signal.aborted) throw new Error('Sprite generation cancelled.');
+      const slots = core.validateDirections(request.directions, prepared.project.recipe);
+      const batches = Array.from({length:Math.ceil(slots.length/4)},(_,index)=>slots.slice(index*4,index*4+4));
+      const combined = {directions:{}}, modelNames = new Set();
+      for (let index=0;index<batches.length;index++) {
+        const batch=batches[index];
+        if (controller.signal.aborted) throw new Error('Sprite generation cancelled.');
+        timer=setTimeout(()=>controller.abort(),240000);
+        const chosen=prepared.approvedPaths.filter(file=>batch.some(slot=>path.basename(file)===slot+'-preview.png'));
+        for(const file of prepared.approvedPaths) if(chosen.length<4&&!chosen.includes(file))chosen.push(file);
+        runtime.tasks.update(task, {phase:batches.length>1?`Designing asset batch ${index+1} of ${batches.length}`:'Designing asset views with your model',fraction:batches.length>1?index/batches.length:null}, 'Using the selected connected account for '+batch.join(', '));
+        const result=await host.generateSpriteScenes({...prepared,approvedPaths:chosen.slice(0,4),directions:batch,instruction:request.instruction,model:request.model},controller.signal);
+        clearTimeout(timer);
+        if(controller.signal.aborted)throw new Error('Sprite generation cancelled.');
+        Object.assign(combined.directions,core.parseResponse(result.response,batch,prepared.project.recipe));
+        modelNames.add(result.model);
+      }
       runtime.tasks.update(task, { phase: 'Validating artwork and rendering PNG frames' }, 'Checking safe geometry, canvas and palette; composing fixed-body frames');
-      const project = await store.saveGeneration(id, result.response, result.model, request.directions, request.version, controller.signal);
+      const project = await store.saveGeneration(id, combined, [...modelNames].join(', '), slots, request.version, controller.signal);
       if (controller.signal.aborted) throw new Error('Sprite generation cancelled.');
       runtime.tasks.update(task, { status: 'completed', phase: 'Candidate ready for review', fraction: 1 }, 'Review directions and flight before approving or exporting');
       return project;

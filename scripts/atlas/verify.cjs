@@ -129,6 +129,7 @@ function init(){
    }catch(error){write({error:error.stack});app.exit(1);}
   },2500);});
  });
- setTimeout(()=>{write({error:'Atlas did not finish loading within 75 seconds.'});app.exit(1);},75000).unref();
+ const verificationMs=process.env.ATLAS_VERIFY_SPRITES_ONLY?120000:75000;
+ setTimeout(()=>{write({error:'Atlas native verification did not finish within '+verificationMs/1000+' seconds.'});app.exit(1);},verificationMs).unref();
 }
 module.exports={init};

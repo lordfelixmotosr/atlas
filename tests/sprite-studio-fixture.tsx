@@ -3,38 +3,52 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { SpriteStudio } from '../src/atlas/sprite-studio';
+import { AppDialog } from '../src/components/app-dialog';
+import { getSpriteSlots } from '../src/atlas/sprite-profiles';
 
 const input = window.__atlasSpriteSnapshot;
 if (!input?.project || !input?.plan) throw new Error('Native sprite snapshot is missing');
 const clone = value => JSON.parse(JSON.stringify(value));
-let project = clone(input.project), taskListeners = [], pending, taskState = [], applyCalls = 0, generateCalls = 0, approveCalls = 0;
+const projects = new Map([input.project, ...Object.values(input.profiles ?? {}), input.master, input.importedSlot, input.importSequence, input.disposable].filter(Boolean).map(value => [value.id, clone(value)]));
+// Replicate existing 0.2.13 singleton imports without changing native files.
+const legacyImports = projects.get(input.importSequence.id);
+legacyImports.candidates.forEach((candidate, index) => { const slot = ['east', 'south', 'north'][index]; candidate.directions = { [slot]: candidate.directions[slot] }; });
+let project = projects.get(input.project.id), taskListeners = [], pending, taskState = [], applyCalls = 0, generateCalls = 0, approveCalls = 0, deleteCalls = 0, masterCalls = 0, lastGeneration, lastApproval;
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const until = async (check, message) => { const deadline = Date.now() + 10000; while (!check() && Date.now() < deadline) await wait(50); assert(check(), message); };
 const emit = value => { taskState = value; for (const listener of taskListeners) listener(value); };
-const summary = () => ({ id: project.id, name: project.recipe.name, kind: project.recipe.kind, updatedAt: project.updatedAt, approvedCount: Object.keys(project.approved).length, preview: project.candidates[0].directions.south.preview });
+const summary = value => ({ id: value.id, name: value.recipe.name, kind: value.recipe.kind, updatedAt: value.updatedAt, archivedAt: value.archivedAt, approvedCount: Object.keys(value.approved).length, requiredCount: getSpriteSlots(value.recipe).length, preview: Object.values(value.candidates[0]?.directions ?? {})[0]?.preview ?? null });
+const plans = new Map([input.plan, ...Object.values(input.profilePlans ?? {})].map(value => [value.token, value]));
 window.modmixer = {
-  spriteList: async () => [summary()], spriteRead: async () => clone(project),
+  spriteList: async () => [...projects.values()].map(summary), spriteRead: async id => { project = projects.get(id); assert(project, 'Unknown fixture family'); return clone(project); },
   spriteCreate: async () => { throw new Error('No unexpected create'); },
+  spriteCreateFromMaster: async () => { masterCalls++; return null; },
   spriteSaveRecipe: async (_id, recipe, version) => { assert(version === project.version, 'Recipe version changed'); project.recipe = clone(recipe); project.version++; return clone(project); },
   spriteImport: async () => null, spriteReveal: async () => {},
-  spriteApprove: async (_id, candidate, directions, version) => { assert(version === project.version, 'Approval version changed'); for (const direction of directions) project.approved[direction] = candidate; project.version++; approveCalls++; return clone(project); },
-  spriteGenerate: request => { generateCalls++; assert(request.model.provider === 'openai-codex', 'Selected model was not sent'); emit([{ id: 'sprite:' + project.id, projectId: project.id, kind: 'sprite', status: 'running', phase: 'Fixture candidate in progress' }]); return new Promise((resolve, reject) => { pending = { resolve, reject }; }); },
+  spriteApprove: async (_id, candidate, directions, version) => { assert(version === project.version, 'Approval version changed'); lastApproval = { candidate, directions }; for (const direction of directions) project.approved[direction] = candidate; project.version++; approveCalls++; return clone(project); },
+  spriteGenerate: request => { generateCalls++; lastGeneration = clone(request); assert(request.model.provider === 'openai-codex', 'Selected model was not sent'); emit([{ id: 'sprite:' + project.id, projectId: project.id, kind: 'sprite', status: 'running', phase: 'Fixture candidate in progress' }]); return new Promise((resolve, reject) => { pending = { resolve, reject }; }); },
   spriteCancel: async () => { emit([]); pending?.reject(new Error('Sprite generation stopped or timed out. Your approved artwork is preserved.')); pending = null; },
-  spriteExportPlan: async () => clone(input.plan), spriteExportApply: async token => { assert(token === input.plan.token, 'Unreviewed export token'); applyCalls++; return { files: input.plan.rows.length, backup: null }; },
+  spriteExportPlan: async id => clone(id === input.project.id ? input.plan : input.profilePlans[projects.get(id).recipe.kind]), spriteExportApply: async token => { assert(plans.has(token), 'Unreviewed export token'); applyCalls++; return { files: plans.get(token).rows.length, backup: null }; },
+  spriteArchive: async (id, archived, version) => { const value = projects.get(id); assert(version === value.version, 'Archive version changed'); value.archivedAt = archived ? new Date().toISOString() : null; value.version++; return clone(value); },
+  spriteDelete: async (id, version) => { assert(projects.get(id).version === version, 'Delete version changed'); projects.delete(id); deleteCalls++; },
   atlasTasksStatus: async () => taskState, onAtlasTasksState: listener => { taskListeners.push(listener); return () => { taskListeners = taskListeners.filter(item => item !== listener); }; },
 };
 const root = createRoot(document.getElementById('root'));
-root.render(<SpriteStudio mods={[{ folder: 'atlas-sprite-fixture', title: 'Atlas verification mod', game: 'rimworld' }]} models={[{ key: 'openai-codex/fixture-model', provider: 'openai-codex', providerLabel: 'ChatGPT', modelId: 'fixture-model', label: 'Fixture model', vision: true }]} onConnect={() => { throw new Error('No live sign-in'); }} />);
+root.render(<><SpriteStudio mods={[{ folder: 'atlas-sprite-fixture', title: 'Atlas verification mod', game: 'rimworld' }]} models={[{ key: 'openai-codex/fixture-model', provider: 'openai-codex', providerLabel: 'ChatGPT', modelId: 'fixture-model', label: 'Fixture model', vision: true }]} onConnect={() => { throw new Error('No live sign-in'); }} /><AppDialog /></>);
 function button(text) { return [...document.querySelectorAll('button')].find(node => node.textContent.trim() === text); }
 function setSelect(selector, value) { const element = document.querySelector(selector); assert(element, 'Missing select: ' + selector); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(element, value); element.dispatchEvent(new Event('change', { bubbles: true })); }
+function setText(selector, value) { const element = document.querySelector(selector); assert(element, 'Missing input: ' + selector); const prototype = element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value); element.dispatchEvent(new Event('input', { bubbles: true })); }
 async function tab(name) { document.getElementById('sprite-tab-' + name).click(); await wait(100); }
 async function images() { for (const image of document.querySelectorAll('.sprite-art')) { await image.decode(); assert(image.naturalWidth === 128 && image.naturalHeight === 128, 'Sprite PNG did not load at locked canvas size'); } }
+async function openFamily(value) { setSelect('[aria-label="Sprite family list"]', 'active'); await wait(50); const family = [...document.querySelectorAll('.sprite-family')].find(node => node.textContent.includes(value.recipe.name)); assert(family, 'Missing profile family: ' + value.recipe.kind); family.click(); await until(() => document.querySelector('.sprite-project-heading h2')?.textContent === value.recipe.name, 'Selected profile did not open'); await images(); }
+function fitGuide() { const input = [...document.querySelectorAll('.sprite-display-tools label')].find(node => node.textContent.includes('Schematic fit guide'))?.querySelector('input'); assert(input, 'Profile lacks fit guide control'); if (!input.checked) input.click(); }
 window.__atlasSpriteTest = {
   async open() { await until(() => document.querySelector('.sprite-family'), 'Saved family is missing'); document.querySelector('.sprite-family').click(); await until(() => document.querySelector('.sprite-workspace'), 'Sprite workspace did not open'); await images(); },
   async run() {
     await this.open();
-    assert(document.querySelector('#sprite-recipe-palette').disabled, 'Identity palette is not locked after artwork');
+    assert(!document.querySelector('#sprite-recipe-palette') && !document.querySelector('#sprite-new-palette'), 'Removed palette controls are still displayed');
+    assert(document.querySelector('#sprite-recipe-canvas').disabled, 'Canvas is not locked after artwork');
     assert(document.querySelector('#sprite-revision').options.length === 3, 'Immutable revision history is missing');
     const west = document.querySelector('.sprite-mirrored .sprite-art');
     assert(getComputedStyle(west).transform.startsWith('matrix(-1'), 'West preview is not mirrored east');
@@ -89,9 +103,86 @@ window.__atlasSpriteTest = {
     assert(applyCalls === 0, 'Opening the export preview applied files automatically');
     assert(document.querySelector('.sprite-export-preview').textContent.includes('not been'), 'Export lacks honest game-test evidence');
     button('Export approved PNGs').click(); await until(() => applyCalls === 1, 'Explicit export action did not apply the reviewed token');
-    return { directionsLoaded: true, mirroredWest: true, individualFlightFrames: true, nativeFlightTiming: true, animationPlays: true, comparisonLoaded: true, identityLocked: true, historyRetained: true, restoredEarlierRevision: true, cancellationPreservesApproval: true, reviewedExportOnly: true, providerCalls: generateCalls, paidProviderRequests: 0 };
+    const profileUi = {};
+    for (const [kind, value] of Object.entries(input.profiles)) {
+      await openFamily(value);
+      assert(!document.getElementById('sprite-tab-animation'), 'Non-bird profile shows an unsupported animation view');
+      fitGuide(); await wait(100);
+      if (kind === 'apparel') {
+        assert(document.querySelector('#sprite-body-type').options.length === 5, 'Adult apparel body-type selector is incomplete');
+        assert(document.querySelector('[data-sprite-slot="item"]'), 'Apparel inventory image is not separate');
+        assert(document.querySelectorAll('[data-sprite-guide="body"]').length >= 3, 'Worn apparel mannequin guides are missing');
+        setSelect('#sprite-body-type', 'Fat'); await wait(100); await images();
+        assert(document.querySelector('[data-sprite-slot="Fat_south"]') && !document.querySelector('[data-sprite-slot="Male_south"]'), 'Body type does not change the worn slots');
+        assert(document.querySelector('.sprite-generation').textContent.includes('16') || document.querySelectorAll('.sprite-direction-checks input').length === 16, 'Apparel generation does not expose every native slot');
+      } else if (kind === 'hat') {
+        assert(document.querySelectorAll('[data-sprite-slot]').length === 4, 'Headwear inventory plus worn views are incomplete');
+        assert(document.querySelectorAll('[data-sprite-guide="head"]').length >= 3, 'Headwear fit silhouettes are missing');
+      } else {
+        assert(!document.querySelector('.sprite-mirrored'), 'A building or furniture profile incorrectly mirrors west');
+        assert(document.querySelector('[data-sprite-guide="footprint"]'), 'Building profile lacks a tile footprint guide');
+        if (kind === 'building') assert(document.querySelector('[data-sprite-slot="west"]'), 'Explicit west building view is absent');
+        if (kind === 'furniture') assert(document.querySelectorAll('[data-sprite-slot]').length === 1 && document.querySelector('[data-sprite-slot="item"]'), 'Single furniture texture is incorrectly split into rotations');
+      }
+      setSelect('[aria-label="Target RimWorld mod"]', 'atlas-sprite-fixture'); await wait(50);
+      button('Preview export').click(); await until(() => document.querySelector('.sprite-export-preview'), 'Profile export preview is missing');
+      assert(document.querySelectorAll('.sprite-export-rows>div').length === input.profilePlans[kind].rows.length, 'Profile export preview omitted files');
+      assert(applyCalls === 1, 'Profile preview automatically exported assets');
+      button('Close preview').click(); await wait(50);
+      profileUi[kind] = { correctSlots: true, fitGuideVisible: true, nativePlanReviewed: true };
+    }
+    await openFamily(input.disposable);
+    document.querySelector('.sprite-family-more').open = true; button('Archive family').click();
+    await until(() => document.querySelector('.sprite-archived-banner'), 'Archived family state is not shown');
+    assert([...document.querySelectorAll('button')].find(node => /^Generate /.test(node.textContent.trim()))?.disabled, 'Archived family remains editable');
+    document.querySelector('.sprite-archived-banner button').click(); await until(() => !document.querySelector('.sprite-archived-banner'), 'Family restore did not return editing');
+    document.querySelector('.sprite-family-more').open = true; button('Delete family…').click();
+    await until(() => button('Delete family'), 'Delete family does not request confirmation'); assert(deleteCalls === 0, 'Family deletion occurred before confirmation');
+    button('Cancel').click(); await until(() => !button('Delete family'), 'Cancelled delete confirmation remained open');
+    assert(projects.has(input.disposable.id) && deleteCalls === 0, 'Cancelling deletion removed the family');
+    button('Delete family…').click(); await until(() => button('Delete family'), 'Second delete confirmation is missing'); button('Delete family').click();
+    await until(() => deleteCalls === 1 && !document.querySelector('.sprite-workspace'), 'Confirmed family deletion did not finish');
+    button('Import master art').click(); await until(() => document.querySelector('#sprite-new-name'), 'Master import form did not open');
+    setText('#sprite-new-name', 'Atlas QA cancelled UI master'); setText('#sprite-new-brief', 'Existing master artwork.'); await wait(50);
+    const beforeMasterFamilies = projects.size; button('Choose PNG and create family').click();
+    await until(() => masterCalls === 1 && !button('Choose PNG and create family')?.disabled, 'Cancelled master picker did not return the form');
+    assert(projects.size === beforeMasterFamilies && document.querySelector('#sprite-new-name').value === 'Atlas QA cancelled UI master', 'Cancelled master import created an empty family or discarded the form');
+    button('Cancel').click(); await wait(50); await openFamily(input.master);
+    const reference = document.querySelector('.sprite-reference-list img'); assert(reference, 'Imported master reference is absent from inspector'); await reference.decode();
+    await openFamily(input.importSequence);
+    assert(document.querySelectorAll('.sprite-direction-grid .sprite-art').length === 4, 'Legacy singleton imports no longer show all saved views');
+    assert(document.querySelector('[data-sprite-slot="east"] .sprite-card-actions').textContent.includes('Approved'), 'Carried earlier approved artwork lost its approval indicator');
+    const sourceSouth = project.candidates[1].id;
+    document.querySelector('[data-sprite-slot="south"] .sprite-card-actions button:last-child').click();
+    await until(() => project.approved.south === sourceSouth, 'Approving a carried legacy view used the wrong revision id');
+    assert(lastApproval.candidate === sourceSouth && project.candidates.length === 3, 'Legacy approval changed revision history or approved the unrelated selected import');
+    await openFamily(input.importedSlot);
+    assert(!Object.keys(project.approved).length && project.candidates[0].directions.east.frames.length === 0, 'Imported flight fixture is not an unapproved flat PNG');
+    const design = document.querySelector('[data-sprite-design-primary]');
+    assert(design?.textContent === 'Design flight frames' && !design.disabled, 'Imported flat bird has no usable design action');
+    const designBox = design.getBoundingClientRect(); assert(designBox.top >= 0 && designBox.bottom <= window.innerHeight, 'Design flight frames is hidden below the fold');
+    await tab('animation'); assert(document.querySelector('[data-sprite-flight-start]'), 'Zero-frame flight view does not explain how to design frames');
+    document.querySelector('[data-sprite-design-primary]').click(); await until(() => document.querySelector('[data-sprite-stop-design]'), 'Design task lacks a visible stop action');
+    assert(lastGeneration.projectId === input.importedSlot.id && lastGeneration.directions.join(',') === 'south,east,north', 'Design flight frames did not request all three views from the existing family');
+    document.querySelector('[data-sprite-stop-design]').click(); await until(() => document.querySelector('[role="alert"]')?.textContent.includes('stopped'), 'Stopping imported design did not report cancellation');
+    assert(project.candidates.length === 1 && project.candidates[0].source === 'imported' && !Object.keys(project.approved).length, 'Cancelled design changed imported or approved artwork');
+    document.querySelector('[aria-label="Dismiss Sprite Studio error"]').click();
+    await openFamily(input.project);
+    const gif = new Image(); gif.src = input.gifPreview; await gif.decode();
+    assert(gif.naturalWidth === 1 && gif.naturalHeight === 1 && gif.src.startsWith('data:image/gif;'), 'Native animated GIF data could not display under production CSP');
+    return { directionsLoaded: true, mirroredWest: true, individualFlightFrames: true, nativeFlightTiming: true, animationPlays: true, comparisonLoaded: true, identityLocked: true, historyRetained: true, restoredEarlierRevision: true, cancellationPreservesApproval: true, reviewedExportOnly: true, profileUi, archiveRestoreUi: true, confirmedDeleteUi: true, cancelledMasterFormPreserved: true, masterReferenceDisplayed: true, legacyImportedViewsVisible: true, legacyApprovalUsesSourceRevision: true, importedBirdDesignActionVisible: true, importedBirdDesignUsesAllViews: true, importedBirdCancelPreservesArtwork: true, animatedWorkshopPreviewDisplays: true, providerCalls: generateCalls, paidProviderRequests: 0 };
   },
-  async state(name) { if (name === 'export') { await tab('directions'); button('Preview export').click(); await until(() => document.querySelector('.sprite-export-preview'), 'Export screenshot preview is missing'); } else { button('Close preview')?.click(); await tab(name); } await images(); document.querySelector('.sprite-workspace-scroll').scrollTop = name === 'export' ? 100000 : 0; document.querySelector('.atlas-sprite-studio').scrollTop = 0; await wait(100); },
+  async state(name) {
+    if (input.profiles?.[name]) { await openFamily(input.profiles[name]); fitGuide(); await wait(50); }
+    else if (name === 'master') await openFamily(input.master);
+    else if (name === 'imports') await openFamily(input.importSequence);
+    else {
+      if (project.id !== input.project.id) await openFamily(input.project);
+      if (name === 'export') { await tab('directions'); if (!document.querySelector('.sprite-export-preview')) { button('Preview export').click(); await until(() => document.querySelector('.sprite-export-preview'), 'Export screenshot preview is missing'); } }
+      else { button('Close preview')?.click(); await tab(name); }
+    }
+    await images(); document.querySelector('.sprite-workspace-scroll').scrollTop = name === 'export' ? 100000 : 0; document.querySelector('.atlas-sprite-studio').scrollTop = 0; await wait(100);
+  },
   async layout() {
     await wait(100);
     assert(document.documentElement.scrollWidth <= window.innerWidth + 1, 'Sprite Studio overflowed the viewport horizontally');

@@ -7,6 +7,7 @@ import {
   getPreviewBgSource,
   readAssetDataUrl,
   readPreviewBgSourceDataUrl,
+  readPreviewImageDataUrl,
   removeAssetFile,
   setPreviewBgSource,
   setPreviewImageFile,
@@ -83,6 +84,17 @@ export function registerAssetsRoutes(ctx: RouteContext): void {
       return scanAssets(path.join(workspaceDir, folder));
     },
   );
+
+  ipc.handle('atlas:assets:read-preview-image', (_evt, folder: string) => readPreviewImageDataUrl(folder));
+
+  ipc.handle('atlas:assets:pick-preview-image', async () => {
+    const win = getWindow(); if (!win) return null;
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      filters: [{ name: 'Workshop preview (PNG, JPEG or GIF)', extensions: ['png', 'jpg', 'jpeg', 'gif'] }],
+    });
+    return result.canceled || !result.filePaths.length ? null : result.filePaths[0];
+  });
 
   ipc.handle(
     'modmixer:assets:remove',

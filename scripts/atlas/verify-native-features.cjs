@@ -13,7 +13,7 @@ async function main(){
   fs.mkdirSync(profile,{recursive:true});fs.writeFileSync(path.join(profile,'settings.json'),JSON.stringify({analyticsOptIn:false,theme:'dark',consent:{version:value('CURRENT_CONSENT_VERSION'),acceptedAt:now},onboarding:{version:value('CURRENT_ONBOARDING_VERSION'),completedAt:now}}));
  }
  const quote=value=>"'"+value.replaceAll("'","''")+"'";cp.execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Start-Process -FilePath ${quote(exe)} -ArgumentList '--atlas-verify' -WorkingDirectory ${quote(root)} -WindowStyle Hidden`],{stdio:'ignore',windowsHide:true});
- const deadline=Date.now()+90000,reportFile=path.join(root,'data/verify-report.json');let report;
+ const deadline=Date.now()+(process.env.ATLAS_VERIFY_SPRITES_ONLY?150000:90000),reportFile=path.join(root,'data/verify-report.json');let report;
  while(Date.now()<deadline){if(fs.existsSync(reportFile)){report=JSON.parse(fs.readFileSync(reportFile));break;}await new Promise(resolve=>setTimeout(resolve,500));}
  if(!report)throw new Error('Native verification did not finish: '+root);if(report.error)throw new Error(report.error);
  if(report.version!==version)throw new Error('Native verification version differs from production.');
