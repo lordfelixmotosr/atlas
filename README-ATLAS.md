@@ -1,4 +1,10 @@
-# Atlas 0.2.17 portable
+# Atlas 0.2.18 portable
+
+## 0.2.18 older model access
+
+The chat model menu keeps its short current-model list by default. Choose **Show older models…** at the bottom to expose superseded chat models from every connected provider; older entries are labeled clearly. Choose **Hide older models…** to return to the concise list. Atlas remembers this preference across restarts, and a chat already using an older model continues to display that selection when the list is collapsed.
+
+Dated aliases, image-only, live, computer-use, embedding and research endpoints remain excluded because they are duplicates or cannot power an Atlas modding chat. Account connections, model context metadata, thinking, speed and usage behavior are unchanged. No paid model request is used by this feature.
 
 ## 0.2.17 Sprite Studio removed
 

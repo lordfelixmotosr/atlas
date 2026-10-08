@@ -138,7 +138,9 @@ export function registerSettingsRoutes(ctx: RouteContext): void {
     },
   );
 
-  ipc.handle('modmixer:models:list', () => host.listAvailableModels());
+  ipc.handle('modmixer:models:list', (_evt, includeOlder = false) =>
+    host.listAvailableModels(includeOlder === true),
+  );
 
   ipc.handle('modmixer:oauth:list', () => host.listOAuthLinks());
 

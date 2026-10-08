@@ -5,6 +5,7 @@ import {
   featuredModels,
   modelFamily,
   resolveDefaultModel,
+  selectableModels,
 } from '../model-selection.js';
 
 /**
@@ -125,6 +126,24 @@ describe('featuredModels', () => {
       'gemini-2.5-pro',
       'gpt-5.6-sol',
       'gpt-5.4-nano',
+    ]);
+  });
+});
+
+describe('selectableModels', () => {
+  it('keeps older family versions while still removing aliases and non-chat models', () => {
+    const catalog = [
+      'gpt-5.6-sol',
+      'gpt-6-sol',
+      'gpt-6.1-sol',
+      'gpt-6.1-sol-20261001',
+      'gpt-6.1-sol-image',
+    ].map((id) => model('openai-codex', id));
+
+    assert.deepEqual(ids(selectableModels(catalog)), [
+      'gpt-6.1-sol',
+      'gpt-6-sol',
+      'gpt-5.6-sol',
     ]);
   });
 });

@@ -199,7 +199,7 @@ export interface Channels {
   'modmixer:settings:set-dangerously-skip-permissions': (
     enabled: boolean,
   ) => Settings;
-  'modmixer:models:list': () => ModelOption[];
+  'modmixer:models:list': (includeOlder?: boolean) => ModelOption[];
 
   // Conversations
   'modmixer:conversations:list': () => Conversation[];

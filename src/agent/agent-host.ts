@@ -54,6 +54,7 @@ import { getRegistry } from './registry/index.js';
 import {
   HOSTED_PROVIDERS,
   featuredModels,
+  selectableModels,
   resolveDefaultModel,
 } from './model-selection.js';
 import { createAddCSharpTool } from './tools/add-csharp.js';
@@ -1680,22 +1681,30 @@ export class AgentHost {
    *    key). pi's `getAvailable()` would also include providers with
    *    matching env vars, but that leaks the user's shell environment and
    *    shows providers they never connected.
-   * 2. Within a provider, only the newest model of each family — see
-   *    `featuredModels`. Nothing here is pinned to a model id, so a flagship
+   * 2. By default, only the newest model of each family — see
+   *    `featuredModels`. The picker's explicit older-model mode requests every
+   *    useful chat version while continuing to exclude duplicate aliases and
+   *    non-chat endpoints. Nothing here is pinned to a model id, so a flagship
    *    that lands in pi's catalog after this build still shows up.
    */
-  listAvailableModels(): ModelOption[] {
+  listAvailableModels(includeOlder = false): ModelOption[] {
     const all = this.modelRegistry.getAll();
     const out: ModelOption[] = [];
     for (const provider of HOSTED_PROVIDERS) {
       if (!this.isProviderConfigured(provider)) continue;
-      for (const m of featuredModels(all.filter((x) => x.provider === provider))) {
+      const providerModels = all.filter((x) => x.provider === provider);
+      const featuredKeys = new Set(featuredModels(providerModels).map((m) => m.id));
+      const visible = includeOlder
+        ? selectableModels(providerModels)
+        : featuredModels(providerModels);
+      for (const m of visible) {
         out.push({
           key: `${m.provider}/${m.id}`,
           provider: m.provider,
           providerLabel: providerLabel(m.provider),
           modelId: m.id,
           label: m.name,
+          older: !featuredKeys.has(m.id),
           vision: m.input.includes('image'),
         });
       }

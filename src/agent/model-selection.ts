@@ -81,6 +81,32 @@ function modelBrand(id: string): string {
   return id.split('-')[0] ?? id;
 }
 
+function compareCatalogModels(a: Model<Api>, b: Model<Api>): number {
+  const av = modelFamily(a.id).version;
+  const bv = modelFamily(b.id).version;
+  return (
+    modelBrand(a.id).localeCompare(modelBrand(b.id)) ||
+    compareVersions(bv, av) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+/**
+ * Every useful chat model in the provider catalog, including superseded
+ * versions. Dated aliases and non-chat endpoints stay hidden because they are
+ * duplicates or cannot power an Atlas chat. Used by the picker's explicit
+ * "Show older models" mode.
+ */
+export function selectableModels(models: readonly Model<Api>[]): Model<Api>[] {
+  return models
+    .filter(
+      (model) =>
+        !DATED_ALIAS.test(model.id) &&
+        !EXCLUDED_MODEL_PATTERNS.some((re) => re.test(model.id)),
+    )
+    .sort(compareCatalogModels);
+}
+
 /**
  * The models we surface for one provider: the newest member of each family.
  *
@@ -107,14 +133,7 @@ export function featuredModels(models: readonly Model<Api>[]): Model<Api>[] {
       best.set(family, { model, version });
     }
   }
-  return [...best.values()]
-    .sort(
-      (a, b) =>
-        modelBrand(a.model.id).localeCompare(modelBrand(b.model.id)) ||
-        compareVersions(b.version, a.version) ||
-        a.model.id.localeCompare(b.model.id),
-    )
-    .map((entry) => entry.model);
+  return [...best.values()].map((entry) => entry.model).sort(compareCatalogModels);
 }
 
 /**

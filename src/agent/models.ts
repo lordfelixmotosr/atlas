@@ -10,6 +10,8 @@ export interface ModelOption {
   label: string;
   /** Surfaced as a "★ Recommended —" prefix in the picker; sorted first. */
   recommended?: boolean;
+  /** True when a newer model from the same family is available. */
+  older?: boolean;
   /**
    * Whether the model accepts image input. `false` means chat image
    * attachments can't be shown to it; `undefined` means we couldn't

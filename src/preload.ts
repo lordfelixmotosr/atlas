@@ -148,7 +148,8 @@ const api = {
     invoke('modmixer:settings:set-dangerously-skip-permissions', enabled),
   setCommunityLore: (enabled: boolean) =>
     invoke('modmixer:settings:set-community-lore', enabled),
-  listModels: () => invoke('modmixer:models:list'),
+  listModels: (includeOlder = false) =>
+    invoke('modmixer:models:list', includeOlder),
 
   // Conversations
   listConversations: () => invoke('modmixer:conversations:list'),

@@ -8,6 +8,7 @@ import {seedConversation, seedPanelState} from '../src/conversations-store';
 
 const conversation={id:'toolbar-fixture',scope:{type:'new'},title:'Toolbar fixture',createdAt:1,updatedAt:1,sessionFile:'',model:{provider:'openai-codex',modelId:'gpt-6.1-sol'},thinkingLevel:'max'};
 const model={key:'openai-codex/gpt-6.1-sol',provider:'openai-codex',modelId:'gpt-6.1-sol',providerLabel:'ChatGPT',label:'GPT-6.1 Sol',supportsImages:true};
+const olderModel={key:'openai-codex/gpt-6-sol',provider:'openai-codex',modelId:'gpt-6-sol',providerLabel:'ChatGPT',label:'GPT-6 Sol',older:true,supportsImages:true};
 const future=Math.floor(Date.now()/1000)+86400;
 const ready=(balance=1250.5)=>({status:'ready',buckets:[{id:'codex',name:'Codex',primary:{usedPercent:20,windowMinutes:300,resetsAt:future},secondary:{usedPercent:60,windowMinutes:10080,resetsAt:future+604800}}],credits:{balance,unlimited:false,hasCredits:true},updatedAt:Date.now()});
 const oauth=new Set(),eventHandlers=new Set();
@@ -21,6 +22,7 @@ window.modmixer=new Proxy({
   getAgentStatus:async()=>({busy:false,compacting:false}),
   getContextUsage:async()=>({tokens:398000,contextWindow:1050000}),
   getOpenAIAccounts:async()=>accountInfo(),
+  listModels:async includeOlder=>includeOlder?[model,olderModel]:[model],
   getOpenAIUsage:async force=>{if(force)forceRefreshes++;if(nextUsage)return nextUsage;return usage;},
   switchOpenAIAccount:async id=>{accountId=id;emitOAuth({type:'accounts-changed',providerId:'openai-codex'});emitOAuth({type:'links-changed',providerId:'openai-codex'});return accountInfo();},
 },{get:(target,key)=>key in target?target[key]:String(key).startsWith('on')?()=>()=>{}:async()=>null});
@@ -82,6 +84,14 @@ window.__atlasToolbarTest={
   },
   async run(){
     await settle();await settle();
+    const modelPicker=[...toolbar().querySelectorAll('select')].find(select=>[...select.options].some(option=>option.textContent.includes('GPT-6.1 Sol')));assert(modelPicker,'Model picker is missing');
+    assert(![...modelPicker.options].some(option=>option.textContent.includes('GPT-6 Sol (older)')),'Older model is visible before expansion');
+    const showOlder=[...modelPicker.options].find(option=>option.textContent.includes('Show older models'));assert(showOlder,'Show older models option is missing');
+    modelPicker.value=showOlder.value;modelPicker.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+    assert([...modelPicker.options].some(option=>option.textContent.includes('GPT-6 Sol (older)')),'Older model did not appear after expansion');
+    const hideOlder=[...modelPicker.options].find(option=>option.textContent.includes('Hide older models'));assert(hideOlder,'Hide older models option is missing');
+    modelPicker.value=hideOlder.value;modelPicker.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+    assert(![...modelPicker.options].some(option=>option.textContent.includes('GPT-6 Sol (older)')),'Older model stayed visible after collapse');
     assertWindowsAndCredits(1250.5);
     const layouts=[];
     for(const width of [1100,650,360]){fixtureRoot.style.width=width+'px';await settle();layouts.push(checkLayout(width));assertWindowsAndCredits(1250.5);}
@@ -102,7 +112,7 @@ window.__atlasToolbarTest={
     usage=ready(42);nextUsage=null;pendingUsage(usage);pendingUsage=null;await settle();
     assertWindowsAndCredits(42);assert(picker.value==='second','Account picker failed to switch');
     checkLayout(650);
-    return {wideAndNarrowNoOverlap:true,consistentControlSizes:true,sessionAndWeeklyUsageVisible:true,creditsWithWindowsVisible:true,zeroCreditsVisible:true,unavailableCreditsExplicit:true,staleCreditsLabelled:true,manualRefresh:true,accountSwitchClearsOldCredits:true,accountSwitchLoadsNewCredits:true,layouts};
+    return {wideAndNarrowNoOverlap:true,consistentControlSizes:true,olderModelsToggle:true,sessionAndWeeklyUsageVisible:true,creditsWithWindowsVisible:true,zeroCreditsVisible:true,unavailableCreditsExplicit:true,staleCreditsLabelled:true,manualRefresh:true,accountSwitchClearsOldCredits:true,accountSwitchLoadsNewCredits:true,layouts};
   },
   close(){reactRoot.unmount();},
 };
