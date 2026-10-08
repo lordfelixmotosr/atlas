@@ -10,7 +10,6 @@ import {startRebuild,cancelActiveRebuild} from '../agent/index/main-bridge';
 import {registerModMixerImportRoutes} from './modmixer-import-routes';
 import {readModChanges,recordModBaseline,prepareModDescription,saveModDescription} from './mod-changes';
 import {readModPrefs} from '../agent/mod-prefs';
-import {registerSpriteStudioRoutes} from './sprite-studio-routes';
 import {felixSetSpeed,felixSetShortcut,felixSessionStatus,felixSteer,felixCancelSteering,felixCompactContext,felixAccountsInfo,felixChangeOpenAIAccount,felixLoginOpenAIAccount,felixGetUsage,felixAgentWorking} from './agent-features';
 export function registerAtlasRoutes(ctx){
  const {ipc,host,getWindow,requireConsent}=ctx,root=process.env.ATLAS_ROOT;
@@ -18,11 +17,9 @@ export function registerAtlasRoutes(ctx){
  const files=require('./atlas/project-files.cjs'),bulk=require('./atlas/bulk-assets.cjs');
  const modRoot=folder=>files.projectRoot(getWorkspacePaths().workspaceDir,folder);
  const descriptions=new Map();
- const spriteJobs=new Map();
- const busy=()=>host.atlasModImport||host.atlasSpriteExport||host.felixAccountOperation||host.pendingOAuth||descriptions.size>0||spriteJobs.size>0||[...host.sessions.values()].some(x=>felixAgentWorking(x.session));
+ const busy=()=>host.atlasModImport||host.felixAccountOperation||host.pendingOAuth||descriptions.size>0||[...host.sessions.values()].some(x=>felixAgentWorking(x.session));
  registerModMixerImportRoutes(ctx,busy);
  const runtime=require('./atlas/runtime.cjs').init({root,resources:path.join(process.resourcesPath,"atlas"),host,getWindow,electron,rebuildIndex:()=>startRebuild(),isBusy:busy,hasDrafts:()=>drafts.size>0,cancelIndex:cancelActiveRebuild,requireConsent});
- registerSpriteStudioRoutes(ctx,{runtime,jobs:spriteJobs,busy,modRoot});
  onSetupProgress((game,event)=>{if(game==='rimworld')runtime.tasks.observeIndex(event);});
  const h=(name,fn)=>ipc.handle(name,(_e,...args)=>fn(...args));
  h('atlas:mods:changes',async(folder,comparison='latest')=>{if(!['latest','published','updated'].includes(comparison))throw new Error('Choose a saved comparison.');return readModChanges(modRoot(folder),(await readModPrefs(folder)).lastPublishedAt,comparison)});

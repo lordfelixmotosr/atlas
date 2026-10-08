@@ -1,4 +1,8 @@
-# Atlas 0.2.16 portable
+# Atlas 0.2.17 portable
+
+## 0.2.17 Sprite Studio removed
+
+Sprite Studio is removed from navigation, generation, import/export, preload APIs and native routes. Existing artwork files in `data/profile/sprite-studio` and earlier export backups are retained. This version does not read or initialize that saved studio data. Home, Library, mod assets, Workshop previews, chat images and the normal mod assistant remain available. The 0.2.16 connection/status repair is retained.
 
 ## 0.2.16 connection recovery and accurate chat activity
 
@@ -9,40 +13,6 @@ The chat distinguishes connecting, waiting for the model, receiving reasoning, r
 Recognized connection failures show an actionable message and keep received text in chat history. Retry or Resume requires an explicit click; active requests and mod-writing tools are not automatically replayed. Deep thinking can still take minutes, and HTTP streaming cannot guarantee that a provider never disconnects. The existing ten-minute model stream inactivity guard remains in place. This release does not lower thinking or automatically compact conversations.
 
 Verification uses local stream fixtures and a mocked bundled Codex provider at both speeds, plus the real Electron chat and progress components. No paid model requests are made during development tests. Transport reliability with the account and network still needs normal use after installation.
-
-## 0.2.15 selected directions, sprite gallery and progress
-
-Choose one, two or all three directions beside the **Design flight frames** button. All design actions use the same selected views. Other profiles let you select their required asset slots. Earlier views and approvals stay in place, and saved artwork guides later directions even before approval.
-
-The **Gallery** tab shows individual sprites and flight frames from the working revision or all revisions. Filter by direction and artwork type, browse pages, and inspect a larger preview with its revision label. Copied unchanged artwork is grouped to avoid repeated thumbnails; the original revision history remains available.
-
-Generation displays the selected views, model request count, elapsed time, and a Stop action. Model reply time uses an indeterminate bar. PNG rendering shows actual completed files and a percentage for that stage, followed by saving and review-ready status. Progress does not estimate remaining model time. Generated art still requires review and in-game visual testing.
-
-## 0.2.14 apparel, hats, buildings and furniture
-
-Sprite Studio now includes apparel, hats, buildings and furniture profiles. Apparel has one inventory icon and 15 worn overlays for the five vanilla adult body types. Hats have an inventory icon and three worn views; west mirrors east. Apparel previews offer schematic body/head fit guides. These guides assist alignment and do not prove fit in RimWorld. Juvenile and custom race body types and worn masks require additional artwork and configuration.
-
-Buildings and furniture support four explicit rotations, including west, or a single nonrotating texture. Set the occupied tile footprint separately from the image's drawn width and height. The preview shows a schematic footprint grid. Export suggests graphics, footprint and rotation XML fields for an existing definition; gameplay behavior, materials, costs and recipes remain a separate modding step.
-
-Choose **Import master art** when creating a family to copy an existing PNG as a reference or a selected asset view. Cancelling the picker creates no family; failed imports roll back the new family. References guide newly generated SVG artwork, while direct view imports keep the PNG's colors and still require approval. The palette control and restriction have been removed: describe colors in the design brief or use your master artwork as the reference. Large apparel requests run in batches of four views and commit one candidate only when every batch validates. Normal model usage applies to every batch.
-
-**Archive** hides a family from the active list while retaining its artwork and history. Choose the archived filter and **Restore** to resume it. **Delete family** asks for confirmation and removes that saved family; exported mod textures and export backups are retained. Existing bird and pawn families remain compatible.
-
-Design controls are now visible at the top of the workspace. **Design flight frames** uses the existing bird family and imported artwork to request all three layered views. Flat artwork has an explicit design action in Animation. Partial imports and revisions keep earlier working views visible; their approvals point to the actual source revision. Sprite references are sent as PNGs to preserve transparency. A selected model that cannot view images asks you to choose an image-capable model before designing from reference artwork.
-
-Workshop preview browsing accepts animated GIFs up to 1 MiB. Atlas retains the animation for the Publish panel and Steam preview, and creates a static first-frame `About/Preview.png` for RimWorld. Static replacement clears the older GIF after a successful write; a newer generated PNG also takes precedence. Preview imports keep backups and roll back failed writes. Steam upload/display still needs testing on the target Workshop item; development verification performs no Steam publishing.
-
-## 0.2.13 Sprite Studio
-
-Open **Sprite Studio** beside Library to create a saved RimWorld sprite family. Choose a static sprite or Odyssey bird, describe its identity, choose a palette and canvas, and import PNG references. **Generate selected views** uses your selected connected GPT/Claude model and normal account usage to design SVG layers, which Atlas validates and renders into transparent PNGs. It uses no separate image API. Small, graphic art is the focus; model quality and visual consistency still require review.
-
-Review south, east and north together, compare a candidate with the approved view, and approve each direction. Candidates and approvals are saved separately so a revision preserves earlier artwork. West previews mirror east, matching native RimWorld flight. Palette, canvas and animation structure stay locked after artwork exists. Recipes, reference hashes, sources, asset manifests and candidates live in `data/profile/sprite-studio`, outside your mods. That folder travels with the portable app.
-
-Bird candidates use separate body and wing layers. Atlas holds the body, head, tail and markings fixed and poses the wings into eight full-body PNG frames per direction. The preview follows RimWorld's `(frameCount + 1) * ticksPerFrame` timing, including its final-frame hold. Grounded draw size is set separately from flight draw size. A flat imported PNG can be approved as a static direction; it cannot supply a layered flight rig. North/east/south approval is required before export. Native flight does not provide an independent west animation.
-
-**Preview export** lists the exact PNG paths and replacement actions. Export applies only that reviewed plan, checks for intervening changes, backs up replacements outside the mod, and rolls back on a write failure. Bird exports include three grounded sprites and 24 flight textures. The suggested XML fragment is displayed for review and copying; existing definitions are not overwritten. PNG, canvas and geometry checks do not prove in-game appearance or animation quality: test the exported textures in RimWorld before publishing.
-
-Generation has its own cancellation and Activity status. It does not steer or interrupt a mod chat. Account switching and application restart wait for sprite work to settle.
 
 ## 0.2.12 Windows startup settings recovery
 

@@ -2,6 +2,9 @@
 // Included only in --verify-build artifacts, never in the delivered application.
 const fs=require('node:fs'),path=require('node:path'),{app}=require('electron');
 function init(){
+ const registeredChannels=new Set(),ipcMain=require('electron').ipcMain;
+ const originalHandle=ipcMain.handle.bind(ipcMain);
+ ipcMain.handle=(channel,callback)=>{registeredChannels.add(channel);return originalHandle(channel,callback);};
  const root=path.dirname(process.execPath),report=path.join(root,'data','verify-report.json');
  fs.mkdirSync(path.join(root,'data'),{recursive:true});
  fs.writeFileSync(path.join(root,'data/atlas-library.json'),JSON.stringify({source:'updates',autoUpdate:false,feedRevision:1}));
@@ -18,7 +21,15 @@ function init(){
   win.webContents.once('did-finish-load',()=>{if(win.webContents.getURL().startsWith('data:'))return;setTimeout(async()=>{
    try{
     const result=await win.webContents.executeJavaScript(`(async()=>({version:await window.modmixer.getAppVersion(),library:await window.modmixer.atlasLibraryStatus(),app:await window.modmixer.atlasAppStatus(),modelIds:(await window.modmixer.listModels()).map(model=>({id:model.id,contextWindow:model.contextWindow})),body:document.body.innerText,title:document.title,hasLibraryApi:typeof window.modmixer.atlasLibrarySearch==='function'}))()`);
-    if(process.env.ATLAS_VERIFY_SPRITES_ONLY){await require('./verify-sprites.cjs').run(win,root,result);write(result);app.exit(0);return;}
+    if(process.env.ATLAS_VERIFY_REMOVAL_ONLY){
+     result.nativeRemoval=await win.webContents.executeJavaScript(`(async()=>{const wait=()=>new Promise(resolve=>setTimeout(resolve,150));let nav;const deadline=Date.now()+10000;while(!(nav=document.querySelector('nav'))&&Date.now()<deadline)await wait();if(!nav)throw new Error('Main navigation did not render');const buttons=[...nav.querySelectorAll('button')];const label=button=>button.textContent.trim();if(buttons.some(button=>label(button)==='Sprite Studio'))throw new Error('Removed studio navigation is still present');const home=buttons.find(button=>label(button)==='Home'),library=buttons.find(button=>label(button)==='Library');if(!home||!library)throw new Error('Home or Library navigation is missing');library.click();await wait();await wait();if(document.querySelector('[data-atlas-sprite-studio]'))throw new Error('Removed studio rendered');home.click();await wait();await wait();const studioMethods=['spriteList','spriteCreate','spriteCreateFromMaster','spriteRead','spriteSaveRecipe','spriteImport','spriteGenerate','spriteCancel','spriteApprove','spriteExportPlan','spriteExportApply','spriteReveal','spriteArchive','spriteDelete'];if(studioMethods.some(name=>typeof window.modmixer[name]!=='undefined'))throw new Error('Removed studio API is still exposed');const retained=['projectFiles','projectRead','revealAsset','readPreviewImage','pickPreviewImage','getAgentStatus','compactContext','atlasAppInstall'];if(retained.some(name=>typeof window.modmixer[name]!=='function'))throw new Error('An unrelated asset/chat/update API was removed');return {homeAndLibrary:true,studioTabAbsent:true,studioApiAbsent:true,retainedApis:true}})()`);
+     if([...registeredChannels].some(channel=>channel.startsWith('atlas:sprites:')))throw new Error('Removed studio IPC handlers are still registered');
+     result.nativeRemoval.studioRoutesAbsent=true;
+     if(fs.existsSync(path.join(root,'data/profile/sprite-studio')))throw new Error('A fresh install still initializes the removed studio');
+     result.nativeRemoval.noStudioInitialization=true;
+     fs.writeFileSync(path.join(root,'data/Atlas-without-sprite-studio.png'),(await win.webContents.capturePage()).toPNG());
+     write(result);app.exit(0);return;
+    }
     if(process.env.ATLAS_VERIFY_BRANDING_ONLY){
      result.nativeBranding=await win.webContents.executeJavaScript(`(async()=>{const deadline=Date.now()+10000;let image;while(!(image=document.querySelector('.atlas-logo'))&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));if(!image)throw new Error('Atlas header logo is missing');await image.decode();const box=image.getBoundingClientRect();return {loaded:image.complete,width:image.naturalWidth,height:image.naturalHeight,displayWidth:box.width,displayHeight:box.height,source:image.currentSrc}})()`);
      if(!result.nativeBranding.loaded||result.nativeBranding.width<=0||result.nativeBranding.height<=0)throw new Error('The supplied Atlas globe logo did not load.');

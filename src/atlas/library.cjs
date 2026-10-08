@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const VERSION = '0.2.16';
+const VERSION = '0.2.17';
 const ONLINE_SOURCE = 'https://github.com/lordfelixmotosr/atlas/releases/latest/download/';
 const MAX_BYTES = 24 * 1024 * 1024;
 const SAFE_ID = /^[a-z][a-z0-9-]{0,63}$/;

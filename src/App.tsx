@@ -1,5 +1,4 @@
 import {AtlasActivityButton} from './atlas/activity-center';
-import {SpriteStudio} from './atlas/sprite-studio';
 import {confirmProjectDrafts} from './atlas/files-view';
 import { AtlasLogo } from './components/atlas-logo';
 import {AtlasKnowledgeButton} from "./atlas/library-ui";
@@ -737,7 +736,6 @@ export function App() {
             sessionActive={!!session}
             onSelectMods={() => setView('mods')}
             onSelectLibrary={() => setView('library')}
-            onSelectSprites={() => setView('sprites')}
             onSelectTab={(folder) => {
               setFocusedFolder(folder);
               setView('mod');
@@ -810,9 +808,7 @@ export function App() {
         </div>
       )}
 
-      {view === 'sprites' ? (
-        <SpriteStudio mods={mods.map(mod=>({folder:mod.folder,name:mod.about.name,game:mod.prefs.game||'rimworld'}))} models={availableModels} onConnect={()=>openSettings('providers')} />
-      ) : view === 'library' ? (
+      {view === 'library' ? (
         getGame(resolveGameId(activeGame)).capabilities.steamWorkshop ? (
           <LibraryView
             envelope={registryEnvelope}

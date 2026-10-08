@@ -35,7 +35,6 @@ function init({root,resources,host,getWindow,electron,rebuildIndex,invalidatePat
   ipcMain.handle('atlas:tasks:clear',()=>tasks.clear());
   ipcMain.handle('atlas:tasks:action',async(_e,id,action)=>{
     const task=tasks.items.get(id);if(!task)throw new Error('Task is no longer available.');
-    if(task.kind==='sprite'&&task.status==='running')return host.atlasSpriteTaskAction?.(task.projectId,action);
     if(task.kind==='download'){if(action==='pause')return application.pause();if(action==='cancel')return application.cancel();if(action==='retry')return application.download();if(action==='install')return application.install();}
     if(task.kind==='index'){if(action==='cancel'&&task.status==='running'){tasks.update(id,{cancelRequested:true,phase:'Stopping index'});return cancelIndex?.();}if(action==='retry'&&task.status!=='running'){if(busy())throw new Error('Finish active work before rebuilding the index.');return rebuildIndex();}}
     if(['chat','build'].includes(task.kind)){if(action==='cancel'&&task.status==='running')return host.interrupt(task.conversationId);if(action==='retry'&&task.kind==='chat'&&['failed','cancelled'].includes(task.status)){requireConsent?.();return host.retry(task.conversationId);}}

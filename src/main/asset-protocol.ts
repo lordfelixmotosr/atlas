@@ -11,7 +11,6 @@
 
 import { net, protocol } from 'electron';
 import { pathToFileURL } from 'node:url';
-import path from 'node:path';
 import { getRegistry } from '../agent/registry/index.js';
 import { getWorkspacePaths } from '../agent/workspace.js';
 import { resolveAssetRequest } from './asset-paths.js';
@@ -42,8 +41,7 @@ export function registerAssetSchemeAsPrivileged(): void {
  */
 export function installAssetProtocolHandler(): void {
   protocol.handle(SCHEME, async (request) => {
-    const studioRoot = process.env.ATLAS_ROOT ? path.join(process.env.ATLAS_ROOT, 'data/profile/sprite-studio') : undefined;
-    const asset = await resolveAssetRequest(request.url, getWorkspacePaths().workspaceDir, getRegistry().getSnapshot().mods, studioRoot);
+    const asset = await resolveAssetRequest(request.url, getWorkspacePaths().workspaceDir, getRegistry().getSnapshot().mods);
     if (!asset) return new Response(null, { status: 404 });
     try {
       const response = await net.fetch(pathToFileURL(asset.filePath).toString());

@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.16 native source release built and verified",
+  "status": "Atlas 0.2.17 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -162,7 +162,8 @@
     "0.2.13: Sprite Studio adds saved directional families, connected-model SVG generation, fixed-body bird animation, PNG reference import and reviewed transactional export",
     "0.2.14: Sprite Studio expands to apparel, hats, buildings and furniture with direct master imports, archive/restore/delete and colors from reference art or design briefs",
     "0.2.15: Sprite Studio selected directions, paginated sprite/frame gallery and actual PNG rendering progress; saved artwork guides sequential directions while earlier candidates and approvals remain preserved",
-    "0.2.16: Codex HTTP streaming, distinct connecting/waiting/reasoning/reply states, response-data silence notices and explicit connection recovery; thinking and speed settings preserved"
+    "0.2.16: Codex HTTP streaming, distinct connecting/waiting/reasoning/reply states, response-data silence notices and explicit connection recovery; thinking and speed settings preserved",
+    "0.2.17: Sprite Studio removed from navigation, generation, routes, preload APIs and account gates; saved profile artwork and previous export backups retained"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -177,7 +178,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.16",
+  "version": "0.2.17",
   "supportedGames": [
     "rimworld"
   ],
@@ -285,24 +286,28 @@
       "0.2.16 source type checking and local regression tests passed; mocked bundled Codex provider verified HTTP streaming at both speeds with unchanged supplied reasoning, cancellation, partial text retention and no automatic replay",
       "0.2.16 native Electron progress/chat components verified for connecting, reasoning, silence, tools, narrow panels, settled state, partial error and explicit Retry; no live model requests",
       "0.2.16 production startup health verified",
-      "0.2.16 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.16 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.17 source type checking and the remaining local regression tests passed; chat, accounts, asset preview and update behavior retained",
+      "0.2.17 native Electron Home/Library navigation, missing Studio APIs/routes and absent fresh-install Studio initialization verified; no live model requests",
+      "0.2.17 production startup health verified",
+      "0.2.17 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "portable": {
-      "path": "Atlas-0.2.16-win-x64-portable.zip",
-      "size": 401113686,
-      "sha256": "e5188525970552022c08428fda6dcc8e47cb1ca7d0fed76db77fe233b9e10a0d"
+      "path": "Atlas-0.2.17-win-x64-portable.zip",
+      "size": 401065713,
+      "sha256": "59c815adcaa7ddec0b8409a8741badea774347cc289bc9011013940d861f1058"
     },
     "full-update": {
-      "path": "Atlas-0.2.16-win-x64-full-update.zip",
-      "size": 400752291,
-      "sha256": "e20067a2b00023497974420b27bedfe2bc53863ab6090c934d1c6d4ed6d7f81f"
+      "path": "Atlas-0.2.17-win-x64-full-update.zip",
+      "size": 400704318,
+      "sha256": "dee23f3b77e03ba638f8dfde472204e2d6eaf2809f958b93381b92e31462fdad"
     },
     "application-update": {
-      "path": "Atlas-0.2.16-win-x64-application-update.zip",
-      "size": 98663826,
-      "sha256": "15b1fed96a3f9afa5b45a8e2a21915e4691185f41e8c5c7b14efe8cf544c39dd"
+      "path": "Atlas-0.2.17-win-x64-application-update.zip",
+      "size": 98615853,
+      "sha256": "564d7139c5bcfa9297b254a4c0e707766dcfe443f3159ecb40e820493adc8aaf"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"
