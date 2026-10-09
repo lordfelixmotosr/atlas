@@ -1,5 +1,6 @@
 import {atlasModelCapabilities} from '../atlas/model-capabilities';
 import {felixWithSpeed,felixGuardStream,felixGateAccountSession,felixObserveSession,felixObserveModelStream,felixAccountEvent,felixInterrupt,felixAgentWorking,felixCheckCompacting,felixCheckIdleSteering,felixSendWithAccount,felixContinueSession,felixLoginOpenAIAccount,felixChangeOpenAIAccount,felixRefreshIdleModels,felixClearUsage,felixContextUsage,felixAssertAccountReady,felixSteeringItems} from "../atlas/agent-features";
+import {clearClaudeUsage} from '../atlas/claude-usage';
 import { app, shell, type BrowserWindow } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -2252,6 +2253,7 @@ export class AgentHost {
 
   private emitOAuth(event: OAuthEvent): void {
     if(event.type==="links-changed"||event.providerId==="openai-codex")felixClearUsage();
+    if(event.type==="links-changed"||event.providerId==="anthropic")clearClaudeUsage();
     this.sendToRenderer('modmixer:oauth:event', event);
   }
 

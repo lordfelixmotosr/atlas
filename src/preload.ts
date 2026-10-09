@@ -44,6 +44,7 @@ const api = {
   setSentenceShortcut:(value:any)=>ipcRenderer.invoke('modmixer:settings:set-sentence-shortcut',value),
   onSentenceShortcutChanged:(fn:any)=>{const cb=(_e:any,x:any)=>fn(x);ipcRenderer.on('modmixer:settings:sentence-shortcut',cb);return()=>ipcRenderer.removeListener('modmixer:settings:sentence-shortcut',cb)},
   getOpenAIUsage:(force=false)=>ipcRenderer.invoke('modmixer:usage:openai',force),
+  getClaudeUsage:(force=false):Promise<import('./atlas/claude-usage').ClaudeUsage>=>ipcRenderer.invoke('atlas:usage:claude',force),
   getOpenAIAccounts:()=>ipcRenderer.invoke('modmixer:accounts:openai:list'),switchOpenAIAccount:(id:string)=>ipcRenderer.invoke('modmixer:accounts:openai:switch',id),renameOpenAIAccount:(id:string,label:string)=>ipcRenderer.invoke('modmixer:accounts:openai:rename',id,label),removeOpenAIAccount:(id:string)=>ipcRenderer.invoke('modmixer:accounts:openai:remove',id),loginOpenAIAccount:(id?:string,label?:string)=>ipcRenderer.invoke('modmixer:accounts:openai:login',id,label),
   steer:(id:string,text:string,files?:any[])=>ipcRenderer.invoke('modmixer:agent:steer',id,text,files),compactContext:(id:string)=>ipcRenderer.invoke('modmixer:agent:compact',id),getAgentStatus:(id:string,includeMessages=false)=>ipcRenderer.invoke('modmixer:agent:status',id,includeMessages),
   revealAsset:(folder:string,file:string)=>ipcRenderer.invoke('atlas:assets:reveal',folder,file),

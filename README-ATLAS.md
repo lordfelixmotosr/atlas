@@ -1,4 +1,8 @@
-# Atlas 0.2.18 portable
+# Atlas 0.2.19 portable
+
+## 0.2.19 Claude usage
+
+Claude chats now show the available five-hour, weekly, and model-specific plan limits in the composer. The display uses the connected Claude OAuth account, refreshes conservatively, and marks old results as stale if Claude's usage service is unavailable. API-key billing is separate and has no Claude plan percentage.
 
 ## 0.2.18 older model access
 

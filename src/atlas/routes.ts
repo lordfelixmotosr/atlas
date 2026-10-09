@@ -11,6 +11,7 @@ import {registerModMixerImportRoutes} from './modmixer-import-routes';
 import {readModChanges,recordModBaseline,prepareModDescription,saveModDescription} from './mod-changes';
 import {readModPrefs} from '../agent/mod-prefs';
 import {felixSetSpeed,felixSetShortcut,felixSessionStatus,felixSteer,felixCancelSteering,felixCompactContext,felixAccountsInfo,felixChangeOpenAIAccount,felixLoginOpenAIAccount,felixGetUsage,felixAgentWorking} from './agent-features';
+import {getClaudeUsage} from './claude-usage';
 export function registerAtlasRoutes(ctx){
  const {ipc,host,getWindow,requireConsent}=ctx,root=process.env.ATLAS_ROOT;
  const drafts=new Set();
@@ -36,7 +37,7 @@ export function registerAtlasRoutes(ctx){
  });
  h('atlas:mods:description-cancel',folder=>{modRoot(folder);descriptions.get(folder)?.abort();});
  electron.app.on('before-quit',()=>{for(const controller of descriptions.values())controller.abort();});
- h('modmixer:settings:set-openai-speed',felixSetSpeed);h('modmixer:settings:set-sentence-shortcut',felixSetShortcut);h('modmixer:usage:openai',force=>felixGetUsage(host,force===true));
+ h('modmixer:settings:set-openai-speed',felixSetSpeed);h('modmixer:settings:set-sentence-shortcut',felixSetShortcut);h('modmixer:usage:openai',force=>felixGetUsage(host,force===true));h('atlas:usage:claude',force=>getClaudeUsage(host,force===true));
  h('modmixer:agent:status',(id,messages)=>felixSessionStatus(host,id,messages===true));h('modmixer:agent:steer',(id,text,attachments)=>{requireConsent();return felixSteer(host,id,text,attachments)});h('modmixer:agent:compact',id=>{requireConsent();return felixCompactContext(host,id)});
  h('atlas:agent:cancel-steering',(id,ids)=>felixCancelSteering(host,id,ids));
  h('modmixer:accounts:openai:list',()=>felixAccountsInfo(host));h('modmixer:accounts:openai:switch',id=>felixChangeOpenAIAccount(host,'switch',id));h('modmixer:accounts:openai:rename',(id,label)=>felixChangeOpenAIAccount(host,'rename',id,label));h('modmixer:accounts:openai:remove',id=>felixChangeOpenAIAccount(host,'remove',id));h('modmixer:accounts:openai:login',(id,label)=>felixLoginOpenAIAccount(host,id,label));

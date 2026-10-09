@@ -1,4 +1,5 @@
 import {AgentActivity} from "../atlas/activity";
+import {ClaudeUsageControl} from '../atlas/claude-usage-control';
 import {FelixSpeedControl,FelixUsageControl,FelixAccountControl,FelixSteeringQueue,felixUseComposerFocus} from "../atlas/controls";
 import {applyCompactResult,applySteeringQueue} from "../conversations-store";
 import {
@@ -684,6 +685,7 @@ export function ChatPanel({
             </div>
             <div className="felix-toolbar-status" data-atlas-composer-status="">
               <FelixUsageControl model={model} />
+              <ClaudeUsageControl model={model} />
               <div className="felix-context-actions">
                 {contextUsage && contextUsage.tokens !== null && (() => {
                   // Color escalates as the context window fills up — at >95%
