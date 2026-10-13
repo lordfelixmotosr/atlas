@@ -76,7 +76,7 @@ export function registerLifecycleRoutes(ctx: RouteContext): void {
       properties: ['openDirectory'],
       title: 'Pick your RimWorld install folder',
       message:
-        'Choose the folder containing RimWorldWin64_Data, RimWorldMac.app, or RimWorldLinux_Data.',
+        'Choose the RimWorld folder containing RimWorld.exe and Data (1.7), or the Unity game data folder / RimWorldMac.app (1.6).',
     });
     if (result.canceled || result.filePaths.length === 0) return null;
     const chosen = result.filePaths[0];

@@ -16,6 +16,7 @@
  */
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { inspectRimWorldRuntime, renderGameReferences, renderFrameworkPackage, escapeProjectXml } from './runtime.js';
 
 /**
  * Write Source/<assemblyName>.csproj + Source/Mod.cs into `modDir`, wired to
@@ -52,15 +53,13 @@ function renderCsproj(input: {
   assemblyName: string;
   managedDir: string | null;
 }): string {
-  const hint = (dll: string) =>
-    input.managedDir
-      ? path.join(input.managedDir, dll).replace(/\\/g, '\\\\')
-      : '';
+  if (!input.managedDir) throw new Error('Select a RimWorld installation in Settings before adding C#.');
+  const runtime = inspectRimWorldRuntime(input.managedDir);
   return `<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
-    <AssemblyName>${input.assemblyName}</AssemblyName>
-    <RootNamespace>${input.assemblyName}</RootNamespace>
+    <TargetFramework>${runtime.targetFramework}</TargetFramework>
+    <AssemblyName>${escapeProjectXml(input.assemblyName)}</AssemblyName>
+    <RootNamespace>${escapeProjectXml(input.assemblyName)}</RootNamespace>
     <OutputPath>..\\Assemblies\\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
@@ -68,21 +67,10 @@ function renderCsproj(input: {
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+${renderFrameworkPackage(runtime)}
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>${hint('Assembly-CSharp.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>${hint('UnityEngine.CoreModule.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine">
-      <HintPath>${hint('UnityEngine.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
+${renderGameReferences(runtime)}
   </ItemGroup>
 </Project>
 `;

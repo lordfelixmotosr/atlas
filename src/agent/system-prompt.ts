@@ -1,3 +1,4 @@
+import { inspectRimWorldRuntime } from './rimworld/runtime.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import { formatSkillsForPrompt } from '@earendil-works/pi-coding-agent';
@@ -26,6 +27,7 @@ interface PromptContext {
   workshopDir: string | null;
   defaultAuthor: string;
   gameVersion: string | null;
+  runtimeDescription: string;
   autoLaunch: boolean;
 }
 
@@ -37,23 +39,21 @@ interface PromptContext {
 // Whatever these hold when the prompt is composed is frozen into the
 // conversation (see buildSystemPrompt's invariant) — which is exactly why
 // `autoLaunch` applies to new chats only.
-let cachedGameVersion: { value: string | null } | null = null;
 
 function gatherContext(): PromptContext {
   const ws = getWorkspacePaths();
   const rw = detectRimWorldPaths();
-  if (!cachedGameVersion) {
-    cachedGameVersion = { value: detectGameVersionMajorMinorSync() };
-  }
+
   return {
     workspaceDir: ws.workspaceDir,
     rimworldModsDir: rw.modsDir,
     managedDir: rw.managedDir,
+    runtimeDescription: rw.managedDir ? (() => { try { const r = inspectRimWorldRuntime(rw.managedDir); return r.engine + ", target " + r.targetFramework + ", references: " + r.references.join(", "); } catch (e) { return String(e); } })() : "unknown",
     playerLog: rw.playerLog,
     modsConfig: rw.modsConfig,
     workshopDir: rw.workshopDir,
     defaultAuthor: loadSettings().defaultAuthor,
-    gameVersion: cachedGameVersion.value,
+    gameVersion: detectGameVersionMajorMinorSync(),
     autoLaunch: loadSettings().autoLaunch,
   };
 }
@@ -163,6 +163,7 @@ function pathsBlock(ctx: PromptContext): string {
   return `Workspace root (each mod is a subfolder here): ${ctx.workspaceDir}
 RimWorld Mods/ (symlink target): ${ctx.rimworldModsDir}
 Default author handle: ${ctx.defaultAuthor} (use this as the packageId prefix unless the user specifies otherwise — e.g. ${ctx.defaultAuthor}.MyMod).
+RimWorld runtime: ${ctx.runtimeDescription}. Use the installed source index; rebuild after switching game versions. For Waylith, UnityEngine namespaces can remain through compatibility assemblies; do not invent UnityEngine DLL paths. Keep 1.6 and 1.7 build outputs separate when supporting both. Do not mark an existing mod 1.7-compatible until tested.
 RimWorld game version: ${ctx.gameVersion ?? '(unknown — game has not been launched yet)'} — new mods default their About.xml supportedVersions to this. Only override (e.g. ["1.5","1.6"]) when the user explicitly asks for back-compat.
 Detected install:
 - Assembly-CSharp.dll: ${ctx.managedDir ?? '(not found — RimWorld may not be installed via Steam)'}
@@ -256,7 +257,7 @@ ${schematicSnapshotBlock(modFolder)}
 This mod folder is your working directory. read/write/edit/grep/find/ls, bash, and the image tools all resolve relative paths against it — so write \`Defs/Foo.xml\`, \`Source/Mod.cs\`, \`Textures/UI/Icon.png\`, and \`rm Source\`, NOT \`${modFolder}/Defs/Foo.xml\`. Only use an absolute path to inspect another mod or read game files; otherwise stay inside this folder.
 The folder name is an opaque internal id — the user-facing name and packageId live in About.xml.
 
-C# is opt-in: this mod is XML-only until you call add_csharp once (it lays down a buildable Source/ project wired to Assembly-CSharp, net472). After that, write your .cs under Source/ and build_mod compiles them. Most mods are XML-only and never need it — don't call it speculatively.
+C# is opt-in: this mod is XML-only until you call add_csharp once (it lays down a buildable Source/ project wired to the installed game assemblies and target framework). After that, write your .cs under Source/ and build_mod compiles them. Most mods are XML-only and never need it — don't call it speculatively.
 
 To rename or reword the mod's identity, call set_mod_metadata (it operates on this mod — no folder arg). About.xml's <description> is the user's marketing copy — only rewrite it when they ask. Use update_schematic for the agent's running spec.
 

@@ -1,11 +1,10 @@
 // Materializes an isolated savedata folder for `-savedatafolder=<path>` test
-// launches. RimWorld 1.6 honors the flag for the entire LocalLow/<RimWorld>
+// launches. RimWorld 1.6 and 1.7 honor the flag for the savedata
 // tree (saves, scenarios, Config/) — so writing a reduced ModsConfig.xml here
 // lets the user test a workspace mod without ever touching their real mod
-// list. Note: -savedatafolder does NOT affect Unity's Player.log location
-// (that follows Application.persistentDataPath, which is unaffected by
-// RimWorld's own flag), so any forensic Player.log reads work the same way
-// regardless of isolated mode.
+// list. The engine log remains in the normal profile: Player.log for Unity,
+// Logs/Player.log for Waylith. Resolve it through detectRimWorldPaths in both
+// normal and isolated mode.
 
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';

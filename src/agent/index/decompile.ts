@@ -12,6 +12,9 @@ import type { IndexProgressListener } from './progress.js';
 const PRIMARY_ASSEMBLIES = [
   'Assembly-CSharp.dll',
   'Assembly-CSharp-firstpass.dll',
+  'UnityStubs.dll',
+  'Waylith.UnityCompat.dll',
+  'Waylith.dll',
 ];
 
 /** DLC assemblies — present per-DLC the user owns. */

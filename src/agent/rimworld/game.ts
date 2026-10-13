@@ -44,7 +44,7 @@ export async function isRimWorldRunning(): Promise<boolean> {
       // WMI. The earlier `/FI "IMAGENAME eq …"` form went through Winmgmt
       // and hung the whole agent for 5 minutes when that service was sick.
       const { stdout } = await execWithTimeout('tasklist /NH /FO CSV');
-      return /^"RimWorldWin64\.exe"/im.test(stdout);
+      return /^"RimWorld(?:Win64)?\.exe"/im.test(stdout);
     }
   } catch {
     // pgrep exits non-zero when no match; tasklist may time out via
@@ -161,7 +161,8 @@ export async function quitRimWorld(
       await execWithTimeout('pkill -i rimworld');
       killed = true;
     } else if (os === 'win32') {
-      await execWithTimeout('taskkill /IM RimWorldWin64.exe /F');
+      const outcomes = await Promise.allSettled(['RimWorld.exe', 'RimWorldWin64.exe'].map(name => execWithTimeout('taskkill /IM ' + name + ' /F')));
+      if (!outcomes.some(outcome => outcome.status === 'fulfilled')) throw new Error('No RimWorld process exited');
       killed = true;
     }
   } catch {
@@ -298,7 +299,7 @@ export async function launchRimWorld(
     return { executable, args, alreadyRunning: true };
   }
 
-  if (args.length === 0) {
+  if (args.length === 0 && detectRimWorldPaths().engine !== 'waylith') {
     const url = `steam://rungameid/${RIMWORLD_APP_ID}`;
     const { file, args: openArgs } = openUrlCommand(url);
     spawn(file, openArgs, { detached: true, stdio: 'ignore' }).unref();

@@ -51,29 +51,6 @@ export interface EnvSnapshot {
   };
 }
 
-/**
- * Read a few bytes of Version.txt to infer the RimWorld major.minor version.
- * Falls back to null if the file is absent or unreadable. We intentionally
- * don't surface a parse error — the version is for display only.
- */
-function readRimWorldVersion(installRoot: string): string | null {
-  const candidates = [
-    path.join(installRoot, 'Version.txt'),
-    // macOS bundle layout
-    path.join(installRoot, 'RimWorldMac.app/Version.txt'),
-  ];
-  for (const c of candidates) {
-    try {
-      const raw = fs.readFileSync(c, 'utf8').trim();
-      const m = raw.match(/^\d+\.\d+(?:\.\d+)?/);
-      if (m) return m[0];
-    } catch {
-      // try next
-    }
-  }
-  return null;
-}
-
 function detectDlcs(dataDir: string | null, managedDir: string | null): string[] {
   if (!dataDir && !managedDir) return [];
   const found: string[] = [];
@@ -129,18 +106,14 @@ async function probeModsDirWritable(modsDir: string): Promise<EnvCheck> {
 export async function detectEnv(): Promise<EnvSnapshot> {
   const rim = detectRimWorldPaths();
 
-  const installRoot =
-    rim.managedDir
-      ? // <install>/RimWorldWin64_Data/Managed/ → <install>/
-        path.dirname(path.dirname(rim.managedDir))
-      : null;
+  const installRoot = rim.installRoot;
 
   const rimworld: EnvSnapshot['rimworld'] = rim.managedDir
     ? {
         ok: true,
-        detail: null,
+        detail: rim.engine === 'waylith' ? 'Waylith Engine' : 'Unity',
         path: installRoot,
-        version: installRoot ? readRimWorldVersion(installRoot) : null,
+        version: rim.version?.match(/^\d+\.\d+(?:\.\d+)?/)?.[0] ?? null,
         dlcs: detectDlcs(rim.dataDir, rim.managedDir),
       }
     : {

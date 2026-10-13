@@ -306,14 +306,15 @@ class ModRegistry {
       mod: byPackageId.get(id) ?? null,
     }));
     const missingActive = active.filter((a) => !a.mod).map((a) => a.packageId);
-    const gameVersionMajorMinor = parseMajorMinor(config.version);
+    const gameVersion = detectRimWorldPaths().version ?? config.version;
+    const gameVersionMajorMinor = parseMajorMinor(gameVersion);
 
     this.snapshot = {
       mods,
       active,
       activeOrder,
       missingActive,
-      gameVersion: config.version,
+      gameVersion,
       gameVersionMajorMinor,
     };
     for (const fn of this.listeners) {

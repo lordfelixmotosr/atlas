@@ -4,7 +4,7 @@ import { detectRimWorldPaths } from '../paths.js';
 import { getIndexPaths } from './paths.js';
 
 /** Bump when the schema or tool contract changes so existing indexes get nuked. */
-export const INDEX_SCHEMA_VERSION = 2;
+export const INDEX_SCHEMA_VERSION = 3;
 
 export interface IndexMeta {
   schemaVersion: number;
@@ -57,26 +57,7 @@ export function detectFingerprint(modFingerprints: string[] = []): IndexFingerpr
   const rim = detectRimWorldPaths();
   if (!rim.managedDir || !rim.dataDir) return null;
   const dataDir = rim.dataDir;
-  // Version.txt sits near the install root. On Windows/Linux dataDir is
-  // <install>/Data, so Version.txt is one level up. On macOS dataDir is
-  // <bundle>/Contents/Resources, and Version.txt lives at <bundle>/Version.txt
-  // (two levels up). Probe both.
-  const installRoot = path.dirname(dataDir);
-  const versionCandidates = [
-    path.join(installRoot, 'Version.txt'),
-    path.join(installRoot, '..', 'Version.txt'),
-  ];
-  let rimworldVersion = 'unknown';
-  for (const c of versionCandidates) {
-    if (fs.existsSync(c)) {
-      try {
-        rimworldVersion = fs.readFileSync(c, 'utf8').trim();
-        break;
-      } catch {
-        // try next
-      }
-    }
-  }
+  const rimworldVersion = rim.version ?? 'unknown';
 
   // Detect DLC packs by looking at <Data>/<Pack>/ directories. Standard set:
   // Core, Royalty, Ideology, Biotech, Anomaly, Odyssey. Any pack folder with

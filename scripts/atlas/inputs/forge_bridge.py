@@ -1,6 +1,7 @@
-"""ModMixer adapter for the user's installed RimWorldForge. See references/LICENSE."""
+"""Atlas adapter for the bundled RimWorldForge. See the bundled LICENSE."""
 from __future__ import annotations
 
+import os
 import argparse
 import copy
 import hashlib
@@ -13,16 +14,62 @@ import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parent.parent
-CONFIG = json.loads((BASE / "integration.json").read_text(encoding="utf-8-sig"))
-FORGE_ROOT = Path(CONFIG["forge_root"]).resolve()
+BASE = Path(__file__).resolve().parent
+CONFIG = {}
+FORGE_ROOT = BASE
 sys.path.insert(0, str(FORGE_ROOT / "src"))
 from rwforge import __version__ as ENGINE_VERSION
 from rwforge import cli, discovery, indexer, validator
 from rwforge.util import read_json, safe_slug
 
-DATA = BASE / "data"
+# Adapt the foundation's Unity-only discovery without rewriting its source.
+_legacy_managed_dir = discovery.managed_dir
+_legacy_player_log_path = discovery.player_log_path
+discovery.managed_dir = lambda game: game if (game / "Waylith.dll").is_file() and (game / "Assembly-CSharp.dll").is_file() else _legacy_managed_dir(game)
+
+
+def atlas_player_log_path() -> Path:
+    game = discovery.discover_game()
+    legacy = _legacy_player_log_path()
+    if game and (game / "Waylith.dll").is_file():
+        if sys.platform == "darwin":
+            return Path.home() / "Library/Application Support/Ludeon Studios/RimWorld by Ludeon Studios/Logs/Player.log"
+        return legacy.parent / "Logs" / "Player.log"
+    return legacy
+
+
+discovery.player_log_path = atlas_player_log_path
+
+
+def selected_game_version() -> str:
+    game = discovery.discover_game()
+    version = discovery.game_version(game) if game else None
+    major_minor = ".".join((version or "").split(".")[:2])
+    if major_minor not in ("1.6", "1.7"):
+        raise ValueError("Atlas Forge supports installed RimWorld 1.6 or 1.7; select the game folder first.")
+    return major_minor
+
+DATA = Path(os.environ.get("ATLAS_ROOT", str(BASE.parent.parent))) / "data" / "forge"
 CURRENT = DATA / "current-index.json"
+
+_legacy_discover_game = discovery.discover_game
+
+
+def atlas_discover_game(explicit: str | None = None) -> Path | None:
+    if not explicit and not os.environ.get("RIMWORLD_ROOT"):
+        try:
+            settings = read_json(DATA.parent / "profile" / "settings.json")
+            selected = settings.get("rimworldInstallOverride")
+            if isinstance(selected, str) and selected:
+                found = _legacy_discover_game(selected)
+                if found:
+                    return found
+        except (OSError, ValueError, TypeError):
+            pass
+    return _legacy_discover_game(explicit)
+
+
+discovery.discover_game = atlas_discover_game
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -88,8 +135,7 @@ def refresh_index(ensure: bool) -> dict:
     if not game:
         raise FileNotFoundError("RimWorld was not found; configure RIMWORLD_ROOT.")
     version = discovery.game_version(game)
-    if version and not version.startswith("1.6"):
-        raise ValueError("This Forge adapter targets RimWorld 1.6; detected " + version)
+    selected_game_version()
     directory = DATA / "indexes"
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / ("defs-" + uuid.uuid4().hex + ".json")
@@ -103,7 +149,8 @@ def refresh_index(ensure: bool) -> dict:
     return {**result, **status, "reused": False}
 
 
-def load_roots(mod: Path) -> tuple[list[Path], list[dict], bool]:
+def load_roots(mod: Path, game_version: str | None = None) -> tuple[list[Path], list[dict], bool]:
+    game_version = game_version or selected_game_version()
     problems, complete = [], True
     load = mod / "LoadFolders.xml"
     roots = []
@@ -112,12 +159,12 @@ def load_roots(mod: Path) -> tuple[list[Path], list[dict], bool]:
             document = ET.parse(load).getroot()
             if document.tag != "loadFolders":
                 raise ValueError("LoadFolders.xml must have a <loadFolders> root")
-            version = next((node for node in document if node.tag.lstrip("v") == "1.6"), None)
+            version = next((node for node in document if node.tag.lstrip("v") == game_version), None)
             if version is None:
-                raise ValueError("LoadFolders.xml has no 1.6 entry; active content could not be selected")
+                raise ValueError("LoadFolders.xml has no " + game_version + " entry; verify the game's fallback before declaring this mod compatible")
             for entry in version:
                 if entry.tag != "li":
-                    raise ValueError("Unsupported node in the 1.6 load-folder list: " + entry.tag)
+                    raise ValueError("Unsupported node in the " + game_version + " load-folder list: " + entry.tag)
                 if entry.attrib:
                     complete = False
                     problems.append({"level": "warning", "code": "adapter.conditional_load_folder",
@@ -134,7 +181,8 @@ def load_roots(mod: Path) -> tuple[list[Path], list[dict], bool]:
             problems.append({"level": "error", "code": "adapter.load_folders", "message": str(error), "file": str(load)})
             complete = False
     else:
-        roots = [mod] + [mod / name for name in ("Common", "1.6") if (mod / name).is_dir()]
+        versions = [name for name in ("1.6", "1.7") if name <= game_version and (mod / name).is_dir()]
+        roots = [mod] + [mod / name for name in ("Common", *(versions[-1:])) if (mod / name).is_dir()]
     return list(dict.fromkeys(roots)), problems, complete
 
 
@@ -224,7 +272,15 @@ def validate_mod(mod: Path, max_problems: int = 40) -> dict:
             validator._texture_exists = original_texture_check
         # Vanilla permits a ThingDef and PawnKindDef to share a name (e.g. Muffalo).
         # Replace Forge's global-name diagnostic with the scoped checks above.
-        result["problems"] = [p for p in result["problems"] if p["code"] != "def.duplicate"]
+        result["problems"] = [p for p in result["problems"] if p["code"] not in ("def.duplicate", "about.version")]
+        if about.is_file():
+            try:
+                supported = [(node.text or "").strip() for node in ET.parse(about).getroot().findall("./supportedVersions/li")]
+                current = selected_game_version()
+                if current not in supported:
+                    result["problems"].append({"level": "warning", "code": "about.version", "message": "About.xml does not declare RimWorld " + current + "; test before changing supportedVersions.", "file": str(about)})
+            except ET.ParseError:
+                pass  # The foundation already reports the syntax error.
         # Map every diagnostic back to the user's mod, then release the temporary snapshot.
         for problem in result["problems"]:
             file = problem.get("file")
@@ -241,7 +297,7 @@ def validate_mod(mod: Path, max_problems: int = 40) -> dict:
     result["evidence"]["references_valid"] = (
         True if result["ok"] and complete and index_path and not status["parse_errors"] and not unresolved else None
     )
-    result.update({"mod": str(mod), "engine_version": ENGINE_VERSION, "adapter_version": 1,
+    result.update({"mod": str(mod), "engine_version": ENGINE_VERSION, "adapter_version": 2, "game_version": selected_game_version(),
                    "checked_at": time.time(), "index_status": status,
                    "coverage": {"load_folders_complete": complete, "load_folders": [str(root) for root in roots],
                                 "reference_check": "Conservative scalar fields only; not dependency activation or type/schema validation."},
@@ -289,7 +345,7 @@ def main() -> int:
         if args.command == "doctor":
             result = discovery.doctor(None)
             result.update({"engine_version": ENGINE_VERSION, "forge_root": str(FORGE_ROOT),
-                           "index_status": index_status()[1], "knowledge_snapshot": str(BASE / "references" / "manifest.json")})
+                           "index_status": index_status()[1], "knowledge_snapshot": str(BASE / "docs")})
         elif args.command == "index":
             result = refresh_index(args.ensure)
         elif args.command in ("search", "inspect"):

@@ -1,4 +1,10 @@
-# Atlas 0.2.19 portable
+# Atlas 0.2.20 portable
+
+## 0.2.20 RimWorld 1.7 support
+
+Detects Waylith alongside Unity 1.6, uses installed version metadata, chooses the matching C# target and references, refreshes the source index, and reads the new log location. The diagnostic bridge ships separate assemblies for each engine. The portable Forge checker now indexes and checks content for either version. Existing mod projects and compatibility declarations are preserved. See [RimWorld compatibility](docs/rimworld-17.md) for verification and limits.
+
+To build this release, first compile vendor/modmixer-bridge/Source/ModMixerBridge.csproj with RimWorldManagedDir set to the 1.7 installation and OutputPath set to the absolute build-check/bridge17/Assemblies directory. Then run build:atlas using an extracted Atlas runtime base. The packager retains the previous Unity bridge and stages the new Waylith bridge separately. Game assemblies are referenced locally and are not redistributed.
 
 ## 0.2.19 Claude usage
 

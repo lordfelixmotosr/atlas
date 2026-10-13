@@ -7,6 +7,8 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { resolveDotnet } from './dotnet.js';
+import { detectRimWorldPaths } from './paths.js';
+import { inspectRimWorldRuntime } from './rimworld/runtime.js';
 
 const execFileP = promisify(execFile);
 
@@ -23,10 +25,12 @@ const execFileP = promisify(execFile);
  */
 
 /** LTS channel we provision when the host has no usable SDK. */
-const DOTNET_CHANNEL = '8.0';
+function requiredSdkMajor(): number {
+  const { managedDir } = detectRimWorldPaths();
+  return managedDir ? inspectRimWorldRuntime(managedDir).sdkMajor : 6;
+}
 
 /** Minimum SDK major we accept from a system install (matches dotnet.ts copy). */
-const MIN_DOTNET_MAJOR = 6;
 
 export interface DotnetInfo {
   /** DOTNET_ROOT — the dir containing the `dotnet` host executable. */
@@ -47,10 +51,10 @@ function exeSuffix(): string {
 async function probeDotnet(exe: string): Promise<string | null> {
   if (!fs.existsSync(exe)) return null;
   try {
-    const { stdout } = await execFileP(exe, ['--version']);
+    const { stdout } = await execFileP(exe, ['--version'], { timeout: 15_000, windowsHide: true });
     const version = stdout.trim();
     const major = Number(version.split('.')[0]);
-    if (!Number.isFinite(major) || major < MIN_DOTNET_MAJOR) return null;
+    if (!Number.isFinite(major) || major < requiredSdkMajor()) return null;
     return version;
   } catch {
     return null;
@@ -68,7 +72,7 @@ async function findSystemDotnet(): Promise<DotnetInfo | null> {
 
 /** Where a ModMixer-provisioned .NET SDK lives. */
 function provisionRoot(): string {
-  return path.join(app.getPath('userData'), 'toolchain', 'dotnet');
+  return path.join(app.getPath('userData'), 'toolchain', `dotnet-${Math.max(8, requiredSdkMajor())}`);
 }
 
 function provisionedExe(): string {
@@ -92,7 +96,7 @@ function dotnetRid(): string {
  */
 function dotnetSdkUrl(): string {
   const ext = process.platform === 'win32' ? 'zip' : 'tar.gz';
-  return `https://aka.ms/dotnet/${DOTNET_CHANNEL}/dotnet-sdk-${dotnetRid()}.${ext}`;
+  return `https://aka.ms/dotnet/${Math.max(8, requiredSdkMajor())}.0/dotnet-sdk-${dotnetRid()}.${ext}`;
 }
 
 async function extractArchive(archive: string, destDir: string): Promise<void> {
@@ -129,7 +133,7 @@ async function provisionDotnetSdk(
 
   const ext = process.platform === 'win32' ? 'zip' : 'tar.gz';
   const archive = path.join(root, `dotnet-sdk.${ext}`);
-  onProgress?.({ phase: 'download', message: 'Downloading the .NET SDK…' });
+  onProgress?.({ phase: 'download', message: `Downloading .NET ${Math.max(8, requiredSdkMajor())} SDK for RimWorld…` });
   const res = await fetch(dotnetSdkUrl());
   if (!res.ok || !res.body) {
     throw new Error(`Failed to download the .NET SDK (HTTP ${res.status}).`);
@@ -160,6 +164,9 @@ export async function findExistingDotnet(): Promise<DotnetInfo | null> {
   const exe = provisionedExe();
   const version = await probeDotnet(exe);
   if (version) return { dir: provisionRoot(), exe, version, provisioned: true };
+  const legacy = path.join(app.getPath('userData'), 'toolchain', 'dotnet', `dotnet${exeSuffix()}`);
+  const legacyVersion = await probeDotnet(legacy);
+  if (legacyVersion) return { dir: path.dirname(legacy), exe: legacy, version: legacyVersion, provisioned: true };
   return null;
 }
 
@@ -173,7 +180,7 @@ let cached: DotnetInfo | null = null;
 export async function ensureDotnetSdk(
   onProgress?: (p: DotnetProvisionProgress) => void,
 ): Promise<DotnetInfo> {
-  if (cached && fs.existsSync(cached.exe)) return cached;
+  if (cached && fs.existsSync(cached.exe) && Number(cached.version.split('.')[0]) >= requiredSdkMajor()) return cached;
   const existing = await findExistingDotnet();
   cached = existing ?? (await provisionDotnetSdk(onProgress));
   return cached;

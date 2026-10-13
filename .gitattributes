@@ -2,3 +2,5 @@
 # ship LF, and a CRLF-converted patch fails the hunk match, killing
 # postinstall (and npm install) on fresh checkouts.
 patches/*.patch text eol=lf
+# Signed pack envelopes have byte-level checksums in their feed.
+*.atlas.json -text

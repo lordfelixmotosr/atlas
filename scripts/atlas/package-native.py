@@ -30,6 +30,10 @@ compact_roots = {
     "Atlas.exe", "LICENSE", "NOTICE", "README-ATLAS.md", "atlas-build.json",
     "resources/app.asar", "resources/modmixer-bridge/About/About.xml",
     "resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/oauth-page.js",
+    "resources/modmixer-bridge/1.7/Assemblies/ModMixerBridge.dll",
+    "resources/modmixer-bridge/1.7/Assemblies/0Harmony.dll",
+    "resources/modmixer-bridge/LoadFolders.xml",
+    "tools/forge/forge_bridge.py",
 }
 def compact(relative):
     return relative in compact_roots or relative.startswith("resources/atlas/")

@@ -7,6 +7,8 @@
  * ambient default.
  */
 import path from 'node:path';
+import { detectRimWorldPaths } from '../paths.js';
+import { inspectRimWorldRuntime } from './runtime.js';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
@@ -78,7 +80,8 @@ export async function buildRimworldMod(
   // compile errors gives the agent a head start.
   let lintFindings: LintFinding[] = [];
   try {
-    lintFindings = await lintMod(modDir);
+    const { managedDir } = detectRimWorldPaths();
+    lintFindings = await lintMod(modDir, managedDir ? inspectRimWorldRuntime(managedDir).targetFramework : 'net472');
   } catch (err) {
     // Lint failures should never block the build; log and continue.
     console.warn('[build_mod] lint failed:', err);

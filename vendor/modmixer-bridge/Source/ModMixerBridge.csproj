@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
+    <RimWorldManagedDir Condition="'$(RimWorldManagedDir)' == ''">$(HOME)/Library/Application Support/Steam/steamapps/common/RimWorld/RimWorldMac.app/Contents/Resources/Data/Managed</RimWorldManagedDir>
+    <RimWorldWaylith Condition="Exists('$(RimWorldManagedDir)/Waylith.dll')">true</RimWorldWaylith>
+    <TargetFramework Condition="'$(RimWorldWaylith)' == 'true'">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(RimWorldWaylith)' != 'true'">net472</TargetFramework>
     <AssemblyName>ModMixerBridge</AssemblyName>
     <RootNamespace>ModMixer.Bridge</RootNamespace>
     <OutputPath>..\Assemblies\</OutputPath>
@@ -8,24 +11,31 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
-    <RimWorldManagedDir Condition="'$(RimWorldManagedDir)' == ''">$(HOME)/Library/Application Support/Steam/steamapps/common/RimWorld/RimWorldMac.app/Contents/Resources/Data/Managed</RimWorldManagedDir>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
-    <PackageReference Include="Lib.Harmony" Version="2.4.1" />
+    <PackageReference Condition="'$(RimWorldWaylith)' != 'true'" Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Condition="'$(RimWorldWaylith)' != 'true'" Include="Lib.Harmony" Version="2.4.1" />
+    <PackageReference Condition="'$(RimWorldWaylith)' == 'true'" Include="Lib.Harmony" Version="3.0.0-rc.2" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Assembly-CSharp">
       <HintPath>$(RimWorldManagedDir)/Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.CoreModule">
+    <Reference Condition="'$(RimWorldWaylith)' != 'true'" Include="UnityEngine.CoreModule">
       <HintPath>$(RimWorldManagedDir)/UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine">
+    <Reference Condition="'$(RimWorldWaylith)' != 'true'" Include="UnityEngine">
       <HintPath>$(RimWorldManagedDir)/UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RimWorldWaylith)' == 'true'">
+    <Reference Include="UnityStubs"><HintPath>$(RimWorldManagedDir)/UnityStubs.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Waylith.UnityCompat"><HintPath>$(RimWorldManagedDir)/Waylith.UnityCompat.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Waylith"><HintPath>$(RimWorldManagedDir)/Waylith.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Brutal.Core.Common"><HintPath>$(RimWorldManagedDir)/Brutal.Core.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Brutal.Core.Numerics"><HintPath>$(RimWorldManagedDir)/Brutal.Core.Numerics.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 </Project>

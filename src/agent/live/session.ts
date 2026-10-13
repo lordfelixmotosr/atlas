@@ -1,3 +1,4 @@
+import { inspectRimWorldRuntime, renderGameReferences, renderFrameworkPackage } from '../rimworld/runtime.js';
 // "Launch Live Session" — the app-side entry point for live modding.
 //
 // One call does the whole flow:
@@ -232,7 +233,8 @@ async function scaffoldSessionMod(displayName: string): Promise<string> {
     'utf8',
   );
 
-  const hint = (dll: string) => (managedDir ? path.join(managedDir, dll) : '');
+  if (!managedDir) throw new Error('Select a RimWorld installation before building live code.');
+  const runtime = inspectRimWorldRuntime(managedDir);
   // Lib.Harmony with runtime assets excluded: the Live mod already loads
   // 0Harmony in-game, and hot assemblies must bind to THAT copy, not ship
   // a second one.
@@ -240,7 +242,7 @@ async function scaffoldSessionMod(displayName: string): Promise<string> {
     path.join(modPath, 'Source', 'LiveSession.csproj'),
     `<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
+    <TargetFramework>${runtime.targetFramework}</TargetFramework>
     <AssemblyName>LiveSession</AssemblyName>
     <RootNamespace>LiveSession</RootNamespace>
     <OutputPath>..\\Assemblies\\</OutputPath>
@@ -250,30 +252,11 @@ async function scaffoldSessionMod(displayName: string): Promise<string> {
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
-    <PackageReference Include="Lib.Harmony" Version="2.4.1" ExcludeAssets="runtime" />
+${renderFrameworkPackage(runtime)}
+    <PackageReference Include="Lib.Harmony" Version="${runtime.engine === 'waylith' ? '3.0.0-rc.2' : '2.4.1'}" ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>${hint('Assembly-CSharp.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>${hint('UnityEngine.CoreModule.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine">
-      <HintPath>${hint('UnityEngine.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.IMGUIModule">
-      <HintPath>${hint('UnityEngine.IMGUIModule.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.TextRenderingModule">
-      <HintPath>${hint('UnityEngine.TextRenderingModule.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
+${renderGameReferences(runtime)}
   </ItemGroup>
 </Project>
 `,

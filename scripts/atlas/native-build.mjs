@@ -26,6 +26,9 @@ const exePath=path.join(output,'Atlas.exe');cp.execFileSync('powershell.exe',['-
 for(const f of ['launch-update.ps1','apply-update.ps1','watch-update.ps1'])fs.copyFileSync('src/atlas/'+f,path.join(output,'resources/atlas',f));for(const f of ['README-ATLAS.md','LICENSE','NOTICE'])fs.copyFileSync(f,path.join(output,f));
 fs.cpSync('templates/game-adapter',path.join(output,'resources/atlas/game-adapter-template'),{recursive:true});
 fs.copyFileSync('src/atlas/distribution.json',path.join(output,'resources/atlas/distribution.json'));
+const bridge17=path.join(root,'build-check/bridge17/Assemblies');
+require('./stage-rimworld-bridge.cjs').stage(base,bridge17,path.join(output,'resources/modmixer-bridge'));
+fs.copyFileSync('scripts/atlas/inputs/forge_bridge.py',path.join(output,'tools/forge/forge_bridge.py'));
 fs.copyFileSync('src/atlas/oauth-page.mjs',path.join(output,'resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/oauth-page.js'));
 const signedSeed=path.join(root,'release-assets/seed');
 if(fs.existsSync(path.join(signedSeed,'index.atlas.json'))){

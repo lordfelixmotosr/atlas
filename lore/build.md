@@ -1,4 +1,8 @@
-## RimWorld build conventions: net472, ReferenceAssemblies, no shipped Unity DLLs
+## RimWorld 1.7 / Waylith builds
+
+For 1.7, read the installed RimWorld.runtimeconfig.json and target its framework (net10.0 in 1.7.4976). Assemblies are beside RimWorld.exe: reference Assembly-CSharp, UnityStubs, Waylith.UnityCompat and the engine dependencies actually present, with Private=false. The .NET Framework ReferenceAssemblies package and UnityEngine module paths below apply to 1.6 only. UnityEngine namespaces can remain through compatibility libraries. Keep separate outputs for 1.6 and 1.7, and test before changing supportedVersions. Harmony must support the selected runtime; Atlas verified its 1.7 bridge with Harmony 3.0.0-rc.2. Older rendering and AssetBundle recipes below require confirmation against the 1.7 source index.
+
+## RimWorld 1.6 build conventions: net472, ReferenceAssemblies, no shipped Unity DLLs
 
 When scaffolding or fixing a `.csproj` for a RimWorld mod:
 

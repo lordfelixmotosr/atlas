@@ -270,6 +270,7 @@ async function checkTargetFramework(
   sourceDir: string,
   modDir: string,
   findings: LintFinding[],
+  targetFramework: string,
 ): Promise<void> {
   const csprojFiles = await walkFiles(sourceDir, ['.csproj']);
   for (const file of csprojFiles) {
@@ -282,11 +283,11 @@ async function checkTargetFramework(
     const m = /<TargetFramework>([^<]+)<\/TargetFramework>/.exec(text);
     if (!m) continue;
     const tfm = m[1].trim();
-    if (/^netstandard/i.test(tfm)) {
+    if (/^netstandard/i.test(tfm) || (targetFramework !== 'net472' && tfm !== targetFramework) || (targetFramework === 'net472' && /^net\d+\./i.test(tfm))) {
       findings.push({
         rule: 'wrong-target-framework',
         file: path.relative(modDir, file),
-        message: `TargetFramework is ${tfm}. RimWorld mods must target net472 (the runtime is Unity Mono with the .NET Framework 4.7.2 surface). netstandard targets will load but will hit version conflicts against RimWorld's netstandard2.1 Assembly-CSharp.`,
+        message: `TargetFramework is ${tfm}; the selected game build uses ${targetFramework}. Compile new code against that installation's framework and assemblies. Keep separate game-version outputs when supporting both Unity 1.6 and Waylith 1.7. An older compiled DLL may still load via Waylith compatibility, but that does not make its old project references valid for a new build.`,
       });
     }
   }
@@ -296,13 +297,13 @@ async function checkTargetFramework(
  * Run all lints. Returns a list of findings (possibly empty). The build
  * tool calls this and appends a section to the build output.
  */
-export async function lintMod(modDir: string): Promise<LintFinding[]> {
+export async function lintMod(modDir: string, targetFramework = 'net472'): Promise<LintFinding[]> {
   const findings: LintFinding[] = [];
   const sourceDir = path.join(modDir, 'Source');
   const defsDir = path.join(modDir, 'Defs');
 
   try {
-    await checkTargetFramework(sourceDir, modDir, findings);
+    await checkTargetFramework(sourceDir, modDir, findings, targetFramework);
   } catch (err) {
     console.warn('[build-lint] target-framework check failed:', err);
   }

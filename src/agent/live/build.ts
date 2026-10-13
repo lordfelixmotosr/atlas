@@ -1,3 +1,4 @@
+import { inspectRimWorldRuntime, renderGameReferences, renderFrameworkPackage } from '../rimworld/runtime.js';
 // dotnet build plumbing for live sessions.
 //
 // Two build flavors, both landing under `<mod>/.live/` (excluded from
@@ -160,9 +161,8 @@ export function buildHotAssembly(
 
 /**
  * Compile a one-shot LiveAction snippet in the scratch project under
- * `<mod>/.live/scratch/`. The .csproj is written once per session (its
- * HintPaths are resolved at creation time) and the snippet is rewritten on
- * every call.
+ * `<mod>/.live/scratch/`. Refresh the generated project when the selected
+ * installation changes, including a switch between Unity and Waylith.
  */
 export function buildActionAssembly(
   modFolder: string,
@@ -174,9 +174,10 @@ export function buildActionAssembly(
   return serialized(scratchDir, async () => {
     await fsp.mkdir(scratchDir, { recursive: true });
     const csprojPath = path.join(scratchDir, 'LiveScratch.csproj');
-    if (!fs.existsSync(csprojPath)) {
-      const { managedDir } = detectRimWorldPaths();
-      await fsp.writeFile(csprojPath, renderScratchCsproj(managedDir), 'utf8');
+    const { managedDir } = detectRimWorldPaths();
+    const project = renderScratchCsproj(managedDir);
+    if (!fs.existsSync(csprojPath) || await fsp.readFile(csprojPath, 'utf8') !== project) {
+      await fsp.writeFile(csprojPath, project, 'utf8');
     }
     await fsp.writeFile(path.join(scratchDir, 'Action.cs'), code, 'utf8');
 
@@ -225,11 +226,11 @@ export async function prewarmLiveBuilds(modFolder: string): Promise<void> {
  * run and return; patching belongs to the session mod via apply_live.
  */
 function renderScratchCsproj(managedDir: string | null): string {
-  const hint = (dll: string) =>
-    managedDir ? path.join(managedDir, dll) : '';
+  if (!managedDir) throw new Error('Select a RimWorld installation before building live code.');
+  const runtime = inspectRimWorldRuntime(managedDir);
   return `<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
+    <TargetFramework>${runtime.targetFramework}</TargetFramework>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <Nullable>disable</Nullable>
@@ -240,29 +241,10 @@ function renderScratchCsproj(managedDir: string | null): string {
     <Compile Include="Action.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+${renderFrameworkPackage(runtime)}
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>${hint('Assembly-CSharp.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>${hint('UnityEngine.CoreModule.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine">
-      <HintPath>${hint('UnityEngine.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.IMGUIModule">
-      <HintPath>${hint('UnityEngine.IMGUIModule.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.TextRenderingModule">
-      <HintPath>${hint('UnityEngine.TextRenderingModule.dll')}</HintPath>
-      <Private>false</Private>
-    </Reference>
+${renderGameReferences(runtime)}
   </ItemGroup>
 </Project>
 `;

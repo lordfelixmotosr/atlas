@@ -5,10 +5,11 @@
   "category": "skills",
   "source": "https://github.com/lebek/modmixer",
   "license": "MIT",
-  "version": "0.1.0",
-  "minAtlasVersion": "0.1.0",
+  "version": "0.2.0",
+  "minAtlasVersion": "0.2.20",
   "gameVersions": [
-    "1.6"
+    "1.6",
+    "1.7"
   ],
-  "notes": "Initial Atlas reference pack."
+  "notes": "Engine-aware Atlas references and static checks; verify exact APIs against the selected installation. Foundational recipes retain their original version scope."
 }

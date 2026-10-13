@@ -5,10 +5,11 @@
   "category": "knowledge",
   "source": "https://github.com/lebek/modmixer",
   "license": "MIT",
-  "version": "0.1.1",
-  "minAtlasVersion": "0.2.1",
+  "version": "0.2.0",
+  "minAtlasVersion": "0.2.20",
   "gameVersions": [
-    "1.6"
+    "1.6",
+    "1.7"
   ],
-  "notes": "Use Atlas metadata paths for schematics, C# assets and placeholders."
+  "notes": "Engine-aware Atlas references and static checks; verify exact APIs against the selected installation. Foundational recipes retain their original version scope."
 }

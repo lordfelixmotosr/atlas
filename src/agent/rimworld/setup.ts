@@ -109,7 +109,7 @@ async function checkRequirements(): Promise<SetupRequirements> {
       id: 'install',
       label:
         env.rimworld.ok && env.rimworld.version
-          ? `RimWorld ${env.rimworld.version}`
+          ? `RimWorld ${env.rimworld.version} · ${env.rimworld.detail ?? "Detected"}`
           : 'RimWorld install',
       severity: 'required',
       ok: env.rimworld.ok,
