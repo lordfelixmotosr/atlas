@@ -22,6 +22,7 @@ export function PublishConfirmDialog({
   open,
   isUpdate,
   modName,
+  supportedVersions,
   initialTrackOnLeaderboard,
   onCancel,
   onConfirm,
@@ -29,6 +30,7 @@ export function PublishConfirmDialog({
   open: boolean;
   isUpdate: boolean;
   modName: string;
+  supportedVersions: string[];
   initialTrackOnLeaderboard: boolean;
   onCancel: () => void;
   onConfirm: (result: {
@@ -70,8 +72,9 @@ export function PublishConfirmDialog({
             <>
               <p>
                 Push your latest changes as an update to the existing Workshop
-                item for <span className="font-medium">{modName}</span>. Its
-                visibility and any Steam-side edits are left unchanged.
+                item for <span className="font-medium">{modName}</span>. RimWorld
+                version tags will sync from About.xml. Your page title,
+                description, visibility and other tags will be preserved.
               </p>
               <label className="block space-y-1.5">
                 <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
@@ -128,6 +131,9 @@ export function PublishConfirmDialog({
               </p>
             </>
           )}
+          <p className="text-xs text-muted">
+            RimWorld version tags: {supportedVersions.join(', ') || 'None declared — add supportedVersions to About.xml.'}
+          </p>
 
         </div>
 

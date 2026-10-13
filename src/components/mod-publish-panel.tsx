@@ -437,6 +437,7 @@ function RimWorldPublishPanel({
         open={confirmOpen}
         isUpdate={isUpdate}
         modName={name}
+        supportedVersions={mod.about.supportedVersions}
         initialTrackOnLeaderboard={mod.prefs.trackOnLeaderboard}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={(result) => {

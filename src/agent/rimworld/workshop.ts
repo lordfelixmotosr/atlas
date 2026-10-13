@@ -13,6 +13,7 @@ import { STEAM_PREVIEW_LIMIT_BYTES } from '../assets/preview-normalize.js';
 import { selectWorkshopPreviewPath } from '../assets/workshop-preview.js';
 import { commitTurn } from '../snapshots.js';
 import { track } from '../telemetry.js';
+import { workshopTags } from './workshop-tags.js';
 
 // RimWorld's Steam app ID. Workshop items live under this consumer/creator app.
 const RIMWORLD_APP_ID = 294100;
@@ -23,10 +24,6 @@ const RIMWORLD_APP_ID = 294100;
 // 0 Public · 1 FriendsOnly · 2 Private · 3 Unlisted.
 const VISIBILITY_PUBLIC = 0;
 const VISIBILITY_VALUES = new Set([0, 1, 2, 3]);
-
-// Tag every upload with "Mod" plus the supportedVersions from About.xml. RimWorld's
-// in-game uploader uses the same convention so Workshop's version filter works.
-const BASE_TAG = 'Mod';
 
 // Filenames matched anywhere under the mod folder that we strip before
 // uploading to Steam. .modmixer is the agent's sidecar (schematic etc.) and
@@ -219,6 +216,10 @@ class PublishHost {
       itemId,
       updateDetails,
     });
+  }
+
+  getItemTags(itemId: bigint): Promise<string[]> {
+    return this.call({ op: 'getItemTags', itemId });
   }
 
   /**
@@ -445,7 +446,7 @@ export async function publishToWorkshop(
     }
   }
 
-  const tags = [BASE_TAG, ...about.supportedVersions];
+  let tags = workshopTags(about.supportedVersions);
   // Use the modder's notes when they typed any; otherwise fall back to a
   // timestamp so the Workshop change history always has a non-empty entry.
   const note = changeNote?.trim() || autoChangeNote();
@@ -473,6 +474,7 @@ export async function publishToWorkshop(
 
     if (existing) {
       itemId = existing;
+      tags = workshopTags(about.supportedVersions, await host.getItemTags(itemId));
     } else {
       emit({ status: 'creating-item' });
       const created = await host.createItem();
@@ -495,20 +497,18 @@ export async function publishToWorkshop(
     // freshly-minted About/PublishedFileId.txt for newly-created items.
     const staged = await stageContentForPublish(modFolder);
 
-    // The first publish seeds the Workshop page's title, description, and tags
-    // from About.xml. On later updates we send only content/preview/changeNote
-    // and omit those fields — Steam preserves any UgcUpdate field we leave out,
-    // so a modder's Steam-side edits (BBCode description, rename, tag tweaks)
-    // survive a republish from Modmixer instead of being clobbered.
+    // Version tags must follow About.xml on every upload. Existing categories
+    // have been merged above; leave title, description and visibility alone on
+    // updates so edits made on the Workshop page survive a republish.
     const updateDetails: WorkshopUpdateDetails = {
       changeNote: note,
       previewPath,
       contentPath: staged.contentPath,
+      tags,
     };
     if (!existing) {
       updateDetails.title = about.name;
       updateDetails.description = about.description;
-      updateDetails.tags = tags;
       updateDetails.visibility = itemVisibility;
     }
 

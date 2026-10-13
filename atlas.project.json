@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.20 native source release built and verified",
+  "status": "Atlas 0.2.21 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -166,7 +166,8 @@
     "0.2.17: Sprite Studio removed from navigation, generation, routes, preload APIs and account gates; saved profile artwork and previous export backups retained",
     "0.2.18: persistent Show older models control added to the chat model picker; superseded chat models are labeled and the current selection remains visible when collapsed",
     "0.2.19: Claude OAuth plan usage added beside the chat toolbar, with five-hour, weekly and model-specific limits, conservative refresh and clear unavailable states",
-    "0.2.20: RimWorld 1.7 Waylith detection, .NET 10 scaffolding, source indexing, game logs, diagnostic bridge, Forge checks and reviewed reference packs added alongside 1.6"
+    "0.2.20: RimWorld 1.7 Waylith detection, .NET 10 scaffolding, source indexing, game logs, diagnostic bridge, Forge checks and reviewed reference packs added alongside 1.6",
+    "0.2.21: Workshop updates synchronize supported RimWorld version tags from About.xml while retaining existing categories and page metadata"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -181,7 +182,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.20",
+  "version": "0.2.21",
   "supportedGames": [
     "rimworld"
   ],
@@ -304,24 +305,27 @@
       "0.2.20 runtime layout and version tests, Forge LoadFolders checks and build lint tests passed",
       "0.2.20 RimWorld 1.7.4976 sample mod compiled and loaded; diagnostic bridge handshake, performance and warning delivery verified; normal mod configuration unchanged",
       "0.2.20 native Electron production build and startup health verified; no paid model requests",
-      "0.2.20 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.20 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.21 seven Workshop tag tests passed: new and existing uploads, 1.7 tags, category preservation, version removal, lookup failures, timeout and utility-process protocol",
+      "0.2.21 native Electron production build and startup health verified; no paid model requests or Steam uploads",
+      "0.2.21 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "portable": {
-      "path": "Atlas-0.2.20-win-x64-portable.zip",
-      "size": 402386301,
-      "sha256": "906a060a1dbd54dd050f41ba5ec8b5a09db80ba0d4b68ca8626bea8c473012ef"
+      "path": "Atlas-0.2.21-win-x64-portable.zip",
+      "size": 402387326,
+      "sha256": "b55d2f5a7a5d6acdea858c2e53516a0482d05ac0c460768ba00296d6cf1cbda2"
     },
     "full-update": {
-      "path": "Atlas-0.2.20-win-x64-full-update.zip",
-      "size": 401803872,
-      "sha256": "40f4d57697b493499cc2182bbd5ff0bcc73ef34fceadea805e81f2bbe99c11f5"
+      "path": "Atlas-0.2.21-win-x64-full-update.zip",
+      "size": 401804897,
+      "sha256": "60b0b1a1f9ac39e5588f187d0fbb526bdc341fdb09965aacab20f0093434eaf1"
     },
     "application-update": {
-      "path": "Atlas-0.2.20-win-x64-application-update.zip",
-      "size": 99720639,
-      "sha256": "ab43fb0c0ecf273ea16f3ed01256a770c8b738ae155b077379a3b0ecadfe162d"
+      "path": "Atlas-0.2.21-win-x64-application-update.zip",
+      "size": 99721937,
+      "sha256": "55f54bd27a2601ec4f77fca97f757f50b99005e5d63f18be64e686222b4473e7"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"

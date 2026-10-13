@@ -17,6 +17,7 @@
  * Protocol (over `process.parentPort`, structured-clone messages — bigint OK):
  *   parent -> { id, op: 'init',       steamworksModule, appId, cwd }
  *   parent -> { id, op: 'createItem', appId }
+ *   parent -> { id, op: 'getItemTags', itemId }
  *   parent -> { id, op: 'updateItem', appId, itemId, updateDetails }
  *   child  -> { id, ok: true, result? }            (op completed)
  *   child  -> { id, ok: false, error }             (op failed)
@@ -24,6 +25,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { readWorkshopTags, type WorkshopTagReader } from './rimworld/workshop-tags.js';
 
 const parent = process.parentPort;
 if (!parent) {
@@ -31,7 +33,7 @@ if (!parent) {
 }
 
 /** Subset of steamworks.js's `workshop` namespace that we drive. */
-interface WorkshopApi {
+interface WorkshopApi extends WorkshopTagReader {
   createItem(appId: number): Promise<{
     itemId: bigint;
     needsToAcceptAgreement: boolean;
@@ -69,7 +71,7 @@ function initSteam(steamworksModule: string, appId: number, cwd: string): void {
 
 interface JobMessage {
   id: number;
-  op: 'init' | 'createItem' | 'updateItem';
+  op: 'init' | 'createItem' | 'getItemTags' | 'updateItem';
   steamworksModule?: string;
   appId?: number;
   cwd?: string;
@@ -86,6 +88,11 @@ async function handle(msg: JobMessage): Promise<void> {
       return;
     }
     if (!ws) throw new Error('Steamworks not initialized');
+    if (op === 'getItemTags') {
+      const tags = await readWorkshopTags(ws, msg.itemId!);
+      parent!.postMessage({ id, ok: true, result: tags });
+      return;
+    }
     if (op === 'createItem') {
       const created = await ws.createItem(msg.appId!);
       parent!.postMessage({

@@ -1,4 +1,10 @@
-# Atlas 0.2.20 portable
+# Atlas 0.2.21 portable
+
+## 0.2.21 Workshop version tags
+
+Publishing an update now synchronizes RimWorld version tags from About.xml, including 1.7. Atlas reads the current Steam tags, replaces version tags with the declared supported versions, and preserves other categories plus the page title, description and visibility. The confirmation shows the declared versions. Missing, truncated or unavailable Steam tag data stops the update before uploading so existing categories are preserved. A missing supportedVersions list must be corrected before publishing. Existing Workshop items need one more Publish update to receive the corrected tags.
+
+Verification covers new uploads, existing-item updates, removed versions, preserved page metadata, tag lookup failures and the utility-process protocol with a simulated Steam API. No Workshop item was published as a development test.
 
 ## 0.2.20 RimWorld 1.7 support
 
