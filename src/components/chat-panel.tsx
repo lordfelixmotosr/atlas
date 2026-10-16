@@ -234,10 +234,17 @@ export function ChatPanel({
   const changeModel = (selection: ModelSelection) => {
     void modelChange.run(selection, model);
   };
-  const changeThinking = (level: ThinkingLevel) => {
+  const thinkingChange = useAsyncAction(async (level: ThinkingLevel) => {
+    const previous = thinkingLevel;
     setPanelThinking(conversation.id, level);
-    void window.modmixer.setConversationThinkingLevel(conversation.id, level);
-  };
+    try {
+      await window.modmixer.setConversationThinkingLevel(conversation.id, level);
+    } catch (error) {
+      setPanelThinking(conversation.id, previous);
+      throw error;
+    }
+  });
+  const changeThinking = (level: ThinkingLevel) => { void thinkingChange.run(level); };
   const send = useAsyncAction((text: string, atts: PreparedAttachment[]) =>
     window.modmixer.send(
       conversation.id,
@@ -261,7 +268,7 @@ export function ChatPanel({
     if (result === null) markIdle(conversation.id);
   }, [conversation.id, runRetry]);
   const error =
-    compactor.error ?? steerCanceller.error ?? steerer.error ?? send.error ?? interruptAction.error ?? modelChange.error ?? retryAction.error;
+    compactor.error ?? steerCanceller.error ?? steerer.error ?? send.error ?? interruptAction.error ?? modelChange.error ?? thinkingChange.error ?? retryAction.error;
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // The streaming assistant message is appended as the last row so it
@@ -679,7 +686,7 @@ export function ChatPanel({
                 onChange={changeModel}
                 onConnect={onConnect}
               />
-              <ThinkingPicker current={thinkingLevel} onChange={changeThinking} />
+              <ThinkingPicker current={thinkingLevel} onChange={changeThinking} models={availableModels} model={model} disabled={thinkingChange.busy || modelChange.busy} />
               <FelixSpeedControl model={model} />
               <FelixAccountControl model={model} busy={busy||compacting} onConnect={onConnect} />
             </div>

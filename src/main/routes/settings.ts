@@ -1,4 +1,5 @@
 import type { MixerThinkingLevel as ThinkingLevel } from '../../lib/thinking-levels.js';
+import { isThinkingLevel } from '../../lib/thinking-levels.js';
 import {
   loadSettings,
   saveSettings,
@@ -62,6 +63,7 @@ export function registerSettingsRoutes(ctx: RouteContext): void {
   ipc.handle(
     'modmixer:settings:set-thinking-level',
     (_evt, level: ThinkingLevel) => {
+      if (!isThinkingLevel(level)) throw new Error('Unknown thinking level.');
       // Default reasoning effort for NEW chats only; existing chats keep
       // their own (see modmixer:conversations:set-thinking-level).
       return saveSettings({ thinkingLevel: level });

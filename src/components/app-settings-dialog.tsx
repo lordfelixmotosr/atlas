@@ -17,6 +17,7 @@ import type { ModelOption } from '@/agent/models';
 import type { UpdaterState } from '@/agent/updater';
 import { DEFAULT_LICENSE_ID } from '@/agent/licenses';
 import { applyTheme } from '@/lib/theme';
+import { useAsyncAction } from '@/lib/use-async-action';
 import { ModelPicker } from './model-picker';
 import { ThinkingPicker } from './thinking-picker';
 import { LicensePicker } from './mod-publish/license-picker';
@@ -57,6 +58,10 @@ export function AppSettingsDialog({
   const [skipPermissions, setSkipPermissions] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const thinkingSave = useAsyncAction(async (level: ThinkingLevel) => {
+    await window.modmixer.setThinkingLevel(level);
+    setDefaultThinking(level);
+  });
 
   useEffect(() => {
     void window.modmixer.getSettings().then((s) => {
@@ -236,12 +241,13 @@ export function AppSettingsDialog({
                         />
                         <ThinkingPicker
                           current={defaultThinking}
-                          onChange={(level) => {
-                            setDefaultThinking(level);
-                            void window.modmixer.setThinkingLevel(level);
-                          }}
+                          models={modelOptions}
+                          model={defaultModel}
+                          disabled={thinkingSave.busy}
+                          onChange={(level) => { void thinkingSave.run(level); }}
                         />
                       </div>
+                      {thinkingSave.error && <p role="alert" className="mt-1.5 text-xs text-red-400">{thinkingSave.error}</p>}
                       <p className="mt-1.5 text-xs text-muted">
                         New chats start with these. Change a chat's model or
                         thinking level any time from its own toolbar — that

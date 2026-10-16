@@ -6,7 +6,7 @@ import path from 'node:path';
 import * as pi from '@earendil-works/pi-coding-agent';
 import {loadSettings,saveSettings} from '../agent/settings';
 import {getConversation} from '../agent/conversations';
-import {toPiThinking} from '../lib/thinking-levels';
+import {toPiThinking} from '../agent/thinking';
 import {buildAttachedPrompt} from '../agent/agent-host';
 import {felixAccountLabel} from './account-label';
 function felixSupportsFast(model) {

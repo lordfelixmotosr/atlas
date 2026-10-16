@@ -1,4 +1,12 @@
-# Atlas 0.2.21 portable
+# Atlas 0.2.22 portable
+
+## 0.2.22 instructions and thinking controls
+
+Atlas checks unfamiliar game APIs against the installed source before editing, preserves existing mod work, and verifies builds before claiming success. Artwork guidance calls for reference inspection and PNG checks. Existing chats refresh their frozen instructions once on next open; messages and custom instructions remain.
+
+The thinking picker follows each connected model’s capabilities, including saved older models. Max now reaches supported GPT and Claude models as native Max; Extra High remains Extra High. Unsupported saved preferences are retained and labelled with the effort actually used. Model switching never rewrites the saved thinking preference. Codex Off explicitly requests no reasoning where supported. Default and per-chat controls report save failures. Models, thinking preferences and speed settings are not reset by this update.
+
+Seven focused tests verify real provider request payloads without network/model usage, metadata fallbacks, saved preferences, picker labels and prompt composition. The isolated browser UI verifies selection, switching, older-model lookup and fallback display. Source type checking passes. Two broader file-browser symlink tests remain restricted by Windows permissions. These checks verify integration behavior; model quality still needs evaluation on real modding tasks.
 
 ## 0.2.21 Workshop version tags
 

@@ -1,3 +1,5 @@
+import type { ThinkingCapabilities } from '../lib/thinking-levels.js';
+
 export interface ModelOption {
   /** Stable composite id, "<provider>/<modelId>", used by the picker. */
   key: string;
@@ -19,4 +21,6 @@ export interface ModelOption {
    * UI treats undefined as "don't warn" to avoid false alarms.
    */
   vision?: boolean;
+  /** Derived from the same provider model metadata used by the active session. */
+  thinking?: ThinkingCapabilities;
 }

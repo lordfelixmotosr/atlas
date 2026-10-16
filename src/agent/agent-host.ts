@@ -31,9 +31,10 @@ import type {
   AgentTool,
 } from '@earendil-works/pi-agent-core';
 import {
-  toPiThinking,
+  isThinkingLevel,
   type MixerThinkingLevel as ThinkingLevel,
 } from '../lib/thinking-levels.js';
+import { toPiThinking, thinkingCapabilities, withThinkingControls } from './thinking.js';
 import {
   ErrorBuffer,
   formatErrorSummary,
@@ -1158,8 +1159,8 @@ export class AgentHost {
       () => [...attachmentRoots],
       { live: convo.live === true, game: convo.game },
     ).map((tool) => toolDefinitionFromAgentTool(tool));
-    // 'max' is Atlas's own top rung — lower it onto pi's scale here (see
-    // lib/thinking-levels.ts). The persisted value stays 'max'.
+    // Resolve the saved preference against this model without changing it.
+    // Max is a native Pi level; each provider receives its own catalog mapping.
     const piThinking = toPiThinking(model, thinkingLevel);
     // Portable shell selection must work even if Windows temporarily prevents
     // updating its persisted path after the Atlas folder has moved.
@@ -1180,7 +1181,7 @@ export class AgentHost {
       customTools,
     });
     sessionRef = session;
-    session.agent.streamFunction = felixGuardStream(felixWithSpeed(session.agent.streamFunction, loadSettings),600000,activity=>{
+    session.agent.streamFunction = felixGuardStream(felixWithSpeed(withThinkingControls(session.agent.streamFunction), loadSettings),600000,activity=>{
       felixObserveModelStream(convo.id,activity);
       (globalThis as any).__atlasRuntime?.tasks?.observeStream(convo.id,activity);
     }) as any;
@@ -1614,9 +1615,8 @@ export class AgentHost {
     setConvModel(conversationId, selection);
     const entry = this.sessions.get(conversationId);
     if (entry) {
-      // Re-lower the persisted level onto the new model: a 'max' chat needs
-      // the max-effort map stamped onto this model too (and a non-adaptive
-      // model must not inherit it).
+      // Keep the saved preference when switching models. Resolve only the
+      // effective effort for this model; the picker explains any fallback.
       const level =
         getConversation(conversationId)?.thinkingLevel ??
         loadSettings().thinkingLevel;
@@ -1627,20 +1627,14 @@ export class AgentHost {
   }
 
   /**
-   * Switch one chat's reasoning effort. Pi clamps internally against the
-   * model's available levels, so passing "xhigh" to Kimi quietly becomes
-   * "high" inside the session — the persisted value is the user's intent,
-   * not necessarily what the next turn runs at. 'max' is lowered onto pi at
-   * this boundary (lib/thinking-levels.ts); switching between 'max' and
-   * 'xhigh' also swaps the session's model instance between the max-effort
-   * copy and the pristine registry one, so 'xhigh' never inherits the
-   * remapped effort.
+   * Persist a deliberate change to one chat's reasoning preference after the
+   * session accepts it. Model switches never overwrite the saved preference.
    */
   async setConversationThinkingLevel(
     conversationId: string,
     level: ThinkingLevel,
   ): Promise<void> {
-    setConvThinkingLevel(conversationId, level);
+    if (!isThinkingLevel(level)) throw new Error('Unknown thinking level.');
     const entry = this.sessions.get(conversationId);
     if (entry) {
       const model = this.resolveModel(getConversation(conversationId)?.model);
@@ -1648,6 +1642,7 @@ export class AgentHost {
       if (piThinking.model) await entry.session.setModel(piThinking.model);
       entry.session.setThinkingLevel(piThinking.level);
     }
+    setConvThinkingLevel(conversationId, level);
   }
 
   /**
@@ -1707,6 +1702,7 @@ export class AgentHost {
           label: m.name,
           older: !featuredKeys.has(m.id),
           vision: m.input.includes('image'),
+          thinking: thinkingCapabilities(atlasModelCapabilities(m)),
         });
       }
     }
@@ -1727,6 +1723,7 @@ export class AgentHost {
         label: slug,
         recommended: isPinnedOpenRouterSlug(slug),
         vision: orModel ? orModel.input.includes('image') : undefined,
+        thinking: orModel ? thinkingCapabilities(orModel) : undefined,
       });
     }
     // Local OpenAI-compatible servers: one row per user-added model. Provider
@@ -1746,6 +1743,7 @@ export class AgentHost {
           modelId,
           label: modelId,
           vision: lm ? lm.input.includes('image') : undefined,
+          thinking: lm ? thinkingCapabilities(lm) : undefined,
         });
       }
     }
