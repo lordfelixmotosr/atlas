@@ -141,7 +141,7 @@ test('refreshed RimWorld prompt requires targeted source checks and verification
   };
   const prompt = load('agent/system-prompt.ts', imports);
   const text = prompt.buildRimworldSystemPrompt({type: 'new'});
-  assert.equal(prompt.PROMPT_VERSION, 3);
+  assert.equal(prompt.PROMPT_VERSION, 4);
   assert.match(text, /operating inside Atlas/);
   assert.match(text, /verify unfamiliar Def fields/);
   assert.match(text, /run build_mod, read the diagnostics/);

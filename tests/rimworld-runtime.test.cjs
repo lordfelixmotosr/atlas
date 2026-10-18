@@ -82,12 +82,12 @@ test('framework diagnostics follow the selected runtime', async t => {
   assert(!(await lintMod(root, 'net472')).some(f => f.rule === 'wrong-target-framework'));
 });
 test('Windows launcher recognizes both games and passes the isolated profile to the selected Waylith executable', async () => {
-  let stdout = '', launched;
+  let stdout = '', launched, refreshes = 0, failRefresh = false;
   const game = loader(new Map([
     ['node:os', { platform: () => 'win32' }],
     ['node:child_process', { exec: (_command, _options, cb) => cb(null, stdout, ''), spawn: (file, args, options) => { launched = { file, args, options }; return { unref() {} }; } }],
     [path.join(source, 'agent/paths.ts'), { detectRimWorldPaths: () => ({ executable: 'C:/Games/RimWorld/RimWorld.exe', engine: 'waylith' }) }],
-    [path.join(source, 'agent/workspace.ts'), {}], [path.join(source, 'agent/registry/index.ts'), {}],
+    [path.join(source, 'agent/workspace.ts'), {refreshSyncedRuntimeMirrors: async () => {refreshes++;if(failRefresh)throw Error('Mirror DLL locked');}}], [path.join(source, 'agent/registry/index.ts'), {}],
   ]))('agent/rimworld/game.ts');
   for (const name of ['RimWorld.exe', 'RimWorldWin64.exe']) { stdout = '"' + name + '","123"'; assert.equal(await game.isRimWorldRunning(), true); }
   stdout = '"steam.exe","123"';
@@ -96,4 +96,7 @@ test('Windows launcher recognizes both games and passes the isolated profile to 
   assert.deepEqual(Array.from(launched.args), ['-savedatafolder=C:/Test profile', '-quicktest']);
   assert.equal(launched.options.env.SteamAppId, '294100');
   await game.launchRimWorld(); assert.equal(launched.file, 'C:/Games/RimWorld/RimWorld.exe');
+  assert.equal(refreshes,2);
+  launched=null;failRefresh=true;
+  await assert.rejects(game.launchRimWorld(),/Mirror DLL locked/);assert.equal(launched,null);
 });

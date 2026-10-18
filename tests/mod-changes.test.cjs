@@ -12,6 +12,14 @@ function fixture(t){const area=fs.mkdtempSync(path.join(base,'changes-')),root=p
 function write(root,file,text){const target=path.join(root,file);fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,text);}
 const xml=(name,label)=>`<Defs><ThingDef><defName>${name}</defName><label>${label}</label></ThingDef></Defs>`;
 
+test('runtime-only publication retains local source inputs in the change baseline',async t=>{
+ const {root}=fixture(t);write(root,'Source/Mod.cs','class Before {}');write(root,'Defs/Thing.xml',xml('Fixture','old'));
+ const inputs=await api.collectModInventory(root);const runtime={...inputs,files:{'Defs/Thing.xml':inputs.files['Defs/Thing.xml']}};
+ const baseline=api.mergePublishedInventory(inputs,runtime);await api.recordModBaseline(root,'published','Runtime release',baseline);
+ assert.equal((await api.readModChanges(root,null,'published')).status,'clean');
+ write(root,'Source/Mod.cs','class After {}');const report=await api.readModChanges(root,null,'published');assert.equal(report.status,'modified');assert(report.files.some(f=>f.path==='Source/Mod.cs'));
+});
+
 test('starts tracking without inventing past publication history and stores state outside the mod',async t=>{
  const {root,state}=fixture(t);write(root,'About/About.xml','<ModMetaData/>');
  const report=await api.readModChanges(root,100);assert.equal(report.status,'tracking');assert.equal(report.lastPublishedAt,100);assert.equal(report.count,0);assert(fs.existsSync(state));assert(!fs.existsSync(path.join(root,'.atlas')));

@@ -237,6 +237,11 @@ if (DEMO_MODE) {
 // Boot the mod registry so it's primed by the time the renderer asks for a
 // snapshot. Subscribers (renderer broadcast, agent tools) attach below.
 const registry = getRegistry();
+void import('./agent/rimworld/runtime-mirror.js').then(async ({restoreMirrorWatchers}) => {
+  const {getMirrorStateDir, getWorkspacePaths, getRimWorldModsDir} = await import('./agent/workspace.js');
+  const {emitModChanged} = await import('./agent/mod-events.js');
+  await restoreMirrorWatchers(getMirrorStateDir(), getWorkspacePaths().workspaceDir, getRimWorldModsDir(), emitModChanged);
+}).catch(error => console.warn('[runtime mirror] watcher startup:', error));
 void registry.start();
 registry.subscribe(() => {
   if (mainWindow && !mainWindow.isDestroyed()) {

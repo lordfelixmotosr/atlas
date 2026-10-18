@@ -378,6 +378,7 @@ export interface Channels {
   'modmixer:index:cancel': () => IndexSnapshot;
 
   // Workshop
+  'atlas:workshop:dry-run': (folder: string) => import('../agent/rimworld/release-package').ReleasePlan;
   'modmixer:workshop:publish': (
     folder: string,
     visibility?: number,

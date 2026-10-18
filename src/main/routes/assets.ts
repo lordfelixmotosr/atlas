@@ -24,6 +24,7 @@ import { emitModChanged } from '../../agent/mod-events.js';
 import {
   linkWorkshopItem,
   publishToWorkshop,
+  dryRunWorkshop,
   unlinkWorkshopItem,
 } from '../../agent/rimworld/workshop.js';
 import type { RouteContext } from './context.js';
@@ -187,6 +188,7 @@ export function registerAssetsRoutes(ctx: RouteContext): void {
       return result;
     },
   );
+  ipc.handle('atlas:workshop:dry-run', (_evt, folder: string) => dryRunWorkshop(folder));
 
   ipc.handle(
     'modmixer:workshop:unlink',

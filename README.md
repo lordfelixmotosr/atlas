@@ -1,4 +1,24 @@
-# Atlas 0.2.20 portable
+# Atlas 0.2.23 portable
+
+## 0.2.23 runtime-only releases
+
+Game sync now installs an owned copied runtime mirror, replacing legacy workspace junctions. The same release rules protect Atlas and in-game Workshop uploads. LoadFolders.xml and every declared version/conditional folder are preserved. Development files are excluded at every depth; unknown root folders warn and can be included with .atlas/release.json. Publish offers a dry run with file sizes and blocking checks. Mirrors refresh before launches, stale files are removed, newly game-written Workshop IDs return to the workspace, and DLL locks stop refresh with a clear message. Existing model and thinking preferences are preserved.
+
+Verification: 52 focused integration checks passed, including actual upload payloads and a real Windows DLL lock. An isolated RimWorld 1.7.4981 game probe loaded shared/versioned content and World data from a real copy without development files. Versioned and conditional file preservation has fixture coverage for 1.4–1.7; other engines were not launched. No Steam mod was uploaded. See [runtime release rules](docs/runtime-releases.md) for configuration and limits.
+
+## 0.2.22 instructions and thinking controls
+
+Atlas checks unfamiliar game APIs against the installed source before editing, preserves existing mod work, and verifies builds before claiming success. Artwork guidance calls for reference inspection and PNG checks. Existing chats refresh their frozen instructions once on next open; messages and custom instructions remain.
+
+The thinking picker follows each connected model’s capabilities, including saved older models. Max now reaches supported GPT and Claude models as native Max; Extra High remains Extra High. Unsupported saved preferences are retained and labelled with the effort actually used. Model switching never rewrites the saved thinking preference. Codex Off explicitly requests no reasoning where supported. Default and per-chat controls report save failures. Models, thinking preferences and speed settings are not reset by this update.
+
+Seven focused tests verify real provider request payloads without network/model usage, metadata fallbacks, saved preferences, picker labels and prompt composition. The isolated browser UI verifies selection, switching, older-model lookup and fallback display. Source type checking passes. Two broader file-browser symlink tests remain restricted by Windows permissions. These checks verify integration behavior; model quality still needs evaluation on real modding tasks.
+
+## 0.2.21 Workshop version tags
+
+Publishing an update now synchronizes RimWorld version tags from About.xml, including 1.7. Atlas reads the current Steam tags, replaces version tags with the declared supported versions, and preserves other categories plus the page title, description and visibility. The confirmation shows the declared versions. Missing, truncated or unavailable Steam tag data stops the update before uploading so existing categories are preserved. A missing supportedVersions list must be corrected before publishing. Existing Workshop items need one more Publish update to receive the corrected tags.
+
+Verification covers new uploads, existing-item updates, removed versions, preserved page metadata, tag lookup failures and the utility-process protocol with a simulated Steam API. No Workshop item was published as a development test.
 
 ## 0.2.20 RimWorld 1.7 support
 

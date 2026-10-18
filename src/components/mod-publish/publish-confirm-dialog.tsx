@@ -23,6 +23,8 @@ export function PublishConfirmDialog({
   isUpdate,
   modName,
   supportedVersions,
+  releaseSummary,
+  releaseWarnings,
   initialTrackOnLeaderboard,
   onCancel,
   onConfirm,
@@ -31,6 +33,8 @@ export function PublishConfirmDialog({
   isUpdate: boolean;
   modName: string;
   supportedVersions: string[];
+  releaseSummary: string;
+  releaseWarnings: string[];
   initialTrackOnLeaderboard: boolean;
   onCancel: () => void;
   onConfirm: (result: {
@@ -57,7 +61,7 @@ export function PublishConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-md border border-line bg-paper shadow-lg">
+      <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-md border border-line bg-paper shadow-lg">
         <div className="border-b border-line px-4 py-3">
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
             Atlas · steam workshop
@@ -134,6 +138,8 @@ export function PublishConfirmDialog({
           <p className="text-xs text-muted">
             RimWorld version tags: {supportedVersions.join(', ') || 'None declared — add supportedVersions to About.xml.'}
           </p>
+          <p className="text-xs text-muted">{releaseSummary}</p>
+          {releaseWarnings.map((warning, i) => <p key={i} className="text-xs text-amber-400">{warning}</p>)}
 
         </div>
 

@@ -63,7 +63,7 @@ function formatAssetWarnings(warnings: string[]): string | null {
   // Bullet-list shape so the agent's eye catches the multi-warning case
   // even when the line wraps in the chat transcript.
   const bullets = warnings.map((w) => `  • ${w}`).join('\n');
-  return `Asset drift detected during sync — reconcile before the next run:\n${bullets}`;
+  return `Sync warnings — review before the next run:\n${bullets}`;
 }
 
 export interface ShipAndLaunchOptions {
@@ -218,6 +218,7 @@ export async function shipAndLaunch(
       version: real.version,
     });
     const launch = await launchRimWorld({
+      runtimeMirrorRefreshed: opts.folder,
       args: quicktest ? ['-quicktest'] : [],
       savedataFolder: sd.savedataDir,
     });
@@ -335,6 +336,7 @@ export async function shipAndLaunch(
   }
 
   const launch = await launchRimWorld({
+    runtimeMirrorRefreshed: opts.folder,
     args: quicktest ? ['-quicktest'] : [],
   });
 

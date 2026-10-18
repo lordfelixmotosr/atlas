@@ -11,14 +11,13 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { detectRimWorldPaths } from '../paths.js';
-import { getWorkspacePaths, syncModToGame } from '../workspace.js';
+import { getWorkspacePaths, syncModToGame, isModSyncedToGame } from '../workspace.js';
 import { parseAboutXml, type AboutXml } from './about-xml.js';
 import { readModsConfig, writeActiveMods } from './mods-config.js';
 import {
   SKIP_DIRS,
   containsDll,
   direntIsDirectoryLike,
-  isSymlinkedInto,
   readPublishedFileId,
 } from '../fs-helpers.js';
 import type {
@@ -231,7 +230,7 @@ class ModRegistry {
       const workspaceMods = await scanRoot(workspaceRoot, 'workspace');
       // Detect symlink presence in RimWorld's Mods/.
       for (const m of workspaceMods) {
-        m.workspaceSynced = await isSymlinkedInto(
+        m.workspaceSynced = await isModSyncedToGame(
           m.folder,
           m.path,
           rimworldModsDir,
@@ -292,7 +291,7 @@ class ModRegistry {
       // before we publish the snapshot.
       for (const m of mods) {
         if (m.source !== 'workspace') continue;
-        m.workspaceSynced = await isSymlinkedInto(
+        m.workspaceSynced = await isModSyncedToGame(
           m.folder,
           m.path,
           rimworldModsDir,

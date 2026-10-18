@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { spawn, exec } from 'node:child_process';
 import { platform } from 'node:os';
 import { detectRimWorldPaths } from '../paths.js';
-import { getWorkspacePaths } from '../workspace.js';
+import { getWorkspacePaths, refreshSyncedRuntimeMirrors } from '../workspace.js';
 import { getRegistry } from '../registry/index.js';
 
 /** RimWorld's Steam application id. */
@@ -237,6 +237,8 @@ export async function disableModInGame(folder: string): Promise<DisableResult> {
 }
 
 export interface LaunchOptions {
+  /** Internal test macro already refreshed this mod immediately before launch. */
+  runtimeMirrorRefreshed?: string;
   /**
    * Extra command-line arguments to pass to the RimWorld executable. The
    * canonical use is `['-quicktest']`, which makes the engine bypass the
@@ -298,6 +300,7 @@ export async function launchRimWorld(
   if (await isRimWorldRunning()) {
     return { executable, args, alreadyRunning: true };
   }
+  await refreshSyncedRuntimeMirrors(opts.runtimeMirrorRefreshed);
 
   if (args.length === 0 && detectRimWorldPaths().engine !== 'waylith') {
     const url = `steam://rungameid/${RIMWORLD_APP_ID}`;

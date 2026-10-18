@@ -72,7 +72,7 @@ function launchModeBlock(autoLaunch: boolean): string {
 }
 
 const SHARED_RULES = `Workspace lifecycle:
-- Mods live in the workspace dir. They are NOT loaded by the game until synced (a symlink into RimWorld's Mods/). The only way to test a mod is run_test_cycle, which bundles sync + enable + dep-walk + autosort + launch + log watch.
+- Mods live in the workspace dir. The game loads a copied runtime mirror in RimWorld's Mods/, refreshed before each launch; edits are made in the workspace and are not live until refreshed. The only way to test a mod is run_test_cycle, which bundles runtime sync + enable + dep-walk + autosort + launch + log watch. Source, Tests, Tools, ArtSources, build outputs and .atlas never ship. LoadFolders.xml is preserved for every declared version. If code reads a custom folder such as World/ by path, declare it in .atlas/release.json as {"include":["World"]}; the release preview warns about undeclared root folders. Never move development files into runtime folders to bypass the release filter.
 - Never tell the user to enable the mod manually in RimWorld's in-game mod list or to restart the game; run_test_cycle handles that end-to-end.
 - Workshop mods are read-only; do not write or edit inside the Workshop directory.
 
@@ -165,7 +165,7 @@ ${text}`;
 
 function pathsBlock(ctx: PromptContext): string {
   return `Workspace root (each mod is a subfolder here): ${ctx.workspaceDir}
-RimWorld Mods/ (symlink target): ${ctx.rimworldModsDir}
+RimWorld Mods/ (runtime copies): ${ctx.rimworldModsDir}
 Default author handle: ${ctx.defaultAuthor} (use this as the packageId prefix unless the user specifies otherwise — e.g. ${ctx.defaultAuthor}.MyMod).
 RimWorld runtime: ${ctx.runtimeDescription}. Use the installed source index; rebuild after switching game versions. For Waylith, UnityEngine namespaces can remain through compatibility assemblies; do not invent UnityEngine DLL paths. Keep 1.6 and 1.7 build outputs separate when supporting both. Do not mark an existing mod 1.7-compatible until tested.
 RimWorld game version: ${ctx.gameVersion ?? '(unknown — game has not been launched yet)'} — new mods default their About.xml supportedVersions to this. Only override (e.g. ["1.5","1.6"]) when the user explicitly asks for back-compat.
@@ -404,7 +404,7 @@ const NEW_MOD_BLOCK = `Active scope: a new mod is being set up. Its folder will 
  * History: 2 = mod-folder cwd + scaffold_mod removed (2026-07).
  * 3 = verify unfamiliar APIs before editing; build/visual checks (2026-10).
  */
-export const PROMPT_VERSION = 3;
+export const PROMPT_VERSION = 4;
 
 /**
  * Compose the agent's system prompt for a given conversation scope.

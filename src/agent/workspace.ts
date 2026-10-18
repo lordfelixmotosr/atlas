@@ -14,10 +14,11 @@ import { scanAssets } from './assets/scanner.js';
 import { parseAboutXml, type ModDependency } from './registry/about-xml.js';
 import { loadSettings } from './settings.js';
 import { track } from './telemetry.js';
+import { ownedMirror, refreshRuntimeMirror, removeRuntimeMirror, isLegacyWorkspaceLink, watchMirrorId } from './rimworld/runtime-mirror.js';
+import { emitModChanged } from './mod-events.js';
 import {
   SKIP_DIRS,
   containsDll,
-  isSymlinkedInto,
   latestMtimeMs,
   readPublishedFileId,
 } from './fs-helpers.js';
@@ -143,7 +144,7 @@ async function buildWorkspaceMod(
   ] = await Promise.all([
     containsCsproj(path.join(workspacePath, 'Source')),
     containsDll(path.join(workspacePath, 'Assemblies')),
-    isSymlinkedInto(folder, workspacePath, rimworldModsDir),
+    isModSyncedToGame(folder, workspacePath, rimworldModsDir),
     readSchematic(folder),
     readPublishedFileId(workspacePath),
     readModPrefs(folder),
@@ -269,7 +270,10 @@ export interface SyncModResult {
 
 export async function syncModToGame(folder: string): Promise<SyncModResult> {
   const t0 = Date.now();
+  checkModFolder(folder);
   console.log(`${SYNC_LOG_PREFIX} start folder=${folder}`);
+  const { isRimWorldRunning } = await import('./rimworld/game.js');
+  if (await isRimWorldRunning()) throw new Error('Close RimWorld before refreshing the runtime mirror; a loaded mirror DLL may be locked.');
   const { workspaceDir } = getWorkspacePaths();
   const rimworldModsDir = getRimWorldModsDir();
   const target = path.join(workspaceDir, folder);
@@ -311,18 +315,11 @@ export async function syncModToGame(folder: string): Promise<SyncModResult> {
       `${SYNC_LOG_PREFIX} pruned ${removedStaleSiblings.length} stale sibling sync(s) sharing packageId: ${removedStaleSiblings.join(', ')}`,
     );
   }
-  if (await withTimeout('isSymlinkedInto', 5_000, () => isSymlinkedInto(folder, target, rimworldModsDir))) {
-    console.log(`${SYNC_LOG_PREFIX} done (already active) total=${Date.now() - t0}ms`);
-    return { removedStaleSiblings, assetWarnings };
-  }
-  if (fs.existsSync(link)) {
-    throw new Error(
-      `${link} already exists and is not a symlink to the workspace. Remove it manually before syncing.`,
-    );
-  }
-  const type = process.platform === 'win32' ? 'junction' : 'dir';
-  await withTimeout('symlink', 5_000, () => fsp.symlink(target, link, type));
-  console.log(`${SYNC_LOG_PREFIX} done total=${Date.now() - t0}ms`);
+  const release = await refreshRuntimeMirror(target, link, getMirrorStateDir());
+  watchMirrorId(target, link, getMirrorStateDir(), () => emitModChanged(folder));
+  for (const warning of release.warnings) console.warn(SYNC_LOG_PREFIX, warning);
+  assetWarnings.push(...release.warnings);
+  console.log(`${SYNC_LOG_PREFIX} refreshed runtime-only copy (${release.files.length} files, ${release.totalBytes} bytes) total=${Date.now() - t0}ms`);
   return { removedStaleSiblings, assetWarnings };
 }
 
@@ -347,13 +344,6 @@ async function pruneSiblingSyncs(
   const targetPidLc = await readPackageIdLc(targetPath);
   if (!targetPidLc) return [];
 
-  let resolvedWorkspace: string;
-  try {
-    resolvedWorkspace = await fsp.realpath(workspaceDir);
-  } catch {
-    return [];
-  }
-
   let entries: fs.Dirent[];
   try {
     entries = await fsp.readdir(rimworldModsDir, { withFileTypes: true });
@@ -366,26 +356,14 @@ async function pruneSiblingSyncs(
     if (entry.name === targetFolder) continue;
     const link = path.join(rimworldModsDir, entry.name);
 
-    // Only entries that resolve back into our workspace are modmixer-owned;
-    // anything else (Steam Workshop subscribe, hand-installed mod, the user's
-    // own symlink) we never touch.
-    let resolved: string;
-    try {
-      const lst = await fsp.lstat(link);
-      if (!lst.isSymbolicLink() && process.platform !== 'win32') continue;
-      resolved = await fsp.realpath(link);
-    } catch {
-      continue;
-    }
-    const rel = path.relative(resolvedWorkspace, resolved);
-    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue;
+    const resolved = path.join(workspaceDir, entry.name);
+    if (!await ownedMirror(resolved, link, getMirrorStateDir()) && !await isLegacyWorkspaceLink(resolved, link)) continue;
 
     const pidLc = await readPackageIdLc(resolved);
     if (!pidLc || pidLc !== targetPidLc) continue;
 
     try {
-      await fsp.rm(link, { recursive: true, force: true });
-      removed.push(entry.name);
+      if (await removeRuntimeMirror(resolved, link, getMirrorStateDir())) removed.push(entry.name);
     } catch (err) {
       console.warn(
         `${SYNC_LOG_PREFIX} failed to prune stale sibling sync ${link}:`,
@@ -408,42 +386,36 @@ async function readPackageIdLc(modPath: string): Promise<string> {
   }
 }
 
-export async function unsyncModFromGame(folder: string): Promise<void> {
-  const { workspaceDir } = getWorkspacePaths();
-  const rimworldModsDir = getRimWorldModsDir();
-  const target = path.join(workspaceDir, folder);
-  const link = path.join(rimworldModsDir, folder);
-  if (!(await isSymlinkedInto(folder, target, rimworldModsDir))) {
-    return; // not active or not ours, leave alone
-  }
-  await fsp.unlink(link);
+export function getMirrorStateDir(): string {
+  return path.join(app.getPath('userData'), 'runtime-mirrors');
 }
 
-/**
- * Permanently remove the symlink in RimWorld's Mods/ directory if it points
- * at our workspace folder. Unlike `unsyncModFromGame` this also runs after
- * the workspace folder has been deleted (when realpath comparison fails) —
- * it just refuses to delete a non-symlink, since that would be the user's
- * own data.
- */
+export async function isModSyncedToGame(folder: string, workspacePath: string, modsDir: string): Promise<boolean> {
+  return ownedMirror(workspacePath, path.join(modsDir, folder), getMirrorStateDir());
+}
+
+/** Every launch refreshes copied mods, including workspace companion mods. */
+export async function refreshSyncedRuntimeMirrors(alreadyRefreshed?: string): Promise<void> {
+  const {workspaceDir} = getWorkspacePaths(), modsDir = getRimWorldModsDir();
+  for (const entry of await fsp.readdir(workspaceDir, {withFileTypes: true})) {
+    if (!entry.isDirectory() || SKIP_DIRS.has(entry.name) || entry.name === alreadyRefreshed) continue;
+    const source = path.join(workspaceDir, entry.name), target = path.join(modsDir, entry.name);
+    if (await ownedMirror(source, target, getMirrorStateDir()) || await isLegacyWorkspaceLink(source, target)) await syncModToGame(entry.name);
+  }
+}
+
+function checkModFolder(folder: string): void {
+  if (!folder || folder === '.' || folder === '..' || /[\\/\x00]/.test(folder)) throw new Error('Invalid mod folder.');
+}
+
+export async function unsyncModFromGame(folder: string): Promise<void> {
+  checkModFolder(folder);
+  const target = path.join(getRimWorldModsDir(), folder);
+  await removeRuntimeMirror(path.join(getWorkspacePaths().workspaceDir, folder), target, getMirrorStateDir());
+}
+
 async function removeRimWorldLink(folder: string): Promise<void> {
-  const rimworldModsDir = getRimWorldModsDir();
-  const link = path.join(rimworldModsDir, folder);
-  let st: fs.Stats;
-  try {
-    st = await fsp.lstat(link);
-  } catch {
-    return; // nothing there
-  }
-  // Refuse to nuke a real directory — that's not ours to delete. On Windows
-  // junctions report as directories from lstat but `isSymbolicLink` returns
-  // true for them; only real dirs reach the throw.
-  if (!st.isSymbolicLink() && st.isDirectory() && process.platform !== 'win32') {
-    throw new Error(
-      `${link} is a real directory, not a symlink — refusing to delete.`,
-    );
-  }
-  await fsp.rm(link, { recursive: true, force: true });
+  await unsyncModFromGame(folder);
 }
 
 export interface ImportModResult {

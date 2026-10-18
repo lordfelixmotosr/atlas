@@ -7,6 +7,18 @@ import { metadataReadPath, metadataWritePath } from '../agent/mod-metadata';
 type DefinitionRecord = { hash: string; type: string; label: string; description?: string; kind?: string; fields?: Record<string, string> };
 type FileRecord = { hash: string; size: number; modifiedAt: number; preview?: string; previewTruncated?: boolean; defs?: Record<string, DefinitionRecord> };
 export type ModInventory = { signature: string; modifiedAt: number; files: Record<string, FileRecord> };
+
+/** Development inputs stay in the local change baseline, never in the upload.
+ * Runtime records are replaced with the exact staged bytes if files changed
+ * while the upload was being prepared. */
+export function mergePublishedInventory(inputs: ModInventory, runtime: ModInventory): ModInventory {
+  const files = {...inputs.files, ...runtime.files};
+  return {
+    files,
+    modifiedAt: Math.max(inputs.modifiedAt, runtime.modifiedAt),
+    signature: hash(Object.keys(files).sort().map(file => file + '\0' + files[file].hash).join('\n')),
+  };
+}
 type Baseline = { at: number; kind: 'published' | 'updated' | 'tracking'; note: string; inventory: ModInventory };
 type ContentDescription = { text: string; at: number; origin: 'ai' | 'manual'; model?: string };
 type State = { version: 1; first: Baseline; published?: Baseline; updated?: Baseline; observed: { signature: string; at: number }; descriptions?: Record<string, ContentDescription> };

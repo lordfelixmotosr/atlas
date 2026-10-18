@@ -1,11 +1,14 @@
 import path from 'node:path';
-import { collectModInventory, recordModBaseline, type ModInventory } from '../../atlas/mod-changes';
+import { collectModInventory, recordModBaseline, mergePublishedInventory, type ModInventory } from '../../atlas/mod-changes';
 import os from 'node:os';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
 import { app, utilityProcess, type UtilityProcess } from 'electron';
-import { getWorkspacePaths, readModAbout } from '../workspace.js';
+import { getWorkspacePaths, readModAbout, getMirrorStateDir, getRimWorldModsDir } from '../workspace.js';
+import { planRelease, copyRelease, assertRelease, auditRelease, fileSha, type ReleasePlan } from './release-package.js';
+import { reconcileMirrorId } from './runtime-mirror.js';
+import { renderLicenseText } from '../license-text.js';
 import { readModPrefs, writeModPrefs } from '../mod-prefs.js';
 import { syncLicenseFile } from '../license-file.js';
 import { DEFAULT_LICENSE_ID } from '../licenses.js';
@@ -24,22 +27,6 @@ const RIMWORLD_APP_ID = 294100;
 // 0 Public · 1 FriendsOnly · 2 Private · 3 Unlisted.
 const VISIBILITY_PUBLIC = 0;
 const VISIBILITY_VALUES = new Set([0, 1, 2, 3]);
-
-// Filenames matched anywhere under the mod folder that we strip before
-// uploading to Steam. .modmixer is the agent's sidecar (schematic etc.) and
-// must never ship; the rest is build cruft / editor noise that has no
-// business on the Workshop. Steamworks has no exclude API, so we stage a
-// filtered copy instead of pointing it at the workspace folder.
-const PUBLISH_EXCLUDES = new Set<string>([
-  '.modmixer',
-  '.atlas',
-  '.git',
-  '.DS_Store',
-  '.vs',
-  'bin',
-  'obj',
-  'node_modules',
-]);
 
 export type PublishStatus =
   | 'preparing'
@@ -252,6 +239,7 @@ async function writePublishedFileId(folder: string, id: bigint): Promise<void> {
   const file = publishedFileIdPath(folder);
   await fsp.mkdir(path.dirname(file), { recursive: true });
   await fsp.writeFile(file, id.toString(), 'utf8');
+  await reconcileMirrorId(workspaceModPath(folder), path.join(getRimWorldModsDir(), folder), getMirrorStateDir());
 }
 
 /**
@@ -264,6 +252,7 @@ export async function unlinkWorkshopItem(folder: string): Promise<void> {
   const file = publishedFileIdPath(folder);
   try {
     await fsp.unlink(file);
+    await reconcileMirrorId(workspaceModPath(folder), path.join(getRimWorldModsDir(), folder), getMirrorStateDir());
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
   }
@@ -306,28 +295,30 @@ export async function linkWorkshopItem(
  * cleanup hook the caller MUST run in a finally block — otherwise a failed
  * upload leaves the staged copy behind in the OS temp dir.
  */
-async function stageContentForPublish(srcFolder: string): Promise<{
-  contentPath: string;
-  cleanup: () => Promise<void>;
-}> {
-  const stageRoot = await fsp.mkdtemp(
-    path.join(os.tmpdir(), 'modmixer-publish-'),
-  );
+function workspaceModPath(folder: string): string {
+  if (!folder || folder === '.' || folder === '..' || /[\\/\x00]/.test(folder)) throw new Error('Invalid mod folder.');
+  return path.join(getWorkspacePaths().workspaceDir, folder);
+}
+
+export async function dryRunWorkshop(folder: string): Promise<ReleasePlan> {
+  const source = workspaceModPath(folder);
+  const about = await readModAbout(folder);
+  const license = (await readModPrefs(folder)).license ?? DEFAULT_LICENSE_ID;
+  const text = about ? renderLicenseText(license, {author: about.author, year: new Date().getFullYear()}) : null;
+  return planRelease(source, text === null ? {} : {LICENSE: text});
+}
+
+async function stageContentForPublish(srcFolder: string): Promise<{contentPath: string; plan: ReleasePlan; cleanup: () => Promise<void>}> {
+  const plan = await planRelease(srcFolder);
+  assertRelease(plan);
+  const stageRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'atlas-publish-'));
   const dest = path.join(stageRoot, path.basename(srcFolder));
-  await fsp.cp(srcFolder, dest, {
-    recursive: true,
-    filter: (source) => !PUBLISH_EXCLUDES.has(path.basename(source)),
-  });
-  return {
-    contentPath: dest,
-    cleanup: async () => {
-      try {
-        await fsp.rm(stageRoot, { recursive: true, force: true });
-      } catch (err) {
-        console.warn('[workshop] staged content cleanup failed:', err);
-      }
-    },
-  };
+  try {await copyRelease(srcFolder, dest, plan);}
+  catch (error) {await fsp.rm(stageRoot, {recursive: true, force: true}); throw error;}
+  return {contentPath: dest, plan, cleanup: async () => {
+    try {await fsp.rm(stageRoot, {recursive: true, force: true});}
+    catch (error) {console.warn('[workshop] staged content cleanup failed:', error);}
+  }};
 }
 
 function previewPathFor(folder: string): string | undefined {
@@ -413,7 +404,8 @@ export async function publishToWorkshop(
   }
 
   const { workspaceDir } = getWorkspacePaths();
-  const modFolder = path.join(workspaceDir, folder);
+  const modFolder = workspaceModPath(folder);
+  await reconcileMirrorId(modFolder, path.join(getRimWorldModsDir(), folder), getMirrorStateDir());
   const previewPath = previewPathFor(folder);
 
   // Resolve the mod's license (default MIT) and materialize it before the
@@ -459,6 +451,9 @@ export async function publishToWorkshop(
   // Steamworks runs in a forked host process, not here — see PublishHost. The
   // host is killed in the `finally` below so Steam stops treating RimWorld as
   // "running" the moment the publish settles.
+  const staged = await stageContentForPublish(modFolder);
+  let inputInventory: ModInventory | undefined;
+  try {inputInventory = await collectModInventory(modFolder);} catch (error) {console.warn('[workshop] cannot capture local change inputs:', error);}
   const host = new PublishHost();
   host.setProgressHandler((p) =>
     emit({
@@ -481,6 +476,10 @@ export async function publishToWorkshop(
       itemId = created.itemId;
       needsToAcceptAgreement = created.needsToAcceptAgreement;
       await writePublishedFileId(folder, itemId);
+      const idPath = path.join(staged.contentPath, 'About', 'PublishedFileId.txt');
+      await fsp.writeFile(idPath, itemId.toString(), 'utf8');
+      staged.plan.files = staged.plan.files.filter(f => f.path.toLowerCase() !== 'about/publishedfileid.txt');
+      staged.plan.files.push({path: 'About/PublishedFileId.txt', bytes: Buffer.byteLength(itemId.toString()), sha256: await fileSha(idPath)});
       if (needsToAcceptAgreement) {
         agreementUrl = `steam://url/CommunityFilePage/${itemId.toString()}`;
         emit({
@@ -493,9 +492,8 @@ export async function publishToWorkshop(
 
     emit({ status: 'uploading-content', itemId: itemId.toString() });
 
-    // Stage *after* writePublishedFileId so the staged copy includes the
-    // freshly-minted About/PublishedFileId.txt for newly-created items.
-    const staged = await stageContentForPublish(modFolder);
+    // Re-audit the actual staged files, including a freshly minted Workshop ID.
+    await auditRelease(staged.contentPath, staged.plan);
 
     // Version tags must follow About.xml on every upload. Existing categories
     // have been merged above; leave title, description and visibility alone on
@@ -514,8 +512,11 @@ export async function publishToWorkshop(
 
     let publishedInventory: ModInventory | undefined;
     try {
-      // Compare later edits with the staged bytes actually sent to Steam.
-      try { publishedInventory = await collectModInventory(staged.contentPath); }
+      // Keep source inputs in the LOCAL baseline; Steam receives staged content.
+      try {
+        const runtime = await collectModInventory(staged.contentPath);
+        publishedInventory = inputInventory ? mergePublishedInventory(inputInventory, runtime) : runtime;
+      }
       catch (error) { console.warn('[workshop] could not capture published content:', error); }
       await host.updateItem(itemId, updateDetails);
     } finally {
@@ -575,5 +576,6 @@ export async function publishToWorkshop(
     };
   } finally {
     host.dispose();
+    await staged.cleanup();
   }
 }

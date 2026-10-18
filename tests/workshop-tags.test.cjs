@@ -25,6 +25,7 @@ function load(file, imports = {}, globals = {}) {
   return module.exports;
 }
 const tags = load('agent/rimworld/workshop-tags.ts');
+const release = load('agent/rimworld/release-package.ts', {'fast-xml-parser': require('fast-xml-parser')});
 const parser = load('agent/registry/about-xml.ts');
 
 test('Steam tags follow About.xml major/minor versions and preserve non-version categories', () => {
@@ -88,7 +89,10 @@ function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1
           }
           if (message.op === 'createItem') result = { itemId: 456n, needsToAcceptAgreement: false };
           if (message.op === 'updateItem') {
-            uploaded.push({ ...message.updateDetails, about: await fsp.readFile(path.join(message.updateDetails.contentPath, 'About/About.xml'), 'utf8') });
+            const files = [];
+            const walk = async (dir, prefix = '') => {for (const e of await fsp.readdir(dir, {withFileTypes:true})) {if(e.isDirectory()) await walk(path.join(dir,e.name),prefix+e.name+'/');else files.push(prefix+e.name);}};
+            await walk(message.updateDetails.contentPath);
+            uploaded.push({ ...message.updateDetails, files, publishedId: await fsp.readFile(path.join(message.updateDetails.contentPath,'About/PublishedFileId.txt'),'utf8'), about: await fsp.readFile(path.join(message.updateDetails.contentPath, 'About/About.xml'), 'utf8') });
           }
           this.emit('message', { id: message.id, ok: true, result });
         } catch (error) { this.emit('message', { id: message.id, ok: false, error: error.message }); }
@@ -98,7 +102,7 @@ function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1
   }
   const api = load('agent/rimworld/workshop.ts', {
     electron: { app: { isPackaged: false, getPath: () => root }, utilityProcess: { fork: () => new Child() } },
-    '../workspace.js': { getWorkspacePaths: () => ({ workspaceDir: root }), readModAbout: async () => parser.parseAboutXml(await fsp.readFile(path.join(mod, 'About/About.xml'), 'utf8')) },
+    '../workspace.js': { getWorkspacePaths: () => ({ workspaceDir: root }), getMirrorStateDir: () => path.join(root, 'mirror-state'), getRimWorldModsDir: () => path.join(root, 'gameMods'), readModAbout: async () => parser.parseAboutXml(await fsp.readFile(path.join(mod, 'About/About.xml'), 'utf8')) },
     '../mod-prefs.js': { readModPrefs: async () => ({}), writeModPrefs: async () => {} },
     '../license-file.js': { syncLicenseFile: async () => {} },
     '../licenses.js': { DEFAULT_LICENSE_ID: 'MIT' },
@@ -106,11 +110,14 @@ function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1
     '../assets/workshop-preview.js': { selectWorkshopPreviewPath: () => undefined },
     '../snapshots.js': { commitTurn: async () => {} },
     '../telemetry.js': { track() {} },
-    '../../atlas/mod-changes': { collectModInventory: async () => ({}), recordModBaseline: async () => { baseline = true; } },
+    '../../atlas/mod-changes': { collectModInventory: async () => ({files:{},signature:'fixture',modifiedAt:0}), mergePublishedInventory: (a,b) => b, recordModBaseline: async () => { baseline = true; } },
     './workshop-tags.js': tags,
+    './release-package.js': release,
+    './runtime-mirror.js': {reconcileMirrorId: async () => false},
+    '../license-text.js': {renderLicenseText: () => null},
     'node:os': { tmpdir: () => root },
   });
-  return { api, requests, uploaded, killed: () => killed, baseline: () => baseline };
+  return { api, mod, requests, uploaded, killed: () => killed, baseline: () => baseline };
 }
 
 test('existing-item publishing uploads 1.7 and retains Steam categories and page edits', async t => {
@@ -148,4 +155,24 @@ test('missing supported versions cannot create a Workshop item or clear its vers
   const p = publisher(t, { existing: false, versions: [] });
   await assert.rejects(p.api.publishToWorkshop('Example', 0, '', false), /supported RimWorld version/);
   assert.equal(p.requests.length, 0); assert.equal(p.uploaded.length, 0); assert.equal(p.baseline(), false);
+});
+
+test('actual Steam payload contains only planned runtime files and a freshly created Workshop ID', async t => {
+  const p = publisher(t, {existing:false});
+  for(const [name,content] of Object.entries({'Source/Secret.cs':'private','Tests/Test.xml':'private','Tools/Build.ps1':'private','ArtSources/master.psd':'private','.atlas/release.json':'{"include":["World"]}','World/Planet.xml':'runtime','Defs/Thing.xml':'runtime','Assemblies/Mod.dll':'runtime','Assemblies/Mod.pdb':'debug','Assets.zip.001':'private'})){
+    const file=path.join(p.mod,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,content);
+  }
+  const dry=await p.api.dryRunWorkshop('Example');assert.equal(dry.valid,true);assert.equal(p.requests.length,0);assert(dry.files.some(f=>f.path==='World/Planet.xml'));
+  await p.api.publishToWorkshop('Example',2,'',false);
+  const files=p.uploaded[0].files;
+  assert(files.includes('World/Planet.xml'));assert(files.includes('Assemblies/Mod.dll'));assert.equal(p.uploaded[0].publishedId,'456');
+  assert(!files.some(f=>release.isDevelopmentPath(f)));assert.equal(fs.readFileSync(path.join(p.mod,'Source/Secret.cs'),'utf8'),'private');
+});
+
+test('a stray DLL blocks publishing before any Steam initialization or item creation', async t => {
+  const p=publisher(t,{existing:false});
+  fs.mkdirSync(path.join(p.mod,'Common'));fs.writeFileSync(path.join(p.mod,'Common/stray.dll'),'stray');
+  const dry=await p.api.dryRunWorkshop('Example');assert.equal(dry.valid,false);
+  await assert.rejects(p.api.publishToWorkshop('Example',0,'',false),/Stray DLL/);
+  assert.equal(p.requests.length,0);assert.equal(p.uploaded.length,0);assert(!fs.existsSync(path.join(p.mod,'About/PublishedFileId.txt')));
 });

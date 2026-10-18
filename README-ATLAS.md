@@ -1,4 +1,10 @@
-# Atlas 0.2.22 portable
+# Atlas 0.2.23 portable
+
+## 0.2.23 runtime-only releases
+
+Game sync now installs an owned copied runtime mirror, replacing legacy workspace junctions. The same release rules protect Atlas and in-game Workshop uploads. LoadFolders.xml and every declared version/conditional folder are preserved. Development files are excluded at every depth; unknown root folders warn and can be included with .atlas/release.json. Publish offers a dry run with file sizes and blocking checks. Mirrors refresh before launches, stale files are removed, newly game-written Workshop IDs return to the workspace, and DLL locks stop refresh with a clear message. Existing model and thinking preferences are preserved.
+
+Verification: 52 focused integration checks passed, including actual upload payloads and a real Windows DLL lock. An isolated RimWorld 1.7.4981 game probe loaded shared/versioned content and World data from a real copy without development files. Versioned and conditional file preservation has fixture coverage for 1.4–1.7; other engines were not launched. No Steam mod was uploaded. See [runtime release rules](docs/runtime-releases.md) for configuration and limits.
 
 ## 0.2.22 instructions and thinking controls
 

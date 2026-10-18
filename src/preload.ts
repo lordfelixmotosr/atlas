@@ -347,6 +347,7 @@ const api = {
   },
 
   // Workshop
+  dryRunWorkshop: (folder: string) => invoke('atlas:workshop:dry-run', folder),
   publishToWorkshop: (
     folder: string,
     visibility?: number,

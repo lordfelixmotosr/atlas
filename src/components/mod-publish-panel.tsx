@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AboutMetadata, WorkspaceMod } from '../agent/workspace';
 import type { PublishProgressEvent } from '../agent/rimworld/workshop';
+import type { ReleasePlan } from '../agent/rimworld/release-package';
 import { getGame } from '../agent/games/registry';
 import { DEFAULT_LICENSE_ID, licenseFooter } from '../agent/licenses';
 import { derivePackageId } from '@/lib/identifiers';
@@ -65,6 +66,7 @@ function RimWorldPublishPanel({
   );
   const [agreementUrl, setAgreementUrl] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [releasePlan, setReleasePlan] = useState<ReleasePlan | null>(null);
 
   // Track the latest defaultAuthor so the sticky-detection effect doesn't
   // need it as a dep (it would otherwise re-run too often).
@@ -94,6 +96,7 @@ function RimWorldPublishPanel({
     setAgreementUrl(null);
     setProgress(null);
     setConfirmOpen(false);
+    setReleasePlan(null);
     // reseedFromAbout is stable enough for our purposes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mod.folder]);
@@ -236,6 +239,12 @@ function RimWorldPublishPanel({
   );
 
   const isUpdate = mod.publishedFileId !== null;
+  const inspectUpload = useAsyncAction(async (confirm: boolean) => {
+    if (dirty && confirm && await save.run() === null) return;
+    const plan = await window.modmixer.dryRunWorkshop(mod.folder);
+    setReleasePlan(plan);
+    if (confirm && plan.valid) setConfirmOpen(true);
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -402,6 +411,25 @@ function RimWorldPublishPanel({
             {publish.busy && progress && <PublishProgress progress={progress} />}
 
             {publish.error && <ErrorBanner>{publish.error}</ErrorBanner>}
+            {inspectUpload.error && <ErrorBanner>{inspectUpload.error}</ErrorBanner>}
+            <div className="space-y-2 rounded-md border border-line p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-medium text-ink">Upload contents</span>
+                <button className="rounded-md border border-line px-3 py-1.5 text-xs" disabled={dirty || inspectUpload.busy || publish.busy} onClick={() => void inspectUpload.run(false)}>
+                  {inspectUpload.busy ? 'Checking files…' : 'Dry run · inspect files'}
+                </button>
+              </div>
+              <p className="text-xs text-muted">{dirty ? 'Save metadata to inspect the upload.' : 'Lists the runtime files and sizes without uploading to Steam.'}</p>
+              {releasePlan && <>
+                <p className="text-xs text-ink">{releasePlan.valid ? 'Ready' : 'Blocked'} · {releasePlan.files.length} files · {formatBytes(releasePlan.totalBytes)}</p>
+                {releasePlan.errors.map((error, i) => <p key={i} role="alert" className="text-xs text-red-400">{error}</p>)}
+                {releasePlan.warnings.map((warning, i) => <p key={i} className="text-xs text-amber-400">{warning}</p>)}
+                <details className="text-xs"><summary className="cursor-pointer">Files that would upload</summary>
+                  <div className="mt-2 max-h-56 overflow-auto rounded border border-line"><table className="w-full text-left"><thead><tr><th className="p-2">File</th><th className="p-2 text-right">Size</th></tr></thead><tbody>{releasePlan.files.map(file => <tr key={file.path}><td className="break-all px-2 py-1">{file.path}</td><td className="whitespace-nowrap px-2 py-1 text-right" title={`${file.bytes} bytes`}>{formatBytes(file.bytes)}</td></tr>)}</tbody></table></div>
+                </details>
+                <details className="text-xs"><summary className="cursor-pointer">Excluded paths ({releasePlan.excluded.length})</summary><div className="max-h-40 overflow-auto">{releasePlan.excluded.map(p => <div key={p} className="break-all py-0.5">{p}</div>)}</div></details>
+              </>}
+            </div>
 
             <div className="flex items-center justify-end gap-2 pt-1">
               <button
@@ -411,8 +439,8 @@ function RimWorldPublishPanel({
                 Open mod folder
               </button>
               <button
-                onClick={() => setConfirmOpen(true)}
-                disabled={publish.busy || !name.trim() || !description.trim()}
+                onClick={() => void inspectUpload.run(true)}
+                disabled={publish.busy || inspectUpload.busy || !name.trim() || !description.trim()}
                 className="rounded-md bg-ink px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {publish.busy
@@ -438,6 +466,8 @@ function RimWorldPublishPanel({
         isUpdate={isUpdate}
         modName={name}
         supportedVersions={mod.about.supportedVersions}
+        releaseSummary={releasePlan ? `${releasePlan.files.length} runtime files · ${formatBytes(releasePlan.totalBytes)}` : ''}
+        releaseWarnings={releasePlan?.warnings ?? []}
         initialTrackOnLeaderboard={mod.prefs.trackOnLeaderboard}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={(result) => {
@@ -447,6 +477,10 @@ function RimWorldPublishPanel({
       />
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  return bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 /**
