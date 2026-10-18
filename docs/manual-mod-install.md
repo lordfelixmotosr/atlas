@@ -4,6 +4,8 @@
 
 Clicking opens a file review: added, changed and removed files, their sizes, unchanged counts and warnings. Confirm in that same panel to install the entire current release selection, including XML, textures, versioned content and approved extra folders. This replaces the managed runtime snapshot, removing obsolete files and folders. Development files remain excluded; unknown root folders are warned about and can be approved for release in `.atlas/release.json`. Cancelling the review does not close the game or change the runtime. Changes to workspace files, the installed files, the saved version or game-running state invalidate the confirmation and refresh the review.
 
+Long warning lists are collapsed in the review. After a successful install or restore, a short result explains that installation completed, with every unique warning available under **View details**. These reports keep their heading and OK button visible while the warning body scrolls, including at smaller window sizes. Reviewing a completed result does not keep the installer busy. Asset warnings still require review and are not suppressed.
+
 ## Restore a previous installed version
 
 Use the existing **More mod actions (⋯)** menu → **Restore previous version…**. The entry appears only when a saved runtime is available. Review the files and confirm; save your game first if Atlas must close RimWorld. Restoring leaves the game closed and preserves your workspace source edits and latest Workshop ID. Atlas Launch/Test keeps using that restored runtime until workspace runtime content changes or you explicitly choose Install update. Source-only C# edits require a new build before the runtime changes.

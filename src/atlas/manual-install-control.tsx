@@ -22,7 +22,10 @@ export function ManualInstallControl({folder,conversationId,busy,onInstalling,re
       if(result.status==='confirmation'){setReview(result);return;}
       setReview(null);setNotice(result.status==='current'?'Already installed':mode==='restore'?'Previous version restored':'Update installed');
       const next=await window.modmixer.dllUpdateState(folder,conversationId);setState(next);onRestoreAvailable?.(!!next.previous);
-      if(result.status==='installed'&&result.warnings.length)await appAlert(result.warnings.join('\n'),{title:'Installed with warnings'});
+      if(result.status==='installed'&&result.warnings.length){
+        const warnings=[...new Set(result.warnings)];
+        void appAlert(`${mode==='restore'?'The previous runtime was restored':'The runtime update was installed'} for ${result.installed.length} ${result.installed.length===1?'mod':'mods'}.\n\n${warnings.length} ${warnings.length===1?'warning needs':'warnings need'} review. These are asset or package checks; installation has completed.`,{title:mode==='restore'?'Restored with warnings':'Installed with warnings',details:warnings});
+      }
     }catch(cause){const message=cause instanceof Error?cause.message:String(cause);if(token)setError(message);else await appAlert(message,{title:mode==='restore'?'Restore unavailable':'Update not installed'});}
     finally{active.current=false;setWorking(false);onInstalling(false);}
   };

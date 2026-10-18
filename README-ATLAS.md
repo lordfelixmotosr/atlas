@@ -1,4 +1,10 @@
-# Atlas 0.2.28 portable
+# Atlas 0.2.29 portable
+
+## 0.2.29 installation warning dialog repair
+
+Installation and restoration results show a short success summary with the complete, deduplicated warning list collapsed under View details. Asset and package warnings remain available; they do not turn a completed installation into a failed one. Opening the warning report no longer keeps the installer busy. Shared alerts and confirmations keep their headings and buttons visible while long messages scroll. The installation preview uses a wider, bounded layout with fixed actions and collapsible warnings.
+
+Verified with a native Electron fixture using the actual mod header, installer and shared dialogs, 501 unique warnings, long unbroken paths and several window sizes. No workspace mod sources, Workshop files, installed runtime content, model settings or accounts are changed by this UI repair.
 
 ## 0.2.28 installation preview and runtime restore
 

@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.28 native source release built and verified",
+  "status": "Atlas 0.2.29 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -174,7 +174,8 @@
     "0.2.25: group matching Workshop verification copies under their workspace identity",
     "0.2.26: serialized Windows runtime mirror transactions, retained recovery journals and versioned managed bridge copies",
     "0.2.27: manual full-runtime installation for pending DLL updates; named Windows folder shortcuts without project-path migration",
-    "0.2.28: on-demand installation preview, one retained previous runtime per mod, restore in the existing overflow menu and unchanged-runtime reuse"
+    "0.2.28: on-demand installation preview, one retained previous runtime per mod, restore in the existing overflow menu and unchanged-runtime reuse",
+    "0.2.29: bounded alerts and installation reviews, visible action buttons, collapsed complete warning details and completed-install status handling"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -189,7 +190,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.28",
+  "version": "0.2.29",
   "supportedGames": [
     "rimworld"
   ],
@@ -336,24 +337,27 @@
       "0.2.27 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
       "0.2.28 110 regression checks passed, including preview revalidation inside the sync lease, bounded version retention, restored-runtime testing, Workshop ID preservation, modified/unsafe backups, failed restoration, actual Windows locks and transaction recovery; an isolated real run_test_cycle loaded v1, installed v2 and restored/tested v1 through the actual IPC and diagnostic bridge; source hashes, Workshop metadata and normal ModsConfig were preserved",
       "0.2.28 native Electron production build, app API and second-launch startup health verified; no paid model requests or Steam uploads",
-      "0.2.28 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.28 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.29 36 focused installation, runtime-history and release checks passed, including a real Windows DLL sharing lock; the actual native Electron installer and shared dialogs passed install, restore, cancellation, warning deduplication, full-warning access and scroll geometry checks with 501 unique warnings at 900x600, 620x460, 420x540 and 1000x760; source type checking passed",
+      "0.2.29 native Electron production build, app API and second-launch startup health verified; no paid model requests or Steam uploads",
+      "0.2.29 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "application-update": {
-      "path": "Atlas-0.2.28-win-x64-application-update.zip",
-      "size": 97093278,
-      "sha256": "5734e6ccba1288eb9443a97137cde7b95bb92876181907adafe829f4dcca536d"
+      "path": "Atlas-0.2.29-win-x64-application-update.zip",
+      "size": 97094158,
+      "sha256": "e141782c915cc2fa70607de746c53bdebb38028fb83569c91a5a4185d3f1d6aa"
     },
     "portable": {
-      "path": "Atlas-0.2.28-win-x64-portable.zip",
-      "size": 397253779,
-      "sha256": "905dde427af1a7570e9117ff20ec5185b8d446a3b480df3cbc8b86680d4cf680"
+      "path": "Atlas-0.2.29-win-x64-portable.zip",
+      "size": 397254659,
+      "sha256": "75d25695536d235bee016cd5f3eac5f6c4ae5443f115331487046d8e396905e4"
     },
     "full-update": {
-      "path": "Atlas-0.2.28-win-x64-full-update.zip",
-      "size": 396687287,
-      "sha256": "3afd70e0532e8b120f27de5681a98da333d2140d6f55da427df394bc2bb89c54"
+      "path": "Atlas-0.2.29-win-x64-full-update.zip",
+      "size": 396688167,
+      "sha256": "3bb1d1a299da155260d6efb414ff13d449222c31ded1e1049c046aa96ab9066a"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"
