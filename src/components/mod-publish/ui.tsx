@@ -90,6 +90,8 @@ function labelForStatus(status: PublishStatus): string {
     case 'uploading-content': return 'Uploading content';
     case 'uploading-preview': return 'Uploading preview';
     case 'committing': return 'Committing';
+    case 'verifying-download': return 'Checking Steam download';
+    case 'verifying-files': return 'Comparing downloaded files';
     case 'done': return 'Done';
     case 'error': return 'Error';
   }

@@ -26,6 +26,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readWorkshopTags, type WorkshopTagReader } from './rimworld/workshop-tags.js';
+import {waitForSteamDownload,type SteamDownloadApi} from './rimworld/workshop-verification.js';
 
 const parent = process.parentPort;
 if (!parent) {
@@ -33,7 +34,7 @@ if (!parent) {
 }
 
 /** Subset of steamworks.js's `workshop` namespace that we drive. */
-interface WorkshopApi extends WorkshopTagReader {
+interface WorkshopApi extends WorkshopTagReader, SteamDownloadApi {
   createItem(appId: number): Promise<{
     itemId: bigint;
     needsToAcceptAgreement: boolean;
@@ -71,7 +72,7 @@ function initSteam(steamworksModule: string, appId: number, cwd: string): void {
 
 interface JobMessage {
   id: number;
-  op: 'init' | 'createItem' | 'getItemTags' | 'updateItem';
+  op: 'init' | 'createItem' | 'getItemTags' | 'updateItem' | 'downloadItem' | 'downloadState';
   steamworksModule?: string;
   appId?: number;
   cwd?: string;
@@ -88,6 +89,13 @@ async function handle(msg: JobMessage): Promise<void> {
       return;
     }
     if (!ws) throw new Error('Steamworks not initialized');
+    if(op==='downloadState'){
+      parent!.postMessage({id,ok:true,result:ws.state(msg.itemId!)});return;
+    }
+    if(op==='downloadItem'){
+      const folder=await waitForSteamDownload(ws,msg.itemId!,(current,total)=>parent!.postMessage({downloadProgress:{current,total}}));
+      parent!.postMessage({id,ok:true,result:folder});return;
+    }
     if (op === 'getItemTags') {
       const tags = await readWorkshopTags(ws, msg.itemId!);
       parent!.postMessage({ id, ok: true, result: tags });

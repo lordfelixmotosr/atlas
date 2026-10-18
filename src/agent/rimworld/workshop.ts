@@ -17,6 +17,9 @@ import { selectWorkshopPreviewPath } from '../assets/workshop-preview.js';
 import { commitTurn } from '../snapshots.js';
 import { track } from '../telemetry.js';
 import { workshopTags } from './workshop-tags.js';
+import {getBuildState,buildWarning,type BuildState} from './build-state.js';
+import {readPublishedRelease,savePublishedRelease,compareWorkshopDownload,type WorkshopVerification,type PublishedRelease} from './workshop-verification.js';
+import {emitModChanged} from '../mod-events.js';
 
 // RimWorld's Steam app ID. Workshop items live under this consumer/creator app.
 const RIMWORLD_APP_ID = 294100;
@@ -35,6 +38,8 @@ export type PublishStatus =
   | 'uploading-content'
   | 'uploading-preview'
   | 'committing'
+  | 'verifying-download'
+  | 'verifying-files'
   | 'done'
   | 'error';
 
@@ -53,6 +58,7 @@ export interface PublishProgressEvent {
   agreementUrl?: string;
   /** Set when status === 'error'. */
   error?: string;
+  verification?: WorkshopVerification;
 }
 
 const events = new EventEmitter();
@@ -81,6 +87,7 @@ interface HostMessage {
   result?: unknown;
   error?: string;
   progress?: { status: number; uploaded: number; total: number };
+  downloadProgress?: {current:number;total:number};
 }
 
 /**
@@ -109,6 +116,7 @@ class PublishHost {
     | ((p: { status: number; uploaded: number; total: number }) => void)
     | undefined;
   private exited = false;
+  onDownloadProgress?: (current:number,total:number)=>void;
 
   constructor() {
     // workshop-publish-host is bundled as its own Forge Vite `main` entry, so
@@ -129,6 +137,7 @@ class PublishHost {
     // is then a no-op, but still counts as unhandled unless we swallow it.
     this.ready.catch(() => {});
     this.child.on('message', (msg: HostMessage) => {
+      if(msg.downloadProgress){this.onDownloadProgress?.(msg.downloadProgress.current,msg.downloadProgress.total);return;}
       if (msg.progress) {
         this.onProgress?.(msg.progress);
         return;
@@ -208,6 +217,8 @@ class PublishHost {
   getItemTags(itemId: bigint): Promise<string[]> {
     return this.call({ op: 'getItemTags', itemId });
   }
+  downloadItem(itemId:bigint):Promise<string>{return this.call({op:'downloadItem',itemId});}
+  downloadState(itemId:bigint):Promise<number>{return this.call({op:'downloadState',itemId});}
 
   /**
    * Kill the host process. This is what releases Steam's "RimWorld is
@@ -300,12 +311,76 @@ function workspaceModPath(folder: string): string {
   return path.join(getWorkspacePaths().workspaceDir, folder);
 }
 
-export async function dryRunWorkshop(folder: string): Promise<ReleasePlan> {
+export async function dryRunWorkshop(folder: string): Promise<ReleasePlan & {buildState:BuildState}> {
   const source = workspaceModPath(folder);
   const about = await readModAbout(folder);
   const license = (await readModPrefs(folder)).license ?? DEFAULT_LICENSE_ID;
   const text = about ? renderLicenseText(license, {author: about.author, year: new Date().getFullYear()}) : null;
-  return planRelease(source, text === null ? {} : {LICENSE: text});
+  const plan=await planRelease(source, text === null ? {} : {LICENSE: text});
+  const buildState=await getBuildState(source),warning=buildWarning(buildState);
+  if(warning)plan.warnings.push(warning);
+  return {...plan,buildState};
+}
+
+const verificationJobs=new Map<string,{host:PublishHost;stopped:boolean;promise:Promise<WorkshopVerification>}>();
+const uploading=new Set<string>();
+const verificationRequests=new Map<string,Promise<WorkshopVerification>>();
+const latestPublications=new Map<string,number>();
+async function currentUploadRecord(folder:string,mod:string,itemId:string):Promise<PublishedRelease|null>{
+  const receipt=await readPublishedRelease(mod,itemId);
+  const latest=Math.max(latestPublications.get(folder)??0,(await readModPrefs(folder)).lastPublishedAt??0);
+  return receipt&&receipt.uploadedAt>=latest?receipt:null;
+}
+export async function getWorkshopReleaseStatus(folder:string):Promise<{build:BuildState;release:PublishedRelease|null}>{
+  const mod=workspaceModPath(folder),id=await readPublishedFileId(folder);
+  const release=id?await currentUploadRecord(folder,mod,id.toString()):null;
+  if(release?.verification.status==='checking'&&!verificationRequests.has(folder))release.verification={status:'unavailable',message:'The previous verification did not finish. Retry to check Steam’s copy.'};
+  return{build:await getBuildState(mod),release};
+}
+export function stopWorkshopVerification(folder:string):void{
+  workspaceModPath(folder);const job=verificationJobs.get(folder);if(job){job.stopped=true;job.host.dispose();}
+}
+async function verifyWorkshopReleaseInternal(folder:string,automatic=false):Promise<WorkshopVerification>{
+  const mod=workspaceModPath(folder);
+  if(uploading.has(folder)&&!automatic)throw new Error('Wait for this mod’s upload to finish.');
+  const existing=verificationJobs.get(folder);if(existing)return existing.promise;
+  const id=await readPublishedFileId(folder),receipt=id?await currentUploadRecord(folder,mod,id.toString()):null;
+  if(!receipt)throw new Error('No recorded Atlas upload to compare. Publish this mod once with Atlas 0.2.24 or newer.');
+  const {isRimWorldRunning}=await import('./game.js');
+  if(await isRimWorldRunning()){
+    const result:WorkshopVerification={status:'pending',message:'Upload succeeded. Close RimWorld, then verify its Steam copy.'};
+    await savePublishedRelease(mod,{...receipt,verification:result});return result;
+  }
+  const host=new PublishHost();
+  const job={host,stopped:false,promise:Promise.resolve(null as unknown as WorkshopVerification)};
+  verificationJobs.set(folder,job);
+  job.promise=(async()=>{
+    let result:WorkshopVerification;
+    try{
+      await savePublishedRelease(mod,{...receipt,verification:{status:'checking',message:'Waiting for Steam’s downloaded copy…'}});
+      host.onDownloadProgress=(current,total)=>events.emit('progress',{folder,status:'verifying-download',uploaded:current,total});
+      events.emit('progress',{folder,status:'verifying-download'});
+      await host.init();const download=await host.downloadItem(BigInt(receipt.itemId));
+      const absolute=path.resolve(download),relative=path.relative(mod,absolute);
+      if(!path.isAbsolute(download)||!relative||!relative.startsWith('..')&&!path.isAbsolute(relative)||path.basename(absolute)!==receipt.itemId||path.basename(path.dirname(absolute))!=='294100'||path.basename(path.dirname(path.dirname(absolute)))!=='content')throw new Error('Steam returned an unexpected content location; no workspace copy was checked.');
+      events.emit('progress',{folder,status:'verifying-files'});
+      result=await compareWorkshopDownload(absolute,receipt.files);
+      if((await host.downloadState(BigInt(receipt.itemId)))&(8|16|32))throw new Error('Steam started another update during verification. Retry when it finishes.');
+    }catch(error){result={status:job.stopped?'stopped':'unavailable',checkedAt:Date.now(),message:job.stopped?'Atlas stopped checking. Steam may finish its queued download.':`Upload is saved, but its Steam copy could not be verified: ${error instanceof Error?error.message:String(error)}`};}
+    finally{host.dispose();verificationJobs.delete(folder);}
+    const current=await readPublishedRelease(mod,receipt.itemId);
+    if(current?.uploadedAt===receipt.uploadedAt)await savePublishedRelease(mod,{...receipt,verification:result});
+    events.emit('progress',{folder,status:'done',itemId:receipt.itemId,verification:result});emitModChanged(folder);
+    return result;
+  })();return job.promise;
+}
+
+export function verifyWorkshopRelease(folder:string,automatic=false):Promise<WorkshopVerification>{
+  workspaceModPath(folder);
+  const current=verificationRequests.get(folder);if(current)return current;
+  const task=verifyWorkshopReleaseInternal(folder,automatic);verificationRequests.set(folder,task);
+  void task.finally(()=>{if(verificationRequests.get(folder)===task)verificationRequests.delete(folder);}).catch(()=>{});
+  return task;
 }
 
 async function stageContentForPublish(srcFolder: string): Promise<{contentPath: string; plan: ReleasePlan; cleanup: () => Promise<void>}> {
@@ -347,6 +422,7 @@ function statusFromUpdateStatus(code: number): PublishStatus {
 }
 
 export interface PublishResult {
+  verification?: WorkshopVerification;
   itemId: string;
   url: string;
   needsToAcceptAgreement: boolean;
@@ -379,7 +455,7 @@ async function registerOnLeaderboard(itemId: string): Promise<void> {
   }
 }
 
-export async function publishToWorkshop(
+async function publishToWorkshopInternal(
   folder: string,
   visibility: number = VISIBILITY_PUBLIC,
   changeNote?: string,
@@ -524,6 +600,13 @@ export async function publishToWorkshop(
     }
 
     const publishedAt = Date.now();
+    latestPublications.set(folder,publishedAt);
+    let verification:WorkshopVerification={status:'pending',message:'Upload succeeded. Preparing to check Steam’s copy.'};
+    let receiptSaved=false;
+    try{await savePublishedRelease(modFolder,{version:1,itemId:itemId.toString(),uploadedAt:publishedAt,files:staged.plan.files,verification});receiptSaved=true;}
+    catch(error){verification={status:'unavailable',message:`Upload succeeded, but its verification record could not be saved: ${String(error)}`};}
+    // Release the upload host before asking Steam to download the published item.
+    host.dispose();
     if (publishedInventory) {
       try { await recordModBaseline(modFolder, 'published', changeNote ?? '', publishedInventory, publishedAt); }
       catch (error) { console.warn('[workshop] could not save published comparison:', error); }
@@ -535,6 +618,7 @@ export async function publishToWorkshop(
       itemId: itemId.toString(),
       url,
       agreementUrl,
+      verification,
     });
 
     // Stamp the publish time so the panel can show "last published". Best-effort:
@@ -568,14 +652,29 @@ export async function publishToWorkshop(
       console.warn('[workshop] post-publish snapshot failed:', err);
     }
 
+    if(receiptSaved){
+      try{verification=await verifyWorkshopRelease(folder,true);}
+      catch(error){verification={status:'unavailable',message:`Upload succeeded; verification is unavailable: ${String(error)}`};
+        await savePublishedRelease(modFolder,{version:1,itemId:itemId.toString(),uploadedAt:publishedAt,files:staged.plan.files,verification}).catch(()=>{});
+      }
+    }
     return {
       itemId: itemId.toString(),
       url,
       needsToAcceptAgreement,
       agreementUrl,
+      verification,
     };
   } finally {
     host.dispose();
     await staged.cleanup();
   }
+}
+
+export async function publishToWorkshop(folder:string,visibility:number=VISIBILITY_PUBLIC,changeNote?:string,trackOnLeaderboard=true):Promise<PublishResult>{
+  workspaceModPath(folder);
+  if(uploading.has(folder)||verificationRequests.has(folder))throw new Error('This mod already has an upload or verification in progress.');
+  uploading.add(folder);
+  try{return await publishToWorkshopInternal(folder,visibility,changeNote,trackOnLeaderboard);}
+  finally{uploading.delete(folder);}
 }

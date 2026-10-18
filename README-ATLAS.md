@@ -1,4 +1,10 @@
-# Atlas 0.2.23 portable
+# Atlas 0.2.24 portable
+
+## 0.2.24 build tracking and Steam verification
+
+Publish shows whether workspace source and released DLLs match the last successful Atlas C# build, warns when a rebuild is needed, and offers Rebuild C# with compiler output. Existing source mods remain untracked until a successful recorded build. Hashes detect edits even when timestamps are unchanged. A recorded build does not certify every supported game version.
+
+After a successful upload, Atlas saves the exact runtime file manifest and checks Steam’s downloaded copy. Missing, changed and unexpected files are reported, including development leftovers. Download progress, retry and Stop checking are available. A running game defers the check. Verification failures do not turn a successful upload into an upload error. Settings and chats are preserved. See [release health checks](docs/release-health.md) for evidence and limits.
 
 ## 0.2.23 runtime-only releases
 

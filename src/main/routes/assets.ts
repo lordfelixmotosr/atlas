@@ -25,9 +25,11 @@ import {
   linkWorkshopItem,
   publishToWorkshop,
   dryRunWorkshop,
+  getWorkshopReleaseStatus,verifyWorkshopRelease,stopWorkshopVerification,
   unlinkWorkshopItem,
 } from '../../agent/rimworld/workshop.js';
 import type { RouteContext } from './context.js';
+import {buildRimworldMod} from '../../agent/rimworld/build.js';
 
 /** Asset CRUD + Workshop publish/link/unlink. */
 export function registerAssetsRoutes(ctx: RouteContext): void {
@@ -189,6 +191,13 @@ export function registerAssetsRoutes(ctx: RouteContext): void {
     },
   );
   ipc.handle('atlas:workshop:dry-run', (_evt, folder: string) => dryRunWorkshop(folder));
+  ipc.handle('atlas:workshop:release-status',(_evt,folder:string)=>getWorkshopReleaseStatus(folder));
+  ipc.handle('atlas:workshop:verify',(_evt,folder:string)=>verifyWorkshopRelease(folder));
+  ipc.handle('atlas:workshop:verify-stop',(_evt,folder:string)=>stopWorkshopVerification(folder));
+  ipc.handle('atlas:workshop:rebuild',async(_evt,folder:string)=>{
+    const mod=await getWorkspaceMod(folder);if(!mod||mod.prefs.game!=='rimworld')throw new Error('Select a RimWorld workspace mod.');
+    const result=await buildRimworldMod(mod.workspacePath);emitModChanged(folder);return result.details;
+  });
 
   ipc.handle(
     'modmixer:workshop:unlink',

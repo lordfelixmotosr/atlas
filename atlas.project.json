@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.23 native source release built and verified",
+  "status": "Atlas 0.2.24 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -169,7 +169,8 @@
     "0.2.20: RimWorld 1.7 Waylith detection, .NET 10 scaffolding, source indexing, game logs, diagnostic bridge, Forge checks and reviewed reference packs added alongside 1.6",
     "0.2.21: Workshop updates synchronize supported RimWorld version tags from About.xml while retaining existing categories and page metadata",
     "0.2.22: evidence-based modding instructions and model-aware native thinking controls preserve saved preferences",
-    "0.2.23: runtime-only copied mirrors and shared Steam release filtering preserve per-version content"
+    "0.2.23: runtime-only copied mirrors and shared Steam release filtering preserve per-version content",
+    "0.2.24: recorded C# build fingerprints and post-publish Steam download verification"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -184,7 +185,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.23",
+  "version": "0.2.24",
   "supportedGames": [
     "rimworld"
   ],
@@ -316,24 +317,27 @@
       "0.2.22 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
       "0.2.23 52 release, publisher, launch, ID, Windows-lock, change-tracking and thinking checks passed; isolated RimWorld 1.7.4981 loaded shared/versioned content and World data without development files",
       "0.2.23 native Electron production build and startup health verified; no paid model requests or Steam uploads",
-      "0.2.23 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.23 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.24 67 release-health, publisher, launch, ID, Windows-lock, change-tracking and thinking checks passed; real Steam download comparison matched 1339 current runtime files with no development leftovers",
+      "0.2.24 native Electron production build and startup health verified; no paid model requests or Steam uploads",
+      "0.2.24 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "application-update": {
-      "path": "Atlas-0.2.23-win-x64-application-update.zip",
-      "size": 97073796,
-      "sha256": "4d98acfeb9cc2067daa249416f32f7487c2ec6dd4dcfa2c2ead9f700978864be"
+      "path": "Atlas-0.2.24-win-x64-application-update.zip",
+      "size": 97080234,
+      "sha256": "160e62deffa5a7a0d0cd3a68ef2688c12924ffad62da895c7c3598965d2d642f"
     },
     "portable": {
-      "path": "Atlas-0.2.23-win-x64-portable.zip",
-      "size": 397234297,
-      "sha256": "f5680b4c2337a7d510da5e72894aad04d35623051905634d627dce0f23e23c00"
+      "path": "Atlas-0.2.24-win-x64-portable.zip",
+      "size": 397240735,
+      "sha256": "e0be91f20148cacbb6acd452446431f4481e5451b232a9b33743a154dfcd934a"
     },
     "full-update": {
-      "path": "Atlas-0.2.23-win-x64-full-update.zip",
-      "size": 396667805,
-      "sha256": "4e880e4d0ff7fd0447ac85526b0c07465b5503733b4c2e74f6f2fc8572dad013"
+      "path": "Atlas-0.2.24-win-x64-full-update.zip",
+      "size": 396674243,
+      "sha256": "bb070c05fb1d0f864be841d766ea3b06b36425a98e03d9417284351cf2244fe5"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { AboutMetadata, WorkspaceMod } from '../agent/workspace';
 import type { PublishProgressEvent } from '../agent/rimworld/workshop';
 import type { ReleasePlan } from '../agent/rimworld/release-package';
+import type {BuildState} from '../agent/rimworld/build-state';
+import type {WorkshopVerification} from '../agent/rimworld/workshop-verification';
 import { getGame } from '../agent/games/registry';
 import { DEFAULT_LICENSE_ID, licenseFooter } from '../agent/licenses';
 import { derivePackageId } from '@/lib/identifiers';
@@ -67,6 +69,36 @@ function RimWorldPublishPanel({
   const [agreementUrl, setAgreementUrl] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [releasePlan, setReleasePlan] = useState<ReleasePlan | null>(null);
+  const [buildState,setBuildState]=useState<BuildState|null>(null);
+  const [verification,setVerification]=useState<WorkshopVerification|null>(null);
+  const [buildOutput,setBuildOutput]=useState('');
+  const currentFolder=useRef(mod.folder);currentFolder.current=mod.folder;
+  const refreshRelease=async()=>{
+    const status=await window.modmixer.getWorkshopReleaseStatus(mod.folder);
+    if(currentFolder.current!==mod.folder)return;
+    setBuildState(status.build);setVerification(status.release?.verification??null);
+  };
+  useEffect(()=>{
+    let live=true,sequence=0;
+    setBuildState(null);setVerification(null);setBuildOutput('');
+    const refresh=()=>{const request=++sequence;void window.modmixer.getWorkshopReleaseStatus(mod.folder).then(status=>{
+      if(live&&request===sequence){setBuildState(status.build);setVerification(status.release?.verification??null);}
+    }).catch(error=>{if(live)setBuildState({status:'unknown',message:String(error)});});};
+    refresh();const off=window.modmixer.onModChanged(event=>{if(event.folder===mod.folder)refresh();});
+    window.addEventListener('focus',refresh);
+    return()=>{live=false;off();window.removeEventListener('focus',refresh);};
+  },[mod.folder]);
+  const recheck=useAsyncAction(refreshRelease);
+  const rebuild=useAsyncAction(async()=>{
+    const result=await window.modmixer.rebuildWorkshopMod(mod.folder);
+    if(currentFolder.current!==mod.folder)return;
+    setBuildOutput(result?result.stdout+'\n'+result.stderr:'No build result was returned.');await refreshRelease();setReleasePlan(null);
+    if(!result||result.exitCode!==0)throw new Error('C# build failed. Open the build output for details.');
+  });
+  const verify=useAsyncAction(async()=>{
+    const result=await window.modmixer.verifyWorkshopRelease(mod.folder);
+    if(currentFolder.current===mod.folder)setVerification(result);
+  });
 
   // Track the latest defaultAuthor so the sticky-detection effect doesn't
   // need it as a dep (it would otherwise re-run too often).
@@ -140,6 +172,7 @@ function RimWorldPublishPanel({
     return window.modmixer.onWorkshopProgress((event) => {
       if (event.folder !== mod.folder) return;
       setProgress(event);
+      if(event.verification)setVerification(event.verification);
       if (event.agreementUrl) setAgreementUrl(event.agreementUrl);
       if (event.status === 'done' && event.url) setPublishedUrl(event.url);
     });
@@ -234,6 +267,7 @@ function RimWorldPublishPanel({
         trackOnLeaderboard,
       );
       setPublishedUrl(result.url);
+      if(result.verification)setVerification(result.verification);
       if (result.agreementUrl) setAgreementUrl(result.agreementUrl);
     },
   );
@@ -243,6 +277,7 @@ function RimWorldPublishPanel({
     if (dirty && confirm && await save.run() === null) return;
     const plan = await window.modmixer.dryRunWorkshop(mod.folder);
     setReleasePlan(plan);
+    setBuildState(plan.buildState);
     if (confirm && plan.valid) setConfirmOpen(true);
   });
 
@@ -373,6 +408,20 @@ function RimWorldPublishPanel({
                 : 'Publish this mod to the Steam Workshop. Steam must be running and you must own RimWorld.'
             }
           >
+            <div className="space-y-2 rounded-md border border-line p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className={`text-sm font-medium ${buildState?.status==='needs-rebuild'?'text-amber-400':'text-ink'}`}>{buildLabel(buildState)}</span>
+                <div className="flex gap-2">
+                  <button className="rounded-md border border-line px-2.5 py-1 text-xs" disabled={recheck.busy||rebuild.busy||publish.busy||verify.busy} onClick={()=>void recheck.run()}>Check status</button>
+                  {buildState&&buildState.status!=='not-needed'&&<button className="rounded-md border border-line px-2.5 py-1 text-xs" disabled={rebuild.busy||publish.busy||verify.busy} onClick={()=>void rebuild.run()}>{rebuild.busy?'Building…':'Rebuild C#'}</button>}
+                </div>
+              </div>
+              <p className="text-xs text-muted">{buildState?.message??'Checking workspace source and released DLLs…'}</p>
+              {buildState?.builtAt&&<p className="text-xs text-muted">Recorded build: {new Date(buildState.builtAt).toLocaleString()}</p>}
+              {rebuild.error&&<ErrorBanner>{rebuild.error}</ErrorBanner>}
+              {recheck.error&&<ErrorBanner>{recheck.error}</ErrorBanner>}
+              {buildOutput&&<details className="text-xs"><summary className="cursor-pointer">Build output</summary><pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all">{buildOutput}</pre></details>}
+            </div>
             <PreviewImage
               modFolder={mod.folder}
               hasAi={hasAi}
@@ -408,7 +457,17 @@ function RimWorldPublishPanel({
               </div>
             )}
 
-            {publish.busy && progress && <PublishProgress progress={progress} />}
+            {(publish.busy||verify.busy) && progress && <PublishProgress progress={progress} />}
+            {(verification||mod.publishedFileId)&&<div className="space-y-2 rounded-md border border-line p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-medium text-ink">{verification?.status==='verified'?'Steam copy verified':verification?.status==='mismatch'?'Steam files differ':'Steam verification'}</span>
+                {progress?.status?.startsWith('verifying-')&&(publish.busy||verify.busy)?<button className="rounded-md border border-line px-2.5 py-1 text-xs" onClick={()=>void window.modmixer.stopWorkshopVerification(mod.folder)}>Stop checking</button>:<button className="rounded-md border border-line px-2.5 py-1 text-xs" disabled={!verification||publish.busy||verify.busy||rebuild.busy} onClick={()=>void verify.run()}>{verify.busy?'Checking…':'Verify Steam copy'}</button>}
+              </div>
+              <p className={`text-xs ${verification?.status==='mismatch'?'text-amber-400':'text-muted'}`}>{verification?.message??'Publish once with this Atlas version to save an exact file list for verification.'}</p>
+              {verification?.checkedAt&&<p className="text-xs text-muted">Checked: {new Date(verification.checkedAt).toLocaleString()}</p>}
+              {verification?.status==='mismatch'&&<details className="text-xs"><summary className="cursor-pointer">View differences</summary><div className="mt-2 max-h-48 overflow-auto">{(['missing','changed','unexpected'] as const).flatMap(kind=>(verification[kind]??[]).map(file=><div className="break-all py-0.5" key={kind+file}>{kind}: {file}</div>))}</div></details>}
+              {verify.error&&<ErrorBanner>{verify.error}</ErrorBanner>}
+            </div>}
 
             {publish.error && <ErrorBanner>{publish.error}</ErrorBanner>}
             {inspectUpload.error && <ErrorBanner>{inspectUpload.error}</ErrorBanner>}
@@ -440,7 +499,7 @@ function RimWorldPublishPanel({
               </button>
               <button
                 onClick={() => void inspectUpload.run(true)}
-                disabled={publish.busy || inspectUpload.busy || !name.trim() || !description.trim()}
+                disabled={publish.busy || inspectUpload.busy || rebuild.busy || verify.busy || !name.trim() || !description.trim()}
                 className="rounded-md bg-ink px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {publish.busy
@@ -477,6 +536,11 @@ function RimWorldPublishPanel({
       />
     </div>
   );
+}
+
+function buildLabel(state:BuildState|null):string{
+  if(!state)return 'Checking build…';
+  return {'not-needed':'XML / assets only','untracked':'No build recorded','needs-rebuild':'Needs rebuild','current':'Build recorded · source unchanged','building':'Building C#…','unknown':'Build status unavailable'}[state.status];
 }
 
 function formatBytes(bytes: number): string {

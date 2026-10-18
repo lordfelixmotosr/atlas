@@ -53,7 +53,7 @@ export function DangerZone({
             </>
           ) : (
             <>
-              Deleting removes the mod folder from disk, the symlink in
+              Deleting removes the mod folder from disk, its runtime copy in
               RimWorld's Mods/ directory, the entry in ModsConfig.xml, and any
               agent chats for this mod. This cannot be undone.
               {hasWorkshopItem && (

@@ -27,6 +27,9 @@ function load(file, imports = {}, globals = {}) {
 const tags = load('agent/rimworld/workshop-tags.ts');
 const release = load('agent/rimworld/release-package.ts', {'fast-xml-parser': require('fast-xml-parser')});
 const parser = load('agent/registry/about-xml.ts');
+const metadata=load('agent/mod-metadata.ts');
+const verification=load('agent/rimworld/workshop-verification.ts',{'../mod-metadata.js':metadata,'./release-package.js':release});
+const buildState=load('agent/rimworld/build-state.ts',{'../mod-metadata.js':metadata,'./release-package.js':release});
 
 test('Steam tags follow About.xml major/minor versions and preserve non-version categories', () => {
   const about = parser.parseAboutXml('<ModMetaData><supportedVersions><li>1.6</li><!-- <li>1.5</li> --><li>1.7.4976</li><li>1.7</li></supportedVersions></ModMetaData>');
@@ -56,6 +59,7 @@ test('utility host gets complete tags through the installed SDK API shape', asyn
   load('agent/workshop-publish-host.ts', {
     'node:fs': { existsSync: () => true },
     './rimworld/workshop-tags.js': tags,
+    './rimworld/workshop-verification.js':verification,
     fakeSteam: { init: () => ({ workshop: { getItem: async (...args) => { request = args; return { tags: ['Mod', '1.6', 'Weapons'], tagsTruncated: false }; } } }) },
   }, { process: { parentPort, chdir() {} } });
   listener({ data: { id: 1, op: 'init', steamworksModule: 'fakeSteam', appId: 294100, cwd: 'fixture' } });
@@ -67,7 +71,7 @@ test('utility host gets complete tags through the installed SDK API shape', asyn
   assert.equal(request[1].cachedResponseMaxAge, 0);
 });
 
-function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1.7'] } = {}) {
+function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1.7'], failDownload = false, gameRunning = false, downloadMismatch = false } = {}) {
   const base = path.resolve(__dirname, '../build-check/fixtures'); fs.mkdirSync(base, { recursive: true });
   const root = fs.mkdtempSync(path.join(base, 'workshop-tags-'));
   const mod = path.join(root, 'Example'); fs.mkdirSync(path.join(mod, 'About'), { recursive: true });
@@ -88,11 +92,14 @@ function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1
             result = ['Mod', '1.5', '1.6', 'Weapons'];
           }
           if (message.op === 'createItem') result = { itemId: 456n, needsToAcceptAgreement: false };
+          if(message.op==='downloadItem') {if(failDownload)throw new Error('Steam is offline');result=path.join(root,'steamapps/workshop/content/294100',existing?'123':'456');fs.mkdirSync(path.dirname(result),{recursive:true});await fsp.cp(uploaded[0].snapshot,result,{recursive:true});if(downloadMismatch)fs.mkdirSync(path.join(result,'Source'));}
+          if(message.op==='downloadState')result=4;
           if (message.op === 'updateItem') {
             const files = [];
             const walk = async (dir, prefix = '') => {for (const e of await fsp.readdir(dir, {withFileTypes:true})) {if(e.isDirectory()) await walk(path.join(dir,e.name),prefix+e.name+'/');else files.push(prefix+e.name);}};
             await walk(message.updateDetails.contentPath);
-            uploaded.push({ ...message.updateDetails, files, publishedId: await fsp.readFile(path.join(message.updateDetails.contentPath,'About/PublishedFileId.txt'),'utf8'), about: await fsp.readFile(path.join(message.updateDetails.contentPath, 'About/About.xml'), 'utf8') });
+            const snapshot=path.join(root,'uploaded-snapshot');await fsp.cp(message.updateDetails.contentPath,snapshot,{recursive:true});
+            uploaded.push({ ...message.updateDetails, snapshot, files, publishedId: await fsp.readFile(path.join(message.updateDetails.contentPath,'About/PublishedFileId.txt'),'utf8'), about: await fsp.readFile(path.join(message.updateDetails.contentPath, 'About/About.xml'), 'utf8') });
           }
           this.emit('message', { id: message.id, ok: true, result });
         } catch (error) { this.emit('message', { id: message.id, ok: false, error: error.message }); }
@@ -114,6 +121,10 @@ function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1
     './workshop-tags.js': tags,
     './release-package.js': release,
     './runtime-mirror.js': {reconcileMirrorId: async () => false},
+    './build-state.js':buildState,
+    './workshop-verification.js':verification,
+    './game.js':{isRimWorldRunning:async()=>gameRunning},
+    '../mod-events.js':{emitModChanged:()=>{}},
     '../license-text.js': {renderLicenseText: () => null},
     'node:os': { tmpdir: () => root },
   });
@@ -176,3 +187,11 @@ test('a stray DLL blocks publishing before any Steam initialization or item crea
   await assert.rejects(p.api.publishToWorkshop('Example',0,'',false),/Stray DLL/);
   assert.equal(p.requests.length,0);assert.equal(p.uploaded.length,0);assert(!fs.existsSync(path.join(p.mod,'About/PublishedFileId.txt')));
 });
+
+
+test('post-publish verification compares Steam bytes with the saved upload manifest',async t=>{const p=publisher(t);const result=await p.api.publishToWorkshop('Example',0,'verify',false);assert.equal(result.verification.status,'verified');const status=await p.api.getWorkshopReleaseStatus('Example');assert.equal(status.release.verification.status,'verified');assert.equal(status.release.itemId,'123');});
+test('download failure keeps upload success and its baseline, with a retryable result',async t=>{const p=publisher(t,{failDownload:true});const result=await p.api.publishToWorkshop('Example',0,'verify',false);assert.equal(result.verification.status,'unavailable');assert.equal(p.uploaded.length,1);assert.equal(p.baseline(),true);assert.equal(p.killed(),true);});
+test('actual development leftovers in the Steam copy fail verification',async t=>{const p=publisher(t,{downloadMismatch:true});const result=await p.api.publishToWorkshop('Example',0,'verify',false);assert.equal(result.verification.status,'mismatch');assert(result.verification.unexpected.includes('Source/'));});
+test('a running game defers download verification without cancelling the successful upload',async t=>{const p=publisher(t,{gameRunning:true});const result=await p.api.publishToWorkshop('Example',0,'verify',false);assert.equal(result.verification.status,'pending');assert.equal(p.requests.some(r=>r.op==='downloadItem'),false);assert.equal(p.baseline(),true);});
+
+test('an older upload record cannot verify a newer successful publication',async t=>{const p=publisher(t);await p.api.publishToWorkshop('Example',0,'latest',false);const file=path.join(p.mod,'.atlas/published-runtime.json'),receipt=JSON.parse(fs.readFileSync(file));receipt.uploadedAt-=10000;fs.writeFileSync(file,JSON.stringify(receipt));assert.equal((await p.api.getWorkshopReleaseStatus('Example')).release,null);await assert.rejects(p.api.verifyWorkshopRelease('Example'),/No recorded Atlas upload/);});

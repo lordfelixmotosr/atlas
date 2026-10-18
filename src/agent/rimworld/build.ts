@@ -26,8 +26,9 @@ import {
   reconcileFallbackAssemblyName,
 } from './assembly-names.js';
 import type { BuildModDetails } from '../adapters/types.js';
+import {beginBuild, finishBuild} from './build-state.js';
 
-export async function buildRimworldMod(
+async function buildRimworldModInternal(
   modDir: string,
   signal?: AbortSignal,
 ): Promise<AgentToolResult<BuildModDetails>> {
@@ -68,6 +69,8 @@ export async function buildRimworldMod(
         '(or click Rebuild) to provision it, then build again.',
     );
   }
+  let buildBefore: Record<string,string> | undefined;
+  try {buildBefore = await beginBuild(modDir);} catch(error) {console.warn('[build_mod] cannot capture build inputs:', error);}
   const result = await runCommand(
     dotnet.exe,
     ['build', '--nologo'],
@@ -75,6 +78,9 @@ export async function buildRimworldMod(
     signal,
     dotnetEnv(dotnet),
   );
+  let buildRecordNote = '';
+  try {await finishBuild(modDir, buildBefore, result.exitCode === 0 && !signal?.aborted);}
+  catch(error) {buildRecordNote = `\n\nBuild tracking could not record this result: ${String(error)}`;}
   // Run lints even on a failed build — most lint findings (tickerType, wrong
   // TFM) are diagnoseable from source alone, and surfacing them alongside
   // compile errors gives the agent a head start.
@@ -120,6 +126,7 @@ export async function buildRimworldMod(
     formatFindings(lintFindings) +
     formatHints(errorHints) +
     renameNote +
+    buildRecordNote +
     collisionWarning +
     // Only on a green build: a red build's next step is fixing errors, not
     // testing, so a launch reminder there is just noise. The hint itself is
@@ -129,6 +136,15 @@ export async function buildRimworldMod(
     content: [{ type: 'text', text }],
     details: { ...result, sourceDir, lintFindings, errorHints },
   };
+}
+
+const runningBuilds=new Set<string>();
+export async function buildRimworldMod(modDir:string,signal?:AbortSignal):Promise<AgentToolResult<BuildModDetails>>{
+  const key=path.resolve(modDir).toLowerCase();
+  if(runningBuilds.has(key))throw new Error('This mod already has a C# build in progress.');
+  if(signal?.aborted)throw new Error('Build cancelled.');
+  runningBuilds.add(key);
+  try{return await buildRimworldModInternal(modDir,signal);}finally{runningBuilds.delete(key);}
 }
 
 function runCommand(
