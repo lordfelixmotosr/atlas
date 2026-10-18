@@ -1,4 +1,8 @@
-# Atlas 0.2.25 portable
+# Atlas 0.2.26 portable
+
+## 0.2.26 Windows runtime sync recovery
+
+Runtime sync serializes across the entire game Mods folder, including independent Atlas processes. Windows sharing locks receive bounded retries. A failed installation preserves the original error, the previous runtime copy and a recovery journal. When rollback rename is blocked but reads are allowed, Atlas restores the previous runtime by copying and retains the backup. Interrupted swaps recover before the next sync; missing recorded mirrors refresh before launch. Staging is outside Mods. Sync no longer creates workspace placeholder assets, and sibling cleanup happens only after installation succeeds. Atlas-owned diagnostics bridge copies refresh from the bundled, versioned runtime. Unmanaged copies and Workshop files are preserved. See [Windows sync evidence and recovery](docs/windows-runtime-sync.md).
 
 ## 0.2.25 Workshop copy grouping
 

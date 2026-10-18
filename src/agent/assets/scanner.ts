@@ -57,6 +57,7 @@ export async function scanAssets(
    * scanner can resolve vanilla fallbacks.
    */
   dataDir: string | null = detectRimWorldPaths().dataDir,
+  materializePlaceholders = true,
 ): Promise<AssetScan> {
   const folder = path.basename(modDir);
   const contentRoots = resolveContentRoots(modDir, gameVersion);
@@ -107,7 +108,7 @@ export async function scanAssets(
   // Materialize placeholders for anything still missing — but only when the
   // path has no vanilla fallback. Stubbing over a vanilla path would shadow
   // Core/DLC art at runtime. Clean up orphan stubs as a side effect.
-  await materializeStubs(modDir, requirements);
+  if (materializePlaceholders) await materializeStubs(modDir, requirements);
   const stubbedAfter = await readStubbedPaths(modDir);
   for (const req of requirements) {
     if (stubbedAfter.has(req.path)) {

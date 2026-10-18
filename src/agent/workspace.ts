@@ -14,7 +14,7 @@ import { scanAssets } from './assets/scanner.js';
 import { parseAboutXml, type ModDependency } from './registry/about-xml.js';
 import { loadSettings } from './settings.js';
 import { track } from './telemetry.js';
-import { ownedMirror, refreshRuntimeMirror, removeRuntimeMirror, isLegacyWorkspaceLink, watchMirrorId } from './rimworld/runtime-mirror.js';
+import { ownedMirror, refreshRuntimeMirror, removeRuntimeMirror, isLegacyWorkspaceLink, watchMirrorId, withRuntimeSync, missingRecordedMirror } from './rimworld/runtime-mirror.js';
 import { emitModChanged } from './mod-events.js';
 import {
   SKIP_DIRS,
@@ -269,6 +269,10 @@ export interface SyncModResult {
 }
 
 export async function syncModToGame(folder: string): Promise<SyncModResult> {
+  return withRuntimeSync(getRimWorldModsDir(), () => syncModToGameLocked(folder));
+}
+
+async function syncModToGameLocked(folder: string): Promise<SyncModResult> {
   const t0 = Date.now();
   checkModFolder(folder);
   console.log(`${SYNC_LOG_PREFIX} start folder=${folder}`);
@@ -281,16 +285,12 @@ export async function syncModToGame(folder: string): Promise<SyncModResult> {
   if (!fs.existsSync(target)) {
     throw new Error(`Workspace mod not found: ${target}`);
   }
-  // Materialize asset placeholders before the link goes live so RimWorld
-  // doesn't log "Could not load texture/AudioClip" for assets the user
-  // hasn't dropped in yet. We also capture the scan's drift warnings to
-  // bubble back to the agent — sync is the natural place to report them
-  // because the stub system runs here. Bounded by a timeout so a runaway
-  // scanner can't hang sync indefinitely.
+  // Sync is read-only with respect to workspace content. Placeholder creation
+  // belongs to the asset editor, never to launching/testing a mod.
   let assetWarnings: string[] = [];
   try {
     const scan = await withTimeout('scanAssets', SCAN_ASSETS_TIMEOUT_MS, () =>
-      scanAssets(target),
+      scanAssets(target, undefined, undefined, false),
     );
     assetWarnings = scan.warnings;
   } catch (err) {
@@ -304,6 +304,8 @@ export async function syncModToGame(folder: string): Promise<SyncModResult> {
   // warns about duplicate packageIds on every launch. Run before the early
   // "already symlinked" return so the cleanup still happens when the target
   // itself is unchanged.
+  // Install first. A failed replacement must not remove a working sibling.
+  const release = await refreshRuntimeMirror(target, link, getMirrorStateDir());
   const removedStaleSiblings = await pruneSiblingSyncs(
     folder,
     target,
@@ -315,7 +317,6 @@ export async function syncModToGame(folder: string): Promise<SyncModResult> {
       `${SYNC_LOG_PREFIX} pruned ${removedStaleSiblings.length} stale sibling sync(s) sharing packageId: ${removedStaleSiblings.join(', ')}`,
     );
   }
-  const release = await refreshRuntimeMirror(target, link, getMirrorStateDir());
   watchMirrorId(target, link, getMirrorStateDir(), () => emitModChanged(folder));
   for (const warning of release.warnings) console.warn(SYNC_LOG_PREFIX, warning);
   assetWarnings.push(...release.warnings);
@@ -400,7 +401,7 @@ export async function refreshSyncedRuntimeMirrors(alreadyRefreshed?: string): Pr
   for (const entry of await fsp.readdir(workspaceDir, {withFileTypes: true})) {
     if (!entry.isDirectory() || SKIP_DIRS.has(entry.name) || entry.name === alreadyRefreshed) continue;
     const source = path.join(workspaceDir, entry.name), target = path.join(modsDir, entry.name);
-    if (await ownedMirror(source, target, getMirrorStateDir()) || await isLegacyWorkspaceLink(source, target)) await syncModToGame(entry.name);
+    if (await ownedMirror(source, target, getMirrorStateDir()) || await missingRecordedMirror(source, target, getMirrorStateDir()) || await isLegacyWorkspaceLink(source, target)) await syncModToGame(entry.name);
   }
 }
 

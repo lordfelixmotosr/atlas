@@ -102,3 +102,7 @@ real copied mod, shared Defs, the 1.7 override and extra World data, with all
 development paths absent. The normal ModsConfig.xml was unchanged. Other engine
 versions have file-preservation fixture evidence, not a live game-load result.
 No mod was uploaded to Steam as a development test.
+
+## Windows transaction repair (0.2.26)
+
+The entire Mods root is serialized, including independent processes and sibling pruning. Staging moved to the game root outside Mods. Sharing locks receive bounded retries; failures retain the original exception, journal and recoverable copies. Copy recovery handles a backup directory that can be read but not renamed. Interrupted swaps recover before syncing again. Sync scans are read-only for workspace assets. See [Windows evidence and recovery](windows-runtime-sync.md).

@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.25 native source release built and verified",
+  "status": "Atlas 0.2.26 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -171,7 +171,8 @@
     "0.2.22: evidence-based modding instructions and model-aware native thinking controls preserve saved preferences",
     "0.2.23: runtime-only copied mirrors and shared Steam release filtering preserve per-version content",
     "0.2.24: recorded C# build fingerprints and post-publish Steam download verification",
-    "0.2.25: group matching Workshop verification copies under their workspace identity"
+    "0.2.25: group matching Workshop verification copies under their workspace identity",
+    "0.2.26: serialized Windows runtime mirror transactions, retained recovery journals and versioned managed bridge copies"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -186,7 +187,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.25",
+  "version": "0.2.26",
   "supportedGames": [
     "rimworld"
   ],
@@ -324,24 +325,27 @@
       "0.2.24 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
       "0.2.25 68 registry, release-health, publisher, launch, ID, Windows-lock, change-tracking and thinking checks passed; matching Workshop and package identities group under the workspace without deleting files or changing subscriptions",
       "0.2.25 native Electron production build and startup health verified; no paid model requests or Steam uploads",
-      "0.2.25 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.25 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.26 82 regression checks passed, including real Windows file and directory locks, failed installation and rollback, independent processes, crash and legacy recovery; actual isolated run_test_cycle launched House Targaryen with its parent and companion mods, connected the diagnostic bridge, and preserved workspace hashes, Workshop metadata and normal ModsConfig",
+      "0.2.26 native Electron production build and startup health verified; no paid model requests or Steam uploads",
+      "0.2.26 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "application-update": {
-      "path": "Atlas-0.2.25-win-x64-application-update.zip",
-      "size": 97080419,
-      "sha256": "c385f8776138b52bcafe7063044f187ea326a9542f58c8780e26baee10ed8a71"
+      "path": "Atlas-0.2.26-win-x64-application-update.zip",
+      "size": 97083970,
+      "sha256": "6bf5417669a1533720356009e5aeb08c03145333bfd10de080aa3467807b53e7"
     },
     "portable": {
-      "path": "Atlas-0.2.25-win-x64-portable.zip",
-      "size": 397240920,
-      "sha256": "2db1c5b31e6593e2bc94f06d1a0754f437c530ac543559505b54c83facaefb19"
+      "path": "Atlas-0.2.26-win-x64-portable.zip",
+      "size": 397244471,
+      "sha256": "8106b90a880d4a6ea0e9eb0ac9bb4124d032580e9ccc05269b8562fa885f32aa"
     },
     "full-update": {
-      "path": "Atlas-0.2.25-win-x64-full-update.zip",
-      "size": 396674428,
-      "sha256": "b493a27114957b54fffec2a0f4559658d3b58ad9b24d26c90bc37176ec970180"
+      "path": "Atlas-0.2.26-win-x64-full-update.zip",
+      "size": 396677979,
+      "sha256": "b9229399d2a6e89bfed2a1d35d6ce724960362b83ff338c6736328a84bd7ea57"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"

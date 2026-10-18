@@ -7,12 +7,9 @@
 // About/ and Assemblies/, no C# source). In dev we resolve straight to the
 // repo path so iteration on the bridge .cs files works without re-staging.
 //
-// Installation is a junction (Windows) / symlink (mac+linux) at
-// `<rimworld>/Mods/ModmixerBridge` → source dir. Idempotent: a no-op when
-// the link is already in place and pointing at us. Skipped entirely when
-// the user already has the bridge via Steam Workshop or as a hand-installed
-// real folder under Mods/ — those win, our duplicate would just trigger
-// RimWorld's "duplicate packageId" warning on every launch.
+// New installations are owned runtime copies at Mods/AtlasBridge, refreshed
+// from the versioned bundled bridge before testing. Historical junctions stay
+// supported. Workshop copies and unmanaged real folders are never overwritten.
 
 import { app } from 'electron';
 import path from 'node:path';
@@ -20,6 +17,8 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import { detectRimWorldPaths } from './paths.js';
 import type { RegistrySnapshot } from './registry/types.js';
+import { ownedMirror, refreshRuntimeMirror } from './rimworld/runtime-mirror.js';
+import { getMirrorStateDir } from './workspace.js';
 
 export const BRIDGE_PACKAGE_ID = 'modmixer.bridge';
 /** Folder name we use under `<rimworld>/Mods/`. Stable across versions. */
@@ -48,6 +47,7 @@ export interface BridgeInstallResult {
  */
 export function resolveBridgeSourceDir(): string | null {
   const candidates: string[] = [];
+  if (app.isPackaged && process.resourcesPath) candidates.push(path.join(process.resourcesPath, 'modmixer-bridge'));
   try {
     candidates.push(path.join(app.getAppPath(), 'vendor', 'modmixer-bridge'));
   } catch {
@@ -68,9 +68,8 @@ export function resolveBridgeSourceDir(): string | null {
  * folder install. Safe to call repeatedly; the common path is a single
  * `lstat` + a `realpath` comparison.
  *
- * Never throws — returns a result object describing what happened. A broken
- * install (no RimWorld, no bridge source) just means test sessions run
- * without diagnostics; the agent still functions.
+ * Missing RimWorld/source returns unavailable. Filesystem failures propagate
+ * so a test cannot silently proceed with a failed diagnostics installation.
  */
 export async function ensureBridgeInstalled(
   snapshot: RegistrySnapshot,
@@ -116,7 +115,7 @@ export async function ensureBridgeInstalled(
       } catch {
         // Dangling junction — remove it and recreate below.
         await fsp.rm(target, { recursive: true, force: true });
-        await createBridgeLink(source, target);
+        await installBridgeCopy(source, target);
         return { available: true, installed: true };
       }
       if (pathsEqual(resolved, source)) {
@@ -125,10 +124,14 @@ export async function ensureBridgeInstalled(
       // Junction pointing somewhere else — stale from a previous install
       // location (e.g. dev → prod transition, or moved repo). Refresh.
       await fsp.rm(target, { recursive: true, force: true });
-      await createBridgeLink(source, target);
+      await installBridgeCopy(source, target);
       return { available: true, installed: true };
     }
     if (lst.isDirectory()) {
+      if (await ownedMirror(source, target, getMirrorStateDir())) {
+        await refreshRuntimeMirror(source, target, getMirrorStateDir());
+        return {available: true, installed: true};
+      }
       // Real directory at the same folder name. Not ours; respect it.
       return { available: true, installed: false, skipReason: 'local' };
     }
@@ -141,7 +144,7 @@ export async function ensureBridgeInstalled(
   // Some other workspace folder uses BRIDGE_PACKAGE_ID? snapshot.mods filter
   // above already caught that. The Mods/ entry with our chosen folder name
   // doesn't exist — create the junction.
-  await createBridgeLink(source, target);
+  await installBridgeCopy(source, target);
   return { available: true, installed: true };
 }
 
@@ -165,10 +168,8 @@ export async function removeBridgeInstall(): Promise<boolean> {
   }
 }
 
-async function createBridgeLink(source: string, target: string): Promise<void> {
-  await fsp.mkdir(path.dirname(target), { recursive: true });
-  const type = process.platform === 'win32' ? 'junction' : 'dir';
-  await fsp.symlink(source, target, type);
+async function installBridgeCopy(source: string, target: string): Promise<void> {
+  await refreshRuntimeMirror(source, target, getMirrorStateDir());
 }
 
 /**
