@@ -1,4 +1,8 @@
-# Atlas 0.2.24 portable
+# Atlas 0.2.25 portable
+
+## 0.2.25 Workshop copy grouping
+
+Atlas groups a Steam download with its workspace mod when both the package ID and Workshop ID match. The workspace stays the editable entry; its runtime mirror stays grouped too. Other Workshop IDs remain visible even if they reuse the same package ID. No files are removed and Steam subscriptions are unchanged. Publishing updates the linked Workshop item; verification only downloads/checks that existing item.
 
 ## 0.2.24 build tracking and Steam verification
 

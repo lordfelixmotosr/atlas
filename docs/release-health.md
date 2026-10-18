@@ -60,6 +60,11 @@ files or modifies the workspace. An already current Steam copy may be reused;
 this is a byte comparison of Steam's installed content, not a server-side
 attestation or a purge of historical/manual backups.
 
+From Atlas 0.2.25, the Steam copy shares the workspace's Library entry when both
+its package ID and Workshop ID match. Its files remain in Steam's cache. A
+different Workshop ID remains visible even if it reuses the package ID. This
+grouping affects Atlas's registry; verification does not add Steam subscriptions.
+
 ### Delays and retry
 
 - If RimWorld is running, the successful upload is saved and verification is

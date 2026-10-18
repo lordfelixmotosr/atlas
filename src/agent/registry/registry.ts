@@ -236,17 +236,22 @@ class ModRegistry {
           rimworldModsDir,
         );
       }
-      // If a workspace mod has been symlinked, the symlink target also shows
-      // up under "local". Drop the duplicate by packageId (workspace wins).
+      // The runtime mirror and a verification download represent this same mod.
+      // A Workshop copy is grouped only when BOTH identities match, so another
+      // publisher reusing a package ID remains visible as a possible conflict.
       const workspaceIds = new Set(
         workspaceMods.map((m) => m.about.packageIdLc).filter(Boolean),
+      );
+      const workspacePublications = new Set(
+        workspaceMods.filter(m => m.about.packageIdLc && m.publishedFileId)
+          .map(m => `${m.about.packageIdLc}\0${m.publishedFileId}`),
       );
       for (let i = mods.length - 1; i >= 0; i--) {
         const m = mods[i];
         if (
-          m.source === 'local' &&
           m.about.packageIdLc &&
-          workspaceIds.has(m.about.packageIdLc)
+          (m.source === 'local' && workspaceIds.has(m.about.packageIdLc) ||
+           m.source === 'workshop' && workspacePublications.has(`${m.about.packageIdLc}\0${m.publishedFileId}`))
         ) {
           mods.splice(i, 1);
         }
