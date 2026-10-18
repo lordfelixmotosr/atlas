@@ -1,4 +1,10 @@
-# Atlas 0.2.27 portable
+# Atlas 0.2.28 portable
+
+## 0.2.28 installation preview and runtime restore
+
+**Install update** opens one review with added, changed and removed files, sizes, unchanged counts and release warnings. Confirm there to install; closing a running game uses the same confirmation. **More mod actions (⋯) → Restore previous version** appears when a saved runtime exists and uses the same review. A restored runtime remains selected for Atlas testing until workspace runtime content changes or Install update is chosen. Workspace source edits and current Workshop IDs are retained.
+
+One previous committed runtime per mod is retained outside the game's Mods folder. Unchanged syncs reuse the installed copy and keep the previous version. Hashes are read for the full preview on demand, and background game polling pauses when hidden. Failed recovery copies and locked older backups are retained. Older Atlas builds did not save runtime history: the first changed installation after this update creates the restore point. Restore applies to the selected mod's installed runtime; it does not roll back workspace source code or publish anything to Steam. See [manual installation](docs/manual-mod-install.md).
 
 ## 0.2.27 manual mod installation
 

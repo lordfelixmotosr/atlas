@@ -268,11 +268,11 @@ export interface SyncModResult {
   assetWarnings: string[];
 }
 
-export async function syncModToGame(folder: string): Promise<SyncModResult> {
-  return withRuntimeSync(getRimWorldModsDir(), () => syncModToGameLocked(folder));
+export async function syncModToGame(folder: string,options:import('./rimworld/runtime-mirror.js').MirrorInstallOptions={}): Promise<SyncModResult> {
+  return withRuntimeSync(getRimWorldModsDir(), () => syncModToGameLocked(folder,options));
 }
 
-async function syncModToGameLocked(folder: string): Promise<SyncModResult> {
+async function syncModToGameLocked(folder: string,options:import('./rimworld/runtime-mirror.js').MirrorInstallOptions): Promise<SyncModResult> {
   const t0 = Date.now();
   checkModFolder(folder);
   console.log(`${SYNC_LOG_PREFIX} start folder=${folder}`);
@@ -305,7 +305,7 @@ async function syncModToGameLocked(folder: string): Promise<SyncModResult> {
   // "already symlinked" return so the cleanup still happens when the target
   // itself is unchanged.
   // Install first. A failed replacement must not remove a working sibling.
-  const release = await refreshRuntimeMirror(target, link, getMirrorStateDir());
+  const release = await refreshRuntimeMirror(target, link, getMirrorStateDir(),options);
   const removedStaleSiblings = await pruneSiblingSyncs(
     folder,
     target,

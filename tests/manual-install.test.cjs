@@ -1,6 +1,7 @@
 const test=require('node:test');
 const {load,fixture,release,mirrors,fs,fsp,path,assert}=require('./runtime-fixture.cjs');
 const dll=load('agent/rimworld/dll-update.ts',{'./release-package.js':release,'./runtime-mirror.js':mirrors});
+const previews=load('agent/rimworld/install-preview.ts',{'./release-package.js':release,'./runtime-mirror.js':mirrors});
 const list=value=>JSON.parse(JSON.stringify(value));
 
 test('DLL inventory compares bytes, detects removals and leaves source files intact',async t=>{
@@ -47,8 +48,8 @@ async function routes(t){
   f.write('Assemblies/Main.dll','new');fs.unlinkSync(path.join(f.source,'Defs/Removed.xml'));fs.unlinkSync(path.join(f.source,'Textures/Old.png'));f.write('Defs/Added.xml','new');
   const flags={running:false,busy:false,building:false,quitSucceeds:true,syncError:null,installs:0,quits:0,stops:0};
   const handlers={};
-  const workspace={getWorkspacePaths:()=>({workspaceDir:path.dirname(f.source)}),getMirrorStateDir:()=>f.state,getRimWorldModsDir:()=>path.dirname(f.target),listWorkspaceMods:async()=>[],syncModToGame:async()=>{
-    flags.installs++;if(flags.syncError)throw flags.syncError;await mirrors.refreshRuntimeMirror(f.source,f.target,f.state);return {assetWarnings:[]};
+  const workspace={getWorkspacePaths:()=>({workspaceDir:path.dirname(f.source)}),getMirrorStateDir:()=>f.state,getRimWorldModsDir:()=>path.dirname(f.target),listWorkspaceMods:async()=>[],syncModToGame:async(_folder,options)=>{
+    flags.installs++;if(flags.syncError)throw flags.syncError;await mirrors.refreshRuntimeMirror(f.source,f.target,f.state,options);return {assetWarnings:[]};
   }};
   const module=load('main/routes/dll-updates.ts',{
     electron:{app:{getPath:()=>path.join(f.root,'profile')},shell:{}},
@@ -56,15 +57,17 @@ async function routes(t){
     '../../agent/registry/index.js':{getRegistry:()=>({start:async()=>{},getSnapshot:()=>({mods:[{folder:'Example',source:'workspace',about:{name:'Fixture',packageIdLc:'atlas.release.fixture',modDependencies:[]}}]})})},
     '../../agent/rimworld/game.js':{isRimWorldRunning:async()=>flags.running,quitRimWorld:async()=>{flags.quits++;if(flags.quitSucceeds)flags.running=false;return {killed:flags.quitSucceeds,exited:flags.quitSucceeds};}},
     '../../agent/rimworld/runtime-mirror.js':mirrors,'../../agent/rimworld/release-package.js':release,
+    '../../agent/rimworld/install-preview.js':previews,
     '../../agent/rimworld/build-state.js':{isBuildInProgress:()=>flags.building},'../../agent/rimworld/dll-update.js':dll,
     '../../agent/rimworld/test-history.js':{readTestOptions:async()=>({companionMods:[]})},'../../atlas/mod-folder-shortcuts.js':{}
   });
   module.registerDllUpdateRoutes({ipc:{handle:(name,fn)=>handlers[name]=fn},requireConsent:()=>{},host:{hasActiveWork:()=>flags.busy,stopMonitoring:()=>flags.stops++}});
-  return {...f,flags,apply:token=>handlers['atlas:mods:apply-dll-update']({},'Example','conversation',token)};
+  return {...f,flags,apply:(token,mode)=>handlers['atlas:mods:apply-dll-update']({},'Example','conversation',token,mode)};
 }
 test('manual install replaces the whole runtime and removes obsolete and dev files',async t=>{
   const f=await routes(t),sourceBefore=await release.planRelease(f.source);
-  const result=await f.apply();assert.equal(result.status,'installed');assert.equal(f.flags.quits,0);assert.equal(f.flags.running,false);
+  const preview=await f.apply();assert.equal(preview.status,'confirmation');assert.equal(f.flags.installs,0);assert.equal(preview.preview.added,1);assert.equal(preview.preview.modified,1);assert.equal(preview.preview.removed,3);
+  const result=await f.apply(preview.token);assert.equal(result.status,'installed');assert.equal(f.flags.quits,0);assert.equal(f.flags.running,false);
   assert.equal(fs.readFileSync(path.join(f.target,'Assemblies/Main.dll'),'utf8'),'new');assert(fs.existsSync(path.join(f.target,'Defs/Added.xml')));
   for(const obsolete of ['Defs/Removed.xml','Textures/Old.png','Source'])assert(!fs.existsSync(path.join(f.target,obsolete)));
   assert.equal(fs.readFileSync(path.join(f.target,'About/PublishedFileId.txt'),'utf8'),'123456');
@@ -78,7 +81,7 @@ test('closing the game requires confirmation and installation leaves it closed',
 });
 test('unknown folders are warned about and a changed package invalidates confirmation',async t=>{
   const f=await routes(t);f.write('World/Map.json','data');
-  const first=await f.apply();assert.equal(first.status,'confirmation');assert.match(first.message,/Unknown root folder omitted: World/);assert.equal(f.flags.installs,0);
+  const first=await f.apply();assert.equal(first.status,'confirmation');assert.match(first.warnings.join('\n'),/Unknown root folder omitted: World/);assert.equal(f.flags.installs,0);
   f.write('Defs/Added.xml','changed while reviewing');const second=await f.apply(first.token);assert.equal(second.status,'confirmation');assert.notEqual(second.token,first.token);assert.equal(f.flags.installs,0);
   assert.equal((await f.apply(second.token)).status,'installed');
 });
@@ -92,8 +95,18 @@ test('failed close, active AI work, active builds and invalid releases never ins
 });
 test('installation failure reports the original error and leaves the previous copy',async t=>{
   const f=await routes(t);f.flags.syncError=new Error('EPERM: recovery retained at fixture/previous');
-  await assert.rejects(f.apply(),/Installed so far: none.*EPERM: recovery retained/);
+  const preview=await f.apply();await assert.rejects(f.apply(preview.token),/Installed so far: none.*EPERM: recovery retained/);
   assert.equal(fs.readFileSync(path.join(f.target,'Assemblies/Main.dll'),'utf8'),'old');
+});
+
+test('restore has its own review and an installation token cannot authorize it',async t=>{
+  const f=await routes(t);const preview=await f.apply();await f.apply(preview.token);
+  const restore=await f.apply(preview.token,'restore');assert.equal(restore.status,'confirmation');assert.equal(restore.preview.mode,'restore');assert(restore.preview.mods[0].previousSavedAt);
+  await f.apply(restore.token,'restore');assert.equal(fs.readFileSync(path.join(f.target,'Assemblies/Main.dll'),'utf8'),'old');assert.equal(fs.readFileSync(path.join(f.source,'Assemblies/Main.dll'),'utf8'),'new');
+});
+test('changes to the installed runtime invalidate the file review',async t=>{
+  const f=await routes(t),first=await f.apply();fs.writeFileSync(path.join(f.target,'UserAdded.txt'),'changed after preview');
+  const next=await f.apply(first.token);assert.equal(next.status,'confirmation');assert.notEqual(next.token,first.token);assert(next.preview.mods[0].changes.some(c=>c.path==='UserAdded.txt'&&c.action==='removed'));assert.equal(f.flags.installs,0);
 });
 test('test history retains companions without changing the normal savedata mode',async t=>{
   const f=fixture(t),history=load('agent/rimworld/test-history.ts',{electron:{app:{getPath:()=>path.join(f.root,'profile')}}});

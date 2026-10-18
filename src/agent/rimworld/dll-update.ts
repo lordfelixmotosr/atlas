@@ -6,10 +6,14 @@ import type {RegistrySnapshot} from '../registry/types.js';
 
 export interface DllChange {path: string; action: 'added' | 'modified' | 'removed'}
 export interface ModDllUpdate {folder: string; name: string; changes: DllChange[]; error?: string}
-export interface DllUpdateOverview {running: boolean; pending: boolean; mods: ModDllUpdate[]; error?: string}
+export interface DllUpdateOverview {running: boolean; pending: boolean; mods: ModDllUpdate[]; error?: string;previous?:{savedAt:number;files:number;bytes:number}|null}
+export type RuntimeInstallMode='install'|'restore';
+export interface RuntimeFileChange {path:string;action:'added'|'modified'|'removed';beforeBytes:number;afterBytes:number}
+export interface RuntimeModPreview {folder:string;name:string;changes:RuntimeFileChange[];unchanged:number;runtimeBytes:number;previousSavedAt?:number}
+export interface RuntimeInstallPreview {mode:RuntimeInstallMode;mods:RuntimeModPreview[];added:number;modified:number;removed:number;runtimeBytes:number}
 export type DllInstallResult = {status: 'installed'; installed: string[]; warnings: string[]}
   | {status: 'current'}
-  | {status: 'confirmation'; token: string; message: string; running: boolean};
+  | {status: 'confirmation'; token: string; message: string; running: boolean;preview:RuntimeInstallPreview;warnings:string[]};
 
 /** Includes transitive workspace dependencies and the last test's companions. */
 export function dllTestFolders(snapshot: RegistrySnapshot, folder: string, companions: string[]): string[] {

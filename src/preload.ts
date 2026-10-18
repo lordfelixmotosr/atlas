@@ -230,7 +230,7 @@ const api = {
   launchRimWorld: () => invoke('modmixer:rimworld:launch'),
   isRimWorldRunning: () => invoke('modmixer:rimworld:is-running'),
   dllUpdateState: (folder: string, conversationId: string) => invoke('atlas:mods:dll-update-state', folder, conversationId),
-  applyDllUpdate: (folder: string, conversationId: string, token?: string) => invoke('atlas:mods:apply-dll-update', folder, conversationId, token),
+  applyDllUpdate: (folder: string, conversationId: string, token?: string, mode?: import('./agent/rimworld/dll-update').RuntimeInstallMode) => invoke('atlas:mods:apply-dll-update', folder, conversationId, token, mode),
   openNamedModFolders: () => invoke('atlas:mods:open-named-folders'),
   quitRimWorld: () => invoke('modmixer:rimworld:quit'),
 

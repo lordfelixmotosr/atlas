@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { planRelease, copyRelease, type ReleasePlan } from './release-package.js';
+import {planRelease,copyRelease,auditRelease,allowedDll,isDevelopmentPath,releaseRelative,fileSha,runtimeInventory,runtimeSignature,type ReleasePlan} from './release-package.js';
 
 interface MirrorRecord {
   format: 'atlas-runtime-mirror-v1';
@@ -11,6 +11,8 @@ interface MirrorRecord {
   target: string;
   identity: {dev: number; ino: number; birthtimeMs: number};
   publishedId: string | null;
+  plan?: ReleasePlan;
+  heldWorkspace?: string;
 }
 const locks = new Map<string, Promise<unknown>>();
 const watchers = new Map<string, () => void>();
@@ -181,7 +183,7 @@ async function reconcile(source: string, target: string, stateDir: string): Prom
     // A deliberate workspace link/unlink wins when the game did not write a new ID.
     await writeId(target, src);
   }
-  if (r.publishedId !== src) {r.publishedId = src; await saveRecord(r, stateDir);}
+  if (r.publishedId !== src) {r.publishedId = src;if(r.plan)r.plan=withPublishedId(r.plan,src); await saveRecord(r, stateDir);}
   return copiedBack;
 }
 
@@ -331,7 +333,81 @@ async function recoverLegacy(source: string, target: string, stateDir: string): 
   }
 }
 
-export async function refreshRuntimeMirror(source: string, target: string, stateDir: string): Promise<ReleasePlan> {
+interface PreviousRuntime {
+  format:'atlas-runtime-previous-v1';source:string;target:string;staging:string;identity:Identity;savedAt:number;plan:ReleasePlan;
+}
+export interface PreviousRuntimeInfo {savedAt:number;files:number;bytes:number}
+const historyPath=(target:string,stateDir:string)=>recordPath(target,stateDir).replace(/\.json$/,'.previous.json');
+const stageRoot=(target:string)=>path.join(path.dirname(path.dirname(path.resolve(target))),'.atlas-release-stage');
+function validatePreviousPlan(plan:ReleasePlan):void {
+  if(!plan?.valid||plan.inventoryOnly||!Array.isArray(plan.files)||!Array.isArray(plan.directories)||!Array.isArray(plan.loadRoots)||!Array.isArray(plan.allowDlls))throw new Error('Invalid previous runtime manifest.');
+  for(const root of plan.loadRoots)releaseRelative(root,true);
+  for(const dll of plan.allowDlls)releaseRelative(dll);
+  const seen=new Set<string>();
+  for(const file of plan.files){
+    if(releaseRelative(file.path)!==file.path||isDevelopmentPath(file.path)||!Number.isSafeInteger(file.bytes)||file.bytes<0||!/^[a-f0-9]{64}$/.test(file.sha256)||seen.has(file.path.toLowerCase()))throw new Error('Unsafe previous runtime manifest.');
+    if(file.path.toLowerCase().endsWith('.dll')&&!allowedDll(file.path,plan))throw new Error(`Unapproved DLL in previous runtime: ${file.path}.`);
+    seen.add(file.path.toLowerCase());
+  }
+  for(const dir of plan.directories)if(releaseRelative(dir)!==dir||isDevelopmentPath(dir))throw new Error('Unsafe previous runtime directory.');
+  if(!seen.has('about/about.xml'))throw new Error('Previous runtime has no About/About.xml.');
+}
+async function readPrevious(source:string,target:string,stateDir:string):Promise<PreviousRuntime|null>{
+  const file=historyPath(target,stateDir),st=await stat(file);if(!st)return null;
+  if(!st.isFile()||st.isSymbolicLink())throw new Error('Invalid previous runtime record.');
+  const h=JSON.parse(await fsp.readFile(file,'utf8')) as PreviousRuntime;
+  if(h.format!=='atlas-runtime-previous-v1'||!same(h.source,source)||!same(h.target,target)||path.dirname(path.resolve(h.staging))!==path.resolve(stageRoot(target))||!/^mirror-[\w-]+$/.test(path.basename(h.staging)))throw new Error('Previous runtime paths do not match this mod.');
+  for(const dir of [stageRoot(target),h.staging]){const s=await stat(dir);if(!s?.isDirectory()||s.isSymbolicLink())throw new Error('Previous runtime directory is missing or linked.');}
+  const journal=path.join(h.staging,'transaction.json'),js=await stat(journal);if(!js?.isFile()||js.isSymbolicLink())throw new Error('Previous runtime journal is missing or linked.');
+  const j=JSON.parse(await fsp.readFile(journal,'utf8')) as Journal;
+  if(j.format!=='atlas-runtime-transaction-v1'||j.phase!=='committed'||!same(j.source,source)||!same(j.target,target)||!matches(await stat(path.join(h.staging,'previous')),h.identity)||JSON.stringify(j.previous)!==JSON.stringify(h.identity))throw new Error('Previous runtime identity changed; recovery data was retained.');
+  if((await fsp.lstat(path.join(h.staging,'previous'))).isSymbolicLink())throw new Error('Previous runtime must not be a link.');
+  validatePreviousPlan(h.plan);return h;
+}
+export async function previousRuntimeInfo(source:string,target:string,stateDir:string):Promise<PreviousRuntimeInfo|null>{
+  const h=await readPrevious(source,target,stateDir);return h?{savedAt:h.savedAt,files:h.plan.files.length,bytes:h.plan.files.reduce((n,f)=>n+f.bytes,0)}:null;
+}
+export async function previousRuntimePlan(source:string,target:string,stateDir:string):Promise<{plan:ReleasePlan;savedAt:number;id:string}>{
+  const h=await readPrevious(source,target,stateDir);if(!h)throw new Error('No previous installed runtime is available yet.');
+  const root=path.join(h.staging,'previous');
+  for(const file of h.plan.files){
+    let current=root;for(const part of file.path.split('/')){current=path.join(current,part);if((await fsp.lstat(current)).isSymbolicLink())throw new Error('Previous runtime contains a linked path.');}
+    if(await fileSha(current)!==file.sha256)throw new Error(`Previous runtime changed: ${file.path}. It was retained for recovery.`);
+  }
+  return {plan:withPublishedId(h.plan,await effectivePublishedId(source,target,stateDir)),savedAt:h.savedAt,id:h.staging};
+}
+async function effectivePublishedId(source:string,target:string,stateDir:string):Promise<string|null>{
+  const r=await record(source,target,stateDir),src=await publishedId(source),dst=r?await publishedId(target):null;
+  if(r&&dst!==null&&dst!==r.publishedId&&dst!==src){if(src!==r.publishedId)throw new Error('Workshop IDs changed in both workspace and runtime. Resolve them before restoring.');return dst;}
+  return src;
+}
+function withPublishedId(original:ReleasePlan,id:string|null):ReleasePlan {
+  const files=original.files.filter(f=>f.path.toLowerCase()!=='about/publishedfileid.txt');
+  if(id!==null)files.push({path:'About/PublishedFileId.txt',bytes:Buffer.byteLength(id),sha256:createHash('sha256').update(id).digest('hex')});
+  files.sort((a,b)=>a.path.localeCompare(b.path));return {...original,files,totalBytes:files.reduce((n,f)=>n+f.bytes,0)};
+}
+async function snapshotPlan(target:string,inventory:Pick<ReleasePlan,'files'|'directories'>,hints?:ReleasePlan):Promise<ReleasePlan>{
+  const base=hints??await planRelease(target);
+  const files=inventory.files.filter(f=>!isDevelopmentPath(f.path)),directories=inventory.directories.filter(d=>!isDevelopmentPath(d));
+  const plan={...base,valid:true,inventoryOnly:false,files,directories,totalBytes:files.reduce((n,f)=>n+f.bytes,0),errors:[],warnings:[]};
+  validatePreviousPlan(plan);return plan;
+}
+async function keepPrevious(h:PreviousRuntime,stateDir:string):Promise<void>{
+  let prior:PreviousRuntime|null=null;try{prior=await readPrevious(h.source,h.target,stateDir);}catch(error){console.warn('[runtime mirror] older recovery data retained:',String(error));}
+  const file=historyPath(h.target,stateDir),temporary=file+'.'+randomUUID()+'.tmp';
+  try{await fsp.writeFile(temporary,JSON.stringify(h),{flag:'wx'});await retry('save previous runtime',()=>fsp.rename(temporary,file));}finally{await fsp.unlink(temporary).catch(()=>{});}
+  // Retention is one committed version per mod. Failed transaction directories
+  // are never candidates for this cleanup; locked older versions are retained.
+  if(prior&&prior.staging!==h.staging)try{await readPrevious(h.source,h.target,stateDir);if(matches(await stat(path.join(prior.staging,'previous')),prior.identity))await fsp.rm(prior.staging,{recursive:true,force:true});}catch(error){console.warn('[runtime mirror] older version retained:',prior.staging,String(error));}
+}
+export interface MirrorInstallOptions {forceWorkspace?:boolean;expectedRuntime?:string;expectedInstalled?:string}
+export async function refreshRuntimeMirror(source:string,target:string,stateDir:string,options:MirrorInstallOptions={}):Promise<ReleasePlan>{
+  return installRuntimeMirror(source,target,stateDir,options);
+}
+export async function restoreRuntimeMirror(source:string,target:string,stateDir:string,options:MirrorInstallOptions={}):Promise<ReleasePlan>{
+  return exclusive(target,async()=>{const h=await readPrevious(source,target,stateDir);if(!h)throw new Error('No previous installed runtime is available yet.');return installRuntimeMirror(source,target,stateDir,options,h);});
+}
+async function installRuntimeMirror(source: string, target: string, stateDir: string,options:MirrorInstallOptions,restore?:PreviousRuntime): Promise<ReleasePlan> {
   return exclusive(target, async () => {
     const inside = (parent: string, child: string) => {const r = path.relative(parent, child); return !r || !path.isAbsolute(r) && r !== '..' && !r.startsWith('..' + path.sep);};
     if (inside(source, target) || inside(target, source)) throw new Error('The runtime mirror must be outside the workspace mod.');
@@ -341,18 +417,32 @@ export async function refreshRuntimeMirror(source: string, target: string, state
     await recoverPending(source, target, stateDir, stagingParent);
     await recoverLegacy(source, target, stateDir);
     const old = await stat(target);
-    const owned = await record(source, target, stateDir);
+    let owned = await record(source, target, stateDir);
     const legacy = old ? await isLegacyWorkspaceLink(source, target) : false;
     if (old && !owned && !legacy) throw new Error(`Refusing to overwrite an unmanaged game mod: ${target}.`);
-    if (owned) await reconcile(source, target, stateDir);
-    const plan = await planRelease(source);
+    if (owned) {await reconcile(source, target, stateDir);owned=await record(source,target,stateDir);}
+    const workspacePlan=await planRelease(source);
+    if(owned?.heldWorkspace&&!options.forceWorkspace&&!restore&&owned.heldWorkspace===runtimeSignature(workspacePlan)&&owned.plan){
+      try{await auditRelease(target,owned.plan);return {...owned.plan,warnings:[...owned.plan.warnings,'Using the restored runtime. Install update or change runtime files to use the workspace version.']};}catch{/* independently changed runtime must refresh */}
+    }
+    const plan = restore?withPublishedId(restore.plan,await publishedId(source)):workspacePlan;
     if (!plan.valid) throw new Error('Runtime release check failed:\n' + plan.errors.join('\n'));
+    const inventory=owned?await runtimeInventory(target):null;
+    if(options.expectedRuntime&&runtimeSignature(plan)!==options.expectedRuntime)throw new Error('Runtime files changed after review. Open the installation preview again.');
+    if(options.expectedInstalled&&runtimeSignature(inventory??{files:[],directories:[]})!==options.expectedInstalled)throw new Error('Installed files changed after review. Open the installation preview again.');
+    if(inventory&&!restore&&JSON.stringify(inventory)===JSON.stringify({files:plan.files,directories:plan.directories})){
+      if(!owned?.plan||owned.heldWorkspace)await saveRecord({...owned!,plan,heldWorkspace:undefined},stateDir);
+      watchMirrorId(source,target,stateDir);return plan;
+    }
+    let previousPlan:ReleasePlan|undefined,historyError:unknown;
+    if(inventory)try{previousPlan=await snapshotPlan(target,inventory,owned?.plan);}catch(error){historyError=error;}
     const staging = await fsp.mkdtemp(path.join(stagingParent, 'mirror-'));
     const next = path.join(staging, 'runtime'), backup = path.join(staging, 'previous');
     const j: Journal = {format: 'atlas-runtime-transaction-v1', source: path.resolve(source), target: path.resolve(target), phase: 'prepared', previous: old ? identity(old) : null, oldRecord: owned};
-    let committed = false;
+    let committed = false,keepStaging=false;
     try {
-      await copyRelease(source, next, plan);
+      await copyRelease(restore?path.join(restore.staging,'previous'):source, next,restore?.plan??plan);
+      if(restore){await writeId(next,await publishedId(source));await auditRelease(next,plan);}
       j.installed = identity(await fsp.lstat(next)); // journal identity before the rename/crash window
       await journalWrite(staging, j);
       if (old && !(await ownedMirror(source, target, stateDir)) && !(await isLegacyWorkspaceLink(source, target))) throw new Error('Runtime mirror ownership changed during copying.');
@@ -365,9 +455,14 @@ export async function refreshRuntimeMirror(source: string, target: string, state
       await retry('install runtime ' + target, () => fsp.rename(next, target));
       const st = await fsp.lstat(target);
       j.installed = identity(st); j.phase = 'installed'; await journalWrite(staging, j);
-      await saveRecord({format: 'atlas-runtime-mirror-v1', source: path.resolve(source), target: path.resolve(target), identity: {dev: st.dev, ino: st.ino, birthtimeMs: st.birthtimeMs}, publishedId: await publishedId(source)}, stateDir);
+      await saveRecord({format: 'atlas-runtime-mirror-v1', source: path.resolve(source), target: path.resolve(target), identity: {dev: st.dev, ino: st.ino, birthtimeMs: st.birthtimeMs}, publishedId: await publishedId(source),plan,heldWorkspace:restore?runtimeSignature(workspacePlan):undefined}, stateDir);
       j.phase = 'committed'; await journalWrite(staging, j);
       committed = true;
+      if(owned&&previousPlan&&runtimeSignature(previousPlan)!==runtimeSignature(plan)){
+        keepStaging=true;
+        try{await keepPrevious({format:'atlas-runtime-previous-v1',source:path.resolve(source),target:path.resolve(target),staging,identity:j.previous!,savedAt:Date.now(),plan:previousPlan},stateDir);}
+        catch(error){plan.warnings.push(`The update installed, but its previous version record could not be saved: ${String(error)}. Recovery copy retained at ${staging}.`);}
+      }else if(historyError){keepStaging=true;plan.warnings.push(`The update installed. Its previous copy requires manual recovery: ${String(historyError)}. Retained at ${staging}.`);}
       watchMirrorId(source, target, stateDir);
       return plan;
     } catch (error) {
@@ -384,7 +479,7 @@ export async function refreshRuntimeMirror(source: string, target: string, state
       // explicitly so recursive cleanup cannot follow them into the workspace.
       try {
         const before = await stat(backup);
-        if (committed) {
+        if (committed&&!keepStaging) {
           if (before?.isSymbolicLink()) await fsp.unlink(backup);
           await fsp.rm(staging, {recursive: true, force: true});
         }

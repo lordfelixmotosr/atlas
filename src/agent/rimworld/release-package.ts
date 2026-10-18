@@ -194,10 +194,33 @@ export async function planRelease(modDir: string, virtualFiles: Record<string, s
   return plan;
 }
 
-function allowedDll(relative: string, plan: Pick<ReleasePlan, 'loadRoots' | 'allowDlls'>): boolean {
+export function allowedDll(relative: string, plan: Pick<ReleasePlan, 'loadRoots' | 'allowDlls'>): boolean {
   const p = relative.toLowerCase();
   if (/^(?:assembly-csharp(?:-firstpass)?|unityengine(?:\..*)?|unitystubs|waylith(?:\..*)?|brutal(?:\..*)?|system\.private\.corelib|mscorlib|netstandard)\.dll$/i.test(path.posix.basename(p))) return false;
   return plan.allowDlls.some(d => d.toLowerCase() === p) || plan.loadRoots.some(r => p.startsWith((r ? r.toLowerCase() + '/' : '') + 'assemblies/'));
+}
+
+/** Full installed-file inventory. Used on demand, never by the toolbar timer. */
+export async function runtimeInventory(root: string): Promise<Pick<ReleasePlan,'files'|'directories'>> {
+  await safeRoot(root);
+  const files:ReleaseFile[]=[],directories:string[]=[],seen=new Set<string>();
+  const walk=async(dir:string,prefix=''):Promise<void>=>{
+    for(const e of await fsp.readdir(dir,{withFileTypes:true})){
+      const relative=prefix+e.name,full=path.join(dir,e.name);
+      releaseRelative(relative);
+      if(seen.has(relative.toLowerCase()))throw new Error(`Case-colliding installed path: ${relative}.`);
+      seen.add(relative.toLowerCase());
+      if(e.isSymbolicLink())throw new Error(`Linked installed path is not supported: ${relative}.`);
+      if(e.isDirectory()){directories.push(relative);await walk(full,relative+'/');}
+      else if(e.isFile()){const st=await fsp.stat(full);files.push({path:relative,bytes:st.size,sha256:await fileSha(full)});}
+      else throw new Error(`Non-regular installed path: ${relative}.`);
+    }
+  };
+  await walk(root);files.sort((a,b)=>a.path.localeCompare(b.path));directories.sort();return {files,directories};
+}
+
+export function runtimeSignature(plan:Pick<ReleasePlan,'files'|'directories'>):string {
+  return createHash('sha256').update(JSON.stringify({files:plan.files.filter(f=>f.path.toLowerCase()!=='about/publishedfileid.txt'),directories:plan.directories})).digest('hex');
 }
 
 export function assertRelease(plan: ReleasePlan): void {

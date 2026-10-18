@@ -281,7 +281,7 @@ export interface Channels {
   };
   'modmixer:rimworld:is-running': () => boolean;
   'atlas:mods:dll-update-state': (folder: string, conversationId: string) => import('../agent/rimworld/dll-update').DllUpdateOverview;
-  'atlas:mods:apply-dll-update': (folder: string, conversationId: string, token?: string) => import('../agent/rimworld/dll-update').DllInstallResult;
+  'atlas:mods:apply-dll-update': (folder: string, conversationId: string, token?: string, mode?: import('../agent/rimworld/dll-update').RuntimeInstallMode) => import('../agent/rimworld/dll-update').DllInstallResult;
   'atlas:mods:open-named-folders': () => {directory: string; count: number};
   'modmixer:rimworld:quit': () => { killed: boolean };
 

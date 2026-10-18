@@ -26,6 +26,7 @@ export function ModHeader({
   const running = useRimWorldRunning(isRimWorld);
   const [closing, setClosing] = useState(false);
   const [installing,setInstalling]=useState(false);
+  const [restoreAvailable,setRestoreAvailable]=useState(false),[restoreRequest,setRestoreRequest]=useState(0);
 
   const onClose = async () => {
     if (closing) return;
@@ -61,7 +62,7 @@ export function ModHeader({
       <div className="ml-4 flex flex-wrap items-center gap-2">
         <ModChangesButton mod={mod} busy={busy} />
         <FelixSentenceShortcut conversationId={conversationId} />
-        {isRimWorld&&<ManualInstallControl folder={mod.folder} conversationId={conversationId} busy={busy||closing} onInstalling={setInstalling}/>}
+        {isRimWorld&&<ManualInstallControl folder={mod.folder} conversationId={conversationId} busy={busy||closing} onInstalling={setInstalling} restoreRequest={restoreRequest} onRestoreAvailable={setRestoreAvailable}/>}
         {isRimWorld && running ? (
           <button
             onClick={onClose}
@@ -89,7 +90,7 @@ export function ModHeader({
               : `test in ${getGame(game).displayName.toLowerCase()}`}
           </button>
         )}
-        <SessionMenu conversationId={conversationId} />
+        <SessionMenu conversationId={conversationId} restoreAvailable={isRimWorld&&restoreAvailable} busy={busy||closing||installing} onRestore={()=>setRestoreRequest(n=>n+1)} />
       </div>
     </div>
   );
@@ -101,7 +102,7 @@ export function ModHeader({
  * the clipboard so a tester can paste it into a bug report. Closes on
  * outside-click and flips the item to a confirmation for a beat after copying.
  */
-function SessionMenu({ conversationId }: { conversationId: string }) {
+function SessionMenu({ conversationId,restoreAvailable,busy,onRestore }: { conversationId: string;restoreAvailable:boolean;busy:boolean;onRestore:()=>void }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -150,14 +151,15 @@ function SessionMenu({ conversationId }: { conversationId: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        title="Troubleshooting"
-        aria-label="Troubleshooting"
+        title="More mod actions"
+        aria-label="More mod actions"
         className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line text-muted shadow-sm transition-colors hover:border-ink/30 hover:text-ink"
       >
         <KebabIcon />
       </button>
       {open && (
         <div className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-md border border-line bg-paper shadow-xl">
+          {restoreAvailable&&<button type="button" disabled={busy} onClick={()=>{setOpen(false);onRestore();}} className="block w-full border-b border-line px-3 py-2 text-left text-[12px] text-ink hover:bg-surface disabled:opacity-40">Restore previous version…</button>}
           <button
             type="button"
             onClick={() => void copyLog()}
@@ -189,16 +191,19 @@ function useRimWorldRunning(enabled: boolean): boolean {
       return;
     }
     let cancelled = false;
+    let checking = false;
     const tick = async () => {
+      if(checking||document.visibilityState!=='visible')return;
+      checking=true;
       try {
         const r = await window.modmixer.isRimWorldRunning();
         if (!cancelled) setRunning(r);
       } catch {
         if (!cancelled) setRunning(false);
-      }
+      }finally{checking=false;}
     };
     void tick();
-    const id = window.setInterval(tick, 2000);
+    const id = window.setInterval(tick, 5000);
     return () => {
       cancelled = true;
       window.clearInterval(id);

@@ -78,9 +78,10 @@ test('Windows directory handle without FILE_SHARE_DELETE preserves the old runti
 test('transient Windows DLL sharing lock and directory lock clear within the retry budget', {skip:process.platform!=='win32'},async t=>{
   const f=fixture(t);f.write('Assemblies/Runtime.dll','old');await mirrors.refreshRuntimeMirror(f.source,f.target,f.state);f.write('Assemblies/Runtime.dll','new');
   for(const [file,dir] of [[path.join(f.target,'Assemblies/Runtime.dll'),false],[f.target,true]]){
-    const unlock=await hold(file,dir);const timer=setTimeout(()=>void unlock(),200);try{await mirrors.refreshRuntimeMirror(f.source,f.target,f.state);}finally{clearTimeout(timer);}
+    const expected=dir?'new-directory-test':'new-file-test';f.write('Assemblies/Runtime.dll',expected);
+    const unlock=await hold(file,dir);let unlocking;const timer=setTimeout(()=>{unlocking=unlock();},200);try{await mirrors.refreshRuntimeMirror(f.source,f.target,f.state);}finally{clearTimeout(timer);await(unlocking??unlock());}
+    assert.equal(fs.readFileSync(path.join(f.target,'Assemblies/Runtime.dll'),'utf8'),expected);
   }
-  assert.equal(fs.readFileSync(path.join(f.target,'Assemblies/Runtime.dll'),'utf8'),'new');
 });
 
 test('a real Windows lock on the candidate clears after the previous directory has moved', {skip:process.platform!=='win32'},async t=>{
