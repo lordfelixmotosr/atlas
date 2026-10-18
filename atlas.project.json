@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.26 native source release built and verified",
+  "status": "Atlas 0.2.27 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -172,7 +172,8 @@
     "0.2.23: runtime-only copied mirrors and shared Steam release filtering preserve per-version content",
     "0.2.24: recorded C# build fingerprints and post-publish Steam download verification",
     "0.2.25: group matching Workshop verification copies under their workspace identity",
-    "0.2.26: serialized Windows runtime mirror transactions, retained recovery journals and versioned managed bridge copies"
+    "0.2.26: serialized Windows runtime mirror transactions, retained recovery journals and versioned managed bridge copies",
+    "0.2.27: manual full-runtime installation for pending DLL updates; named Windows folder shortcuts without project-path migration"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -187,7 +188,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.26",
+  "version": "0.2.27",
   "supportedGames": [
     "rimworld"
   ],
@@ -328,24 +329,27 @@
       "0.2.25 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
       "0.2.26 82 regression checks passed, including real Windows file and directory locks, failed installation and rollback, independent processes, crash and legacy recovery; actual isolated run_test_cycle launched House Targaryen with its parent and companion mods, connected the diagnostic bridge, and preserved workspace hashes, Workshop metadata and normal ModsConfig",
       "0.2.26 native Electron production build and startup health verified; no paid model requests or Steam uploads",
-      "0.2.26 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.26 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.2.27 97 regression checks passed, including stale-file removal, DLL hashes/removals, close and warning confirmation, active-work/build guards, Windows locks and transaction recovery; actual isolated run_test_cycle loaded probe DLL v1, manual IPC closed the game and installed v2 without relaunching, and a separate test loaded v2 with diagnostic bridge/log events; workspace hashes, Workshop metadata and normal ModsConfig were preserved",
+      "0.2.27 native Electron production build, app API, second-launch startup health and real Windows shortcut target reading verified; no paid model requests or Steam uploads",
+      "0.2.27 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "application-update": {
-      "path": "Atlas-0.2.26-win-x64-application-update.zip",
-      "size": 97083970,
-      "sha256": "6bf5417669a1533720356009e5aeb08c03145333bfd10de080aa3467807b53e7"
+      "path": "Atlas-0.2.27-win-x64-application-update.zip",
+      "size": 97089308,
+      "sha256": "e9ae166636672db79eb44c02c9c5e8d84751138f796436d152f24f0570ee4e47"
     },
     "portable": {
-      "path": "Atlas-0.2.26-win-x64-portable.zip",
-      "size": 397244471,
-      "sha256": "8106b90a880d4a6ea0e9eb0ac9bb4124d032580e9ccc05269b8562fa885f32aa"
+      "path": "Atlas-0.2.27-win-x64-portable.zip",
+      "size": 397249809,
+      "sha256": "e269c5ececa857694c254cdb270a1f2c0dfae9d0574c8a46ffb2e8dcaf4dbefa"
     },
     "full-update": {
-      "path": "Atlas-0.2.26-win-x64-full-update.zip",
-      "size": 396677979,
-      "sha256": "b9229399d2a6e89bfed2a1d35d6ce724960362b83ff338c6736328a84bd7ea57"
+      "path": "Atlas-0.2.27-win-x64-full-update.zip",
+      "size": 396683317,
+      "sha256": "84e7c8640ebf5684d24f262a00ba50bda85ecf2a5d754954f802c798263d053a"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"

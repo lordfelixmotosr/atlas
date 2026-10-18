@@ -38,6 +38,7 @@ import { loadSettings } from '../../agent/settings.js';
 import { getGame, resolveGameId } from '../../agent/games/registry.js';
 import type { GameId } from '../../agent/games/types.js';
 import type { RouteContext } from './context.js';
+import {registerDllUpdateRoutes} from './dll-updates.js';
 
 /**
  * Workspace mod CRUD + reads (About, schematic, defs) + RimWorld
@@ -45,6 +46,7 @@ import type { RouteContext } from './context.js';
  * so they live together.
  */
 export function registerModRoutes(ctx: RouteContext): void {
+  registerDllUpdateRoutes(ctx);
   const { ipc, host, getWindow, requireConsent } = ctx;
   const registry = getRegistry();
 

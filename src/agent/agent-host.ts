@@ -591,6 +591,7 @@ export class AgentHost {
    * a switched-away session without aborting live work.
    */
   private busyConversations = new Set<string>();
+  hasActiveWork(): boolean {return this.busyConversations.size > 0;}
   /**
    * Built lazily once on first session construction and reused thereafter.
    * The strip-thinking transform is stateless; one extension instance is

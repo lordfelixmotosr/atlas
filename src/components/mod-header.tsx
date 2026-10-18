@@ -1,5 +1,6 @@
 import {FelixSentenceShortcut} from "../atlas/controls";
 import {ModChangesButton} from '../atlas/mod-changes-ui';
+import {ManualInstallControl} from '../atlas/manual-install-control';
 import { useEffect, useRef, useState } from 'react';
 import type { WorkspaceMod } from '../agent/workspace';
 import { getGame } from '../agent/games/registry';
@@ -24,6 +25,7 @@ export function ModHeader({
   // long-lived process; others just show the test/launch button.
   const running = useRimWorldRunning(isRimWorld);
   const [closing, setClosing] = useState(false);
+  const [installing,setInstalling]=useState(false);
 
   const onClose = async () => {
     if (closing) return;
@@ -59,10 +61,11 @@ export function ModHeader({
       <div className="ml-4 flex flex-wrap items-center gap-2">
         <ModChangesButton mod={mod} busy={busy} />
         <FelixSentenceShortcut conversationId={conversationId} />
+        {isRimWorld&&<ManualInstallControl folder={mod.folder} conversationId={conversationId} busy={busy||closing} onInstalling={setInstalling}/>}
         {isRimWorld && running ? (
           <button
             onClick={onClose}
-            disabled={closing}
+            disabled={closing||installing}
             className={cn(
               'group inline-flex items-center gap-2 rounded-md border border-line bg-paper px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted shadow-sm transition-colors hover:border-ink/30 hover:text-ink active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40',
             )}
@@ -74,7 +77,7 @@ export function ModHeader({
           <button
             data-demo="launch"
             onClick={onTest}
-            disabled={busy || !hasAi}
+            disabled={busy || !hasAi || installing}
             title={!hasAi ? 'Connect an AI provider to run tests' : undefined}
             className={cn(
               'group inline-flex items-center gap-2 rounded-md border border-accent bg-accent px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-accent-foreground shadow-sm transition-all hover:bg-accent-soft hover:shadow-md active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none',

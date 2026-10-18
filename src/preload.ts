@@ -229,6 +229,9 @@ const api = {
     invoke('modmixer:rimworld:disable-mod', folder),
   launchRimWorld: () => invoke('modmixer:rimworld:launch'),
   isRimWorldRunning: () => invoke('modmixer:rimworld:is-running'),
+  dllUpdateState: (folder: string, conversationId: string) => invoke('atlas:mods:dll-update-state', folder, conversationId),
+  applyDllUpdate: (folder: string, conversationId: string, token?: string) => invoke('atlas:mods:apply-dll-update', folder, conversationId, token),
+  openNamedModFolders: () => invoke('atlas:mods:open-named-folders'),
   quitRimWorld: () => invoke('modmixer:rimworld:quit'),
 
   // Assets

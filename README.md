@@ -1,4 +1,10 @@
-# Atlas 0.2.26 portable
+# Atlas 0.2.27 portable
+
+## 0.2.27 manual mod installation
+
+The mod header shows **Install update** when a managed runtime has added, changed or removed DLLs, including workspace dependencies and companions from the last successful test. It installs the complete runtime package without an AI request or automatic game relaunch. If RimWorld is running, save first and confirm **Close and install**. Unknown omitted folders are shown for review before installation. The existing transactional installer removes obsolete runtime files, excludes development files, preserves Workshop IDs and retains recovery data on failure. Wait for active agent work and C# builds to finish before installing. This action does not change the normal ModsConfig.xml.
+
+**Open named mod folders** on Home opens readable Windows shortcuts showing the package ID and modification time. Actual workspace folder names and saved paths stay fixed. Refresh this view after moving the portable folder to another PC.
 
 ## 0.2.26 Windows runtime sync recovery
 

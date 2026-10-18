@@ -10,6 +10,7 @@ const ROOT_DOCUMENTS = /^(?:licen[cs]e|copying|notice|readme)(?:\.(?:txt|md))?$/
 
 export interface ReleaseFile { path: string; bytes: number; sha256: string }
 export interface ReleasePlan {
+  inventoryOnly?: boolean;
   valid: boolean;
   files: ReleaseFile[];
   directories: string[];
@@ -82,7 +83,7 @@ async function safeRoot(root: string): Promise<string> {
 }
 
 /** Read-only, deterministic selection for BOTH the game mirror and Steam upload. */
-export async function planRelease(modDir: string, virtualFiles: Record<string, string> = {}): Promise<ReleasePlan> {
+export async function planRelease(modDir: string, virtualFiles: Record<string, string> = {}, inventoryOnly = false): Promise<ReleasePlan> {
   const root = await safeRoot(modDir);
   const plan: ReleasePlan = {valid: false, files: [], directories: [], totalBytes: 0, excluded: [], warnings: [], errors: [], unknownRootFolders: [], versions: [], loadRoots: [], allowDlls: []};
   const top = await fsp.readdir(root, {withFileTypes: true});
@@ -156,6 +157,7 @@ export async function planRelease(modDir: string, virtualFiles: Record<string, s
       plan.directories.push(relative);
       for (const e of await fsp.readdir(full, {withFileTypes: true})) await visit(relative + '/' + e.name);
     } else if (st.isFile()) {
+      if (inventoryOnly && !relative.toLowerCase().endsWith('.dll') && !['about/about.xml','loadfolders.xml'].includes(relative.toLowerCase())) return;
       if (seen.has(relative)) return;
       seen.add(relative);
       plan.files.push({path: relative, bytes: st.size, sha256: await fileSha(full)});
@@ -188,6 +190,7 @@ export async function planRelease(modDir: string, virtualFiles: Record<string, s
   plan.excluded = [...new Set(plan.excluded)].sort();
   plan.directories = [...new Set(plan.directories)].sort();
   plan.valid = plan.errors.length === 0;
+  if (inventoryOnly) plan.inventoryOnly = true;
   return plan;
 }
 
@@ -198,6 +201,7 @@ function allowedDll(relative: string, plan: Pick<ReleasePlan, 'loadRoots' | 'all
 }
 
 export function assertRelease(plan: ReleasePlan): void {
+  if (plan.inventoryOnly) throw new Error('A DLL inventory cannot be installed or published as a complete runtime package.');
   if (!plan.valid) throw new Error('Runtime release check failed:\n' + plan.errors.join('\n'));
 }
 

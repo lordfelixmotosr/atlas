@@ -11,6 +11,7 @@ import { isRimWorldRunning, quitRimWorld } from './game.js';
 import { prepareDebugSession } from './prefs.js';
 import { shipAndLaunch } from './ship.js';
 import { ensureTestSavedataPrefs } from './test-savedata.js';
+import { saveTestOptions } from './test-history.js';
 import type { RunTestCycleDetails, TestCycleContext } from '../adapters/types.js';
 
 /**
@@ -158,6 +159,7 @@ export async function runRimworldTestCycle(
     modFolder: ctx.folder,
     isolated: launchResult.details.isolated,
   });
+  await saveTestOptions(ctx.folder, p).catch(error => console.warn('[test] could not save test settings:', String(error)));
   lines.push(
     'Watching the in-game bridge in the background; errors will arrive as auto-prompts.',
   );

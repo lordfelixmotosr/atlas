@@ -12,6 +12,7 @@ export interface BuildState {
 }
 interface BuildRecord {version: 1; builtAt?: number; inputs?: Record<string,string>; outputs?: Record<string,string>; attempt?: 'building' | 'failed' | 'changed' | 'success'}
 const active = new Set<string>();
+export const isBuildInProgress = (mod: string): boolean => active.has(path.resolve(mod));
 const skipped = new Set(['bin','obj','.git','.atlas','.modmixer','node_modules','.live']);
 const rootInput = /^(?:Directory\.(?:Build|Packages)\.(?:props|targets)|global\.json|NuGet\.Config|\.editorconfig)$/i;
 const codeInput = /\.(?:cs|csproj|props|targets|resx|ruleset|editorconfig)$/i;

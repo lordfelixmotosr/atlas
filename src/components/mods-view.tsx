@@ -5,6 +5,7 @@ import { getGame, resolveGameId } from '../agent/games/registry';
 import { ModTile } from './mod-tile';
 import { byUpdatedDesc } from '@/lib/sort-mods';
 import { cn } from '@/lib/cn';
+import {appAlert} from './app-dialog';
 
 /** Home's "filter by published" control — a mod counts as published once it has a Workshop/Modrinth id. */
 type PublishFilter = 'all' | 'published' | 'unpublished';
@@ -33,6 +34,8 @@ export function ModsView({
     patch: { pinned?: boolean; archived?: boolean },
   ) => void;
 }) {
+  const [openingFolders,setOpeningFolders]=useState(false);
+  const openFolders=async()=>{setOpeningFolders(true);try{await window.modmixer.openNamedModFolders();}catch(error){await appAlert(error instanceof Error?error.message:String(error));}finally{setOpeningFolders(false);}};
   const def = getGame(game);
   // Home is scoped to the active game; mods for other games live behind their
   // own selection (their tabs stay open regardless).
@@ -121,6 +124,7 @@ export function ModsView({
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {mods.length>0&&<button className="atlas-button" disabled={openingFolders} onClick={()=>void openFolders()} title="Open readable Windows shortcuts to your mod folders. Existing project paths stay fixed.">{openingFolders?'Preparing folders…':'Open named mod folders'}</button>}
             {def.capabilities.liveSession && (
               <button
                 onClick={() => void launchLive()}

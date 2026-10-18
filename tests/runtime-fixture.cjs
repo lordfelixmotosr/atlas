@@ -25,7 +25,7 @@ function fixture(t) {
   fs.mkdirSync(path.dirname(target),{recursive:true});
   const write=(p,data='fixture')=>{const f=path.join(source,p);fs.mkdirSync(path.dirname(f),{recursive:true});fs.writeFileSync(f,data);};
   write('About/About.xml','<ModMetaData><name>Fixture</name><packageId>atlas.release.fixture</packageId><supportedVersions><li>1.6</li><li>1.7</li></supportedVersions></ModMetaData>');
-  t.after(()=>{assert(root.startsWith(base+path.sep));fs.rmSync(root,{recursive:true,force:true});});
+  t.after(async()=>{assert(root.startsWith(base+path.sep));fs.unwatchFile(path.join(target,'About','PublishedFileId.txt'));await mirrors.withRuntimeSync(path.dirname(target),async()=>{});fs.rmSync(root,{recursive:true,force:true});});
   return {root,source,target,state,write};
 }
 
