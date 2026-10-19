@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { WorkshopNotesPreview } from './workshop-notes-preview';
 
 // UgcItemVisibility values from steamworks.js (numeric literals — the enum
 // can't be imported into the renderer because steamworks.js is externalized).
@@ -61,8 +62,8 @@ export function PublishConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-md border border-line bg-paper shadow-lg">
-        <div className="border-b border-line px-4 py-3">
+      <div role="dialog" aria-modal="true" aria-label={isUpdate ? 'Publish update' : 'Publish to Steam Workshop'} className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-md border border-line bg-paper shadow-lg">
+        <div className="shrink-0 border-b border-line px-4 py-3">
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
             Atlas · steam workshop
           </div>
@@ -71,7 +72,7 @@ export function PublishConfirmDialog({
           </div>
         </div>
 
-        <div className="space-y-3 px-4 py-3 text-sm text-ink">
+        <div data-publish-body className="min-h-0 space-y-3 overflow-auto px-4 py-3 text-sm text-ink [overflow-wrap:anywhere]">
           {isUpdate ? (
             <>
               <p>
@@ -96,6 +97,7 @@ export function PublishConfirmDialog({
                   record a timestamp instead.
                 </span>
               </label>
+              <WorkshopNotesPreview text={changeNote} />
             </>
           ) : (
             <>
@@ -143,7 +145,7 @@ export function PublishConfirmDialog({
 
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
+        <div data-publish-actions className="flex shrink-0 items-center justify-end gap-2 border-t border-line px-4 py-3">
           <button
             onClick={onCancel}
             className="rounded-md border border-line bg-paper px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink transition-colors hover:border-ink/40"

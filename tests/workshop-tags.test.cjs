@@ -24,6 +24,7 @@ function load(file, imports = {}, globals = {}) {
   })(localRequire, module, module.exports);
   return module.exports;
 }
+const notes = load('lib/workshop-notes.ts');
 const tags = load('agent/rimworld/workshop-tags.ts');
 const release = load('agent/rimworld/release-package.ts', {'fast-xml-parser': require('fast-xml-parser')});
 const parser = load('agent/registry/about-xml.ts');
@@ -119,6 +120,7 @@ function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1
     '../telemetry.js': { track() {} },
     '../../atlas/mod-changes': { collectModInventory: async () => ({files:{},signature:'fixture',modifiedAt:0}), mergePublishedInventory: (a,b) => b, recordModBaseline: async () => { baseline = true; } },
     './workshop-tags.js': tags,
+    '../../lib/workshop-notes': notes,
     './release-package.js': release,
     './runtime-mirror.js': {reconcileMirrorId: async () => false},
     './build-state.js':buildState,
@@ -207,3 +209,5 @@ test('actual development leftovers in the Steam copy fail verification',async t=
 test('a running game defers download verification without cancelling the successful upload',async t=>{const p=publisher(t,{gameRunning:true});const result=await p.api.publishToWorkshop('Example',0,'verify',false);assert.equal(result.verification.status,'pending');assert.equal(p.requests.some(r=>r.op==='downloadItem'),false);assert.equal(p.baseline(),true);});
 
 test('an older upload record cannot verify a newer successful publication',async t=>{const p=publisher(t);await p.api.publishToWorkshop('Example',0,'latest',false);const file=path.join(p.mod,'.atlas/published-runtime.json'),receipt=JSON.parse(fs.readFileSync(file));receipt.uploadedAt-=10000;fs.writeFileSync(file,JSON.stringify(receipt));assert.equal((await p.api.getWorkshopReleaseStatus('Example')).release,null);await assert.rejects(p.api.verifyWorkshopRelease('Example'),/No recorded Atlas upload/);});
+
+test('actual publisher converts Markdown notes once and keeps existing Steam notes',async t=>{for(const existing of [true,false]){const p=publisher(t,{existing,subscribed:false});await p.api.publishToWorkshop('Example',0,'## Features\n- **Recruitment:** Added guards.',false);assert.equal(p.uploaded[0].changeNote,'[h2]Features[/h2]\n[list]\n[*][b]Recruitment:[/b] Added guards.\n[/list]');}const p=publisher(t,{subscribed:false});await p.api.publishToWorkshop('Example',0,'[b]Fixed[/b] reloading.',false);assert.equal(p.uploaded[0].changeNote,'[b]Fixed[/b] reloading.');});

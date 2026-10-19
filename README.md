@@ -1,4 +1,10 @@
-# Atlas 0.2.30 portable
+# Atlas 0.2.31 portable
+
+## 0.2.31 Workshop update notes
+
+Atlas converts Markdown headings, lists, emphasis, code and links into Steam BBCode at publication, including existing Markdown drafts. Plain text and existing Steam formatting remain usable. The Changes panel and final publish confirmation show a local Steam formatting preview; the publish dialog keeps its action buttons visible while long content scrolls. The preview renders text safely without loading embedded content or opening links.
+
+New AI descriptions return public player notes separately from private review warnings. Missing earlier text, shortened excerpts and omitted files are reported in Atlas, excluded from copied descriptions and update notes. Editing a draft keeps its warnings; both expire when the comparison changes. Unsupported claims must be omitted. An invalid AI response leaves the existing draft intact. Older saved prose is not silently rewritten: regenerate an older AI draft to separate embedded review commentary, or remove that commentary while reviewing it. The preview approximates formatting; Steam controls its own fonts and spacing.
 
 ## 0.2.30 duplicate download prevention
 

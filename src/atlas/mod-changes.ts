@@ -20,7 +20,7 @@ export function mergePublishedInventory(inputs: ModInventory, runtime: ModInvent
   };
 }
 type Baseline = { at: number; kind: 'published' | 'updated' | 'tracking'; note: string; inventory: ModInventory };
-type ContentDescription = { text: string; at: number; origin: 'ai' | 'manual'; model?: string };
+type ContentDescription = { text: string; at: number; origin: 'ai' | 'manual'; model?: string; reviewWarnings?: string[] };
 type State = { version: 1; first: Baseline; published?: Baseline; updated?: Baseline; observed: { signature: string; at: number }; descriptions?: Record<string, ContentDescription> };
 export interface ModChangeFile { path: string; action: 'added' | 'edited' | 'removed'; category: string; description: string }
 export interface ModChangeReport {
@@ -29,7 +29,7 @@ export interface ModChangeReport {
   lastModifiedAt: number; lastPublishedAt: number | null; lastUpdatedAt: number | null;
   note: string; count: number; files: ModChangeFile[];
   features?: { added: string[]; changed: string[]; removed: string[] };
-  descriptionKey?: string; featureDescription?: string; descriptionOrigin?: string; descriptionAt?: number;
+  descriptionKey?: string; featureDescription?: string; descriptionOrigin?: string; descriptionAt?: number; descriptionNeedsReview?: boolean; reviewWarnings?: string[];
 }
 export type ModChangeSummary = Omit<ModChangeReport, 'files'>;
 const skipped = new Set(['.git', '.atlas', '.modmixer', '.vs', '.DS_Store', 'bin', 'obj', 'node_modules']);
@@ -195,12 +195,16 @@ export function prepareModDescription(root: string, comparison: 'latest'|'publis
     return JSON.stringify({comparison:baseline.kind,baselineAt:baseline.at,features:describeModFeatures(baseline.inventory,current,rows),totalChangedFiles:rows.length,omittedFiles:omitted,evidence});
   });
 }
-export function saveModDescription(root: string, comparison: 'latest'|'published'|'updated', expectedKey: string, text: string, origin: 'ai'|'manual'='manual', model?: string) {
+export function saveModDescription(root: string, comparison: 'latest'|'published'|'updated', expectedKey: string, text: string, origin: 'ai'|'manual'='manual', model?: string, reviewWarnings?: string[]) {
   return exclusive(root,async()=>{
     if(typeof text!=='string'||!text.trim()||text.length>12000)throw new Error('Use a description of 1–12,000 characters.');
     const state=await readState(root),current=await collectModInventory(root),baseline=state&&chooseBaseline(state,comparison);
     if(!state||!baseline||descriptionKey(baseline,current)!==expectedKey)throw new Error('The mod or comparison changed. Refresh before saving this description.');
-    state.descriptions??={};state.descriptions[expectedKey]={text:text.trim(),at:Date.now(),origin,...(model?{model}: {})};
+    if(reviewWarnings && (!Array.isArray(reviewWarnings)||reviewWarnings.length>23||reviewWarnings.some(w=>typeof w!=='string'||w.length>1500)))throw new Error('Invalid description review warnings.');
+    state.descriptions??={};
+    // Editing public wording must not dismiss coverage warnings for this comparison.
+    const warnings=reviewWarnings??state.descriptions[expectedKey]?.reviewWarnings??[];
+    state.descriptions[expectedKey]={text:text.trim(),at:Date.now(),origin,reviewWarnings:warnings,...(model?{model}: {})};
     state.descriptions=Object.fromEntries(Object.entries(state.descriptions).sort((a,b)=>b[1].at-a[1].at).slice(0,8));await saveState(root,state);
   });
 }
@@ -241,7 +245,7 @@ export function readModChanges(root: string, lastPublishedAt: number | null = nu
       if (!baseline) return { ...common, status: 'unavailable', label: 'No comparison saved', description: `No file snapshot exists for the last ${comparison === 'published' ? 'publication' : 'marked update'}. Tracking started ${new Date(state.first.at).toLocaleString()}.`, baselineAt: null, baselineKind: null, count: 0, files: [] };
       const files = compareModInventories(baseline.inventory, current), tracking = baseline.kind === 'tracking';
       const key=descriptionKey(baseline,current),saved=state.descriptions?.[key];
-      return { ...common, features:describeModFeatures(baseline.inventory,current,files),descriptionKey:key,featureDescription:saved?.text??'',descriptionOrigin:saved?.origin,descriptionAt:saved?.at,status: files.length ? 'modified' : tracking ? 'tracking' : 'clean', label: files.length ? baseline.kind === 'published' ? 'Unpublished changes' : baseline.kind === 'updated' ? 'Changes since update' : 'Changes since tracking started' : tracking ? 'Tracking started' : 'No changes since ' + (baseline.kind === 'published' ? 'publication' : 'update'), description: files.length ? description(files) : tracking ? 'No earlier file snapshot exists. Future changes will be compared from this point.' : 'Mod content matches the saved comparison.', baselineAt: baseline.at, baselineKind: baseline.kind, count: files.length, files };
+      return { ...common, features:describeModFeatures(baseline.inventory,current,files),descriptionKey:key,featureDescription:saved?.text??'',descriptionNeedsReview:saved?.origin==='ai'&&saved.reviewWarnings===undefined,reviewWarnings:saved?.reviewWarnings??[],descriptionOrigin:saved?.origin,descriptionAt:saved?.at,status: files.length ? 'modified' : tracking ? 'tracking' : 'clean', label: files.length ? baseline.kind === 'published' ? 'Unpublished changes' : baseline.kind === 'updated' ? 'Changes since update' : 'Changes since tracking started' : tracking ? 'Tracking started' : 'No changes since ' + (baseline.kind === 'published' ? 'publication' : 'update'), description: files.length ? description(files) : tracking ? 'No earlier file snapshot exists. Future changes will be compared from this point.' : 'Mod content matches the saved comparison.', baselineAt: baseline.at, baselineKind: baseline.kind, count: files.length, files };
     } catch (error) {
       return { status: 'unavailable', label: 'Change comparison unavailable', description: error instanceof Error ? error.message : String(error), baselineAt: null, baselineKind: null, lastModifiedAt: 0, lastPublishedAt, lastUpdatedAt: null, note: '', count: 0, files: [] };
     }

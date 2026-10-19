@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { toSteamChangeNotes } from '../../lib/workshop-notes';
 import { collectModInventory, recordModBaseline, mergePublishedInventory, type ModInventory } from '../../atlas/mod-changes';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -524,7 +525,7 @@ async function publishToWorkshopInternal(
   let tags = workshopTags(about.supportedVersions);
   // Use the modder's notes when they typed any; otherwise fall back to a
   // timestamp so the Workshop change history always has a non-empty entry.
-  const note = changeNote?.trim() || autoChangeNote();
+  const note = toSteamChangeNotes(changeNote?.trim() || autoChangeNote());
 
   const existing = await readPublishedFileId(folder);
   let needsToAcceptAgreement = false;
