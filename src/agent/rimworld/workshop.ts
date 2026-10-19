@@ -340,7 +340,7 @@ export async function getWorkshopReleaseStatus(folder:string):Promise<{build:Bui
 export function stopWorkshopVerification(folder:string):void{
   workspaceModPath(folder);const job=verificationJobs.get(folder);if(job){job.stopped=true;job.host.dispose();}
 }
-async function verifyWorkshopReleaseInternal(folder:string,automatic=false):Promise<WorkshopVerification>{
+async function verifyWorkshopReleaseInternal(folder:string,automatic=false,allowDownload=false):Promise<WorkshopVerification>{
   const mod=workspaceModPath(folder);
   if(uploading.has(folder)&&!automatic)throw new Error('Wait for this mod’s upload to finish.');
   const existing=verificationJobs.get(folder);if(existing)return existing.promise;
@@ -357,15 +357,22 @@ async function verifyWorkshopReleaseInternal(folder:string,automatic=false):Prom
   job.promise=(async()=>{
     let result:WorkshopVerification;
     try{
-      await savePublishedRelease(mod,{...receipt,verification:{status:'checking',message:'Waiting for Steam’s downloaded copy…'}});
+      await savePublishedRelease(mod,{...receipt,verification:{status:'checking',message:'Checking Steam subscription…'}});
+      await host.init();
+      const state=await host.downloadState(BigInt(receipt.itemId));
+      if(!Number.isInteger(state)||state<0)throw new Error('Steam returned an invalid subscription state.');
+      if(!(state&1)&&(automatic||!allowDownload)){
+        result={status:'pending',downloadRequired:true,message:'Upload succeeded. Automatic verification is skipped for unsubscribed mods to avoid creating another copy in RimSort. You can explicitly download a Steam copy to verify it.'};
+      }else{
       host.onDownloadProgress=(current,total)=>events.emit('progress',{folder,status:'verifying-download',uploaded:current,total});
       events.emit('progress',{folder,status:'verifying-download'});
-      await host.init();const download=await host.downloadItem(BigInt(receipt.itemId));
+      const download=await host.downloadItem(BigInt(receipt.itemId));
       const absolute=path.resolve(download),relative=path.relative(mod,absolute);
       if(!path.isAbsolute(download)||!relative||!relative.startsWith('..')&&!path.isAbsolute(relative)||path.basename(absolute)!==receipt.itemId||path.basename(path.dirname(absolute))!=='294100'||path.basename(path.dirname(path.dirname(absolute)))!=='content')throw new Error('Steam returned an unexpected content location; no workspace copy was checked.');
       events.emit('progress',{folder,status:'verifying-files'});
       result=await compareWorkshopDownload(absolute,receipt.files);
       if((await host.downloadState(BigInt(receipt.itemId)))&(8|16|32))throw new Error('Steam started another update during verification. Retry when it finishes.');
+      }
     }catch(error){result={status:job.stopped?'stopped':'unavailable',checkedAt:Date.now(),message:job.stopped?'Atlas stopped checking. Steam may finish its queued download.':`Upload is saved, but its Steam copy could not be verified: ${error instanceof Error?error.message:String(error)}`};}
     finally{host.dispose();verificationJobs.delete(folder);}
     const current=await readPublishedRelease(mod,receipt.itemId);
@@ -375,10 +382,10 @@ async function verifyWorkshopReleaseInternal(folder:string,automatic=false):Prom
   })();return job.promise;
 }
 
-export function verifyWorkshopRelease(folder:string,automatic=false):Promise<WorkshopVerification>{
+export function verifyWorkshopRelease(folder:string,automatic=false,allowDownload=false):Promise<WorkshopVerification>{
   workspaceModPath(folder);
   const current=verificationRequests.get(folder);if(current)return current;
-  const task=verifyWorkshopReleaseInternal(folder,automatic);verificationRequests.set(folder,task);
+  const task=verifyWorkshopReleaseInternal(folder,automatic,allowDownload);verificationRequests.set(folder,task);
   void task.finally(()=>{if(verificationRequests.get(folder)===task)verificationRequests.delete(folder);}).catch(()=>{});
   return task;
 }

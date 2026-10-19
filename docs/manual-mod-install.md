@@ -18,6 +18,14 @@ If the game is running, Atlas asks the user to save and confirm closing it. A fa
 
 First installations still use Sync to game or a test launch. Atlas refuses to overwrite an unmanaged directory. Dependency detection includes transitive workspace dependencies and companions saved after the last successful test. Plans are checked again when accepting a close/warning confirmation; a changed package requires fresh confirmation.
 
+## Library scans and duplicate entries
+
+Opening Atlas or refreshing the library does not install workspace mods. Active package IDs alone do not authorize copying a workspace into the game's Mods directory. This keeps **Unsync** effective when the same package remains enabled. Explicit Sync, Install and Test still install runtime files; launches still refresh previously managed installations and recover missing recorded runtime mirrors.
+
+RimWorld can list both a local runtime and a subscribed Workshop release of the same mod. Atlas's library groups matching workspace/runtime/publication identities, but that does not change RimWorld's own list. Keeping a local development copy and subscribing to its published version can therefore produce two game entries. Downloaded verification files are not themselves proof of a subscription. Atlas does not delete Workshop files or change subscriptions while scanning.
+
+RimSort also scans downloaded files that are not subscribed. Automatic post-publish verification checks the subscription first and skips downloading unsubscribed items. The upload remains successful, with verification pending. If you choose manual verification, Atlas asks before creating a separate Steam download. Cancelling avoids that copy; confirming can make RimSort show two entries. Subscribed copies still verify automatically. Existing downloads are never silently removed by this update.
+
 ## Readable folder navigation
 
 Home → **Open named mod folders** creates Windows `.lnk` shortcuts in the profile's `Mod folders` directory. Each name includes package ID (or author/name), modification time and a short stable identifier. Targets remain the original workspace folders. This avoids breaking chat/session paths, project references and saved settings. Only unchanged shortcuts recorded as Atlas-owned are replaced; user files and edited links are preserved. Refresh the view after moving Atlas.

@@ -12,6 +12,8 @@ export interface WorkshopVerification {
   missing?:string[];
   changed?:string[];
   unexpected?:string[];
+  /** The item is not subscribed; creating a Steam copy requires explicit consent. */
+  downloadRequired?:boolean;
 }
 export interface PublishedRelease {version:1;itemId:string;uploadedAt:number;files:ReleaseFile[];verification:WorkshopVerification}
 export async function savePublishedRelease(mod:string,receipt:PublishedRelease):Promise<void>{

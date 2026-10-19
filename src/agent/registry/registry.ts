@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { detectRimWorldPaths } from '../paths.js';
-import { getWorkspacePaths, syncModToGame, isModSyncedToGame } from '../workspace.js';
+import { getWorkspacePaths, isModSyncedToGame } from '../workspace.js';
 import { parseAboutXml, type AboutXml } from './about-xml.js';
 import { readModsConfig, writeActiveMods } from './mods-config.js';
 import {
@@ -228,7 +228,7 @@ class ModRegistry {
     }
     if (fs.existsSync(workspaceRoot)) {
       const workspaceMods = await scanRoot(workspaceRoot, 'workspace');
-      // Detect symlink presence in RimWorld's Mods/.
+      // Detect an Atlas-owned runtime mirror in RimWorld's Mods/.
       for (const m of workspaceMods) {
         m.workspaceSynced = await isModSyncedToGame(
           m.folder,
@@ -266,43 +266,11 @@ class ModRegistry {
       if (m.about.packageIdLc) byPackageId.set(m.about.packageIdLc, m);
     }
 
-    // Auto-heal: any workspace mod whose packageId is in <activeMods> but
-    // that hasn't been symlinked into RimWorld's Mods/ won't actually load —
-    // RimWorld can't find a folder for the packageId. This state can arise
-    // from older modmixer builds or from manual ModsConfig edits. Sync the
-    // symlink and let the next scan pick up the corrected state.
-    const healed: string[] = [];
-    for (const m of mods) {
-      if (m.source !== 'workspace') continue;
-      if (!m.about.packageIdLc) continue;
-      if (!activeOrder.includes(m.about.packageIdLc)) continue;
-      if (m.workspaceSynced) continue;
-      try {
-        await syncModToGame(m.folder);
-        healed.push(m.folder);
-      } catch (err) {
-        console.warn(
-          `[registry] auto-heal failed to sync workspace mod ${m.folder}:`,
-          err,
-        );
-      }
-    }
-    if (healed.length > 0) {
-      console.log(
-        `[registry] auto-healed ${healed.length} workspace mod symlink(s):`,
-        healed.join(', '),
-      );
-      // Re-stat the workspace mods so workspaceSynced reflects the new state
-      // before we publish the snapshot.
-      for (const m of mods) {
-        if (m.source !== 'workspace') continue;
-        m.workspaceSynced = await isModSyncedToGame(
-          m.folder,
-          m.path,
-          rimworldModsDir,
-        );
-      }
-    }
+    // Scanning only observes installations. An active package ID may be
+    // supplied by Steam or an independently installed local mod; it does not
+    // authorize installing a workspace copy. Install/Sync/Test own that work,
+    // including recovery of recorded runtime mirrors before a game launch.
+    // This also keeps an explicit Unsync effective across watcher rescans.
 
     const active: ActiveMod[] = activeOrder.map((id, i) => ({
       packageId: id,

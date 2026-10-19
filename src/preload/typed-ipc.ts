@@ -383,7 +383,7 @@ export interface Channels {
   // Workshop
   'atlas:workshop:dry-run': (folder: string) => import('../agent/rimworld/release-package').ReleasePlan & {buildState:import('../agent/rimworld/build-state').BuildState};
   'atlas:workshop:release-status':(folder:string)=>{build:import('../agent/rimworld/build-state').BuildState;release:import('../agent/rimworld/workshop-verification').PublishedRelease|null};
-  'atlas:workshop:verify':(folder:string)=>import('../agent/rimworld/workshop-verification').WorkshopVerification;
+  'atlas:workshop:verify':(folder:string,allowDownload?:boolean)=>import('../agent/rimworld/workshop-verification').WorkshopVerification;
   'atlas:workshop:verify-stop':(folder:string)=>void;
   'atlas:workshop:rebuild':(folder:string)=>import('../agent/adapters/types').BuildModDetails|undefined;
   'modmixer:workshop:publish': (

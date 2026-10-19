@@ -1,4 +1,12 @@
-# Atlas 0.2.29 portable
+# Atlas 0.2.30 portable
+
+## 0.2.30 duplicate download prevention
+
+Post-publish verification now checks Steam subscription state before downloading. Unsubscribed items are left uploaded without silently creating another local Steam copy that RimSort would flag as a duplicate. Manual verification asks before downloading such a copy; cancelling keeps the Atlas runtime only. Subscribed items continue to verify automatically. An unavailable subscription check preserves upload success and stops before downloading.
+
+Starting Atlas and refreshing its library no longer install an unsynced workspace mod just because its package ID is enabled. This prevents scans from creating an extra local copy alongside another installation and keeps explicit Unsync actions effective. Install, Sync and Test still update runtime mirrors; launch-time recovery of previously managed mirrors remains available.
+
+RimWorld can display a local development copy and a subscribed Workshop version separately. Atlas does not change Steam subscriptions or remove Workshop files. A verification download is not proof that the item is subscribed. See [library scans and duplicate entries](docs/manual-mod-install.md#library-scans-and-duplicate-entries).
 
 ## 0.2.29 installation warning dialog repair
 

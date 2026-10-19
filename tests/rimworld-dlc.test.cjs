@@ -31,6 +31,35 @@ test('Odyssey dependencies and canonical DLC load order are retained ahead of or
  const mods=[...official.map(id=>mod(id)),mod('brrainz.harmony'),mod('example.target',['ludeon.rimworld.odyssey'])];const input=['example.target',...official.slice().reverse(),'brrainz.harmony'];const sorted=autosort({snapshot:snapshot(mods,input),activeOrder:input,rules:new Map()});assert.deepEqual(Array.from(sorted.order),['brrainz.harmony',...official,'example.target']);assert.equal(sorted.conflicts.length,0);
  const required=computeTestSet({snapshot:snapshot(mods,['ludeon.rimworld']),targetPackageId:'example.target'});assert.deepEqual(Array.from(required.reducedActive),['ludeon.rimworld','ludeon.rimworld.odyssey','example.target']);
 });
+
+for (const counterpart of ['workshop', 'local', 'none']) {
+ test(`registry scans never install an active unsynced workspace mod (${counterpart} counterpart)`, async t => {
+  const base=path.resolve(__dirname,'../build-check/fixtures');fs.mkdirSync(base,{recursive:true});
+  const root=fs.mkdtempSync(path.join(base,'registry-read-only-')),workspaceDir=path.join(root,'workspace'),modsDir=path.join(root,'Mods'),workshopDir=path.join(root,'workshop');
+  const writeMod=(parent,folder)=>{const dir=path.join(parent,folder,'About');fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'About.xml'),'<ModMetaData><name>Example</name><packageId>example.owned</packageId></ModMetaData>');fs.writeFileSync(path.join(dir,'PublishedFileId.txt'),'123');};
+  for(const dir of [workspaceDir,modsDir,workshopDir])fs.mkdirSync(dir,{recursive:true});
+  writeMod(workspaceDir,'workspace');
+  if(counterpart==='workshop')writeMod(workshopDir,'123');
+  if(counterpart==='local')writeMod(modsDir,'independent-copy');
+  let installs=0,configWrites=0;
+  const stubs=new Map([
+   [path.join(source,'agent/paths.ts'),{detectRimWorldPaths:()=>({modsDir,workshopDir})}],
+   [path.join(source,'agent/workspace.ts'),{getWorkspacePaths:()=>({workspaceDir}),isModSyncedToGame:async()=>false,syncModToGame:async()=>{installs++;writeMod(modsDir,'workspace');}}],
+   [path.join(source,'agent/registry/mods-config.ts'),{readModsConfig:async()=>({version:'1.7',activeMods:['example.owned']}),writeActiveMods:async()=>{configWrites++;}}],
+  ]);
+  const registry=loader(stubs)('agent/registry/registry.ts').getRegistry();
+  t.after(()=>{registry.stop();assert(root.startsWith(base+path.sep));fs.rmSync(root,{recursive:true,force:true});});
+  await registry.start();
+  await Promise.all([registry.refresh(),registry.refresh()]);
+  const snapshot=await registry.refresh();
+  assert.equal(installs,0,'A library scan must not create an additional game copy');
+  assert.equal(configWrites,0,'Scanning must preserve the game load order');
+  assert.equal(snapshot.mods.find(m=>m.source==='workspace').workspaceSynced,false);
+  assert(!fs.existsSync(path.join(modsDir,'workspace')));
+  if(counterpart==='local')assert(fs.existsSync(path.join(modsDir,'independent-copy/About/About.xml')));
+  if(counterpart==='workshop')assert(fs.existsSync(path.join(workshopDir,'123/About/About.xml')));
+ });
+}
 test('the actual registry synthesizes Odyssey metadata and reads its installed About.xml',async t=>{
  const base=path.resolve(__dirname,'../build-check/fixtures');fs.mkdirSync(base,{recursive:true});const root=fs.mkdtempSync(path.join(base,'dlc-')),dataDir=path.join(root,'Data'),workspaceDir=path.join(root,'workspace');fs.mkdirSync(path.join(dataDir,'Core'),{recursive:true});fs.mkdirSync(path.join(dataDir,'Odyssey'));fs.mkdirSync(workspaceDir);t.after(()=>{assert(root.startsWith(base+path.sep));fs.rmSync(root,{recursive:true,force:true});});
  const stubs=new Map([[path.join(source,'agent/paths.ts'),{detectRimWorldPaths:()=>({dataDir,modsDir:path.join(root,'Mods')})}],[path.join(source,'agent/workspace.ts'),{getWorkspacePaths:()=>({workspaceDir})}],[path.join(source,'agent/registry/mods-config.ts'),{readModsConfig:async()=>({version:'1.6',activeMods:official,knownExpansions:official.slice(1)})}]]);

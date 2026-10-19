@@ -18,6 +18,7 @@ import {
 import { DangerZone } from './mod-publish/danger-zone';
 import { PublishConfirmDialog } from './mod-publish/publish-confirm-dialog';
 import { MinecraftPublishPanel } from './mod-publish/minecraft-publish-panel';
+import { appConfirm } from './app-dialog';
 
 export function ModPublishPanel(props: {
   mod: WorkspaceMod;
@@ -97,7 +98,13 @@ function RimWorldPublishPanel({
   });
   const verify=useAsyncAction(async()=>{
     const result=await window.modmixer.verifyWorkshopRelease(mod.folder);
-    if(currentFolder.current===mod.folder)setVerification(result);
+    if(currentFolder.current!==mod.folder)return;
+    setVerification(result);
+    if(result.downloadRequired&&await appConfirm('This downloads a separate Steam copy of this mod. RimSort may list it alongside your Atlas version as a duplicate. Your upload is already saved; this optional check does not update the Atlas runtime.',{title:'Download a verification copy?',okLabel:'Download & verify',cancelLabel:'Keep Atlas copy only'})){
+      if(currentFolder.current!==mod.folder)return;
+      const confirmed=await window.modmixer.verifyWorkshopRelease(mod.folder,true);
+      if(currentFolder.current===mod.folder)setVerification(confirmed);
+    }
   });
 
   // Track the latest defaultAuthor so the sticky-detection effect doesn't

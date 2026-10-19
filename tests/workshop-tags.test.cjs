@@ -71,7 +71,7 @@ test('utility host gets complete tags through the installed SDK API shape', asyn
   assert.equal(request[1].cachedResponseMaxAge, 0);
 });
 
-function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1.7'], failDownload = false, gameRunning = false, downloadMismatch = false } = {}) {
+function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1.7'], failDownload = false, gameRunning = false, downloadMismatch = false, subscribed = true, failState = false } = {}) {
   const base = path.resolve(__dirname, '../build-check/fixtures'); fs.mkdirSync(base, { recursive: true });
   const root = fs.mkdtempSync(path.join(base, 'workshop-tags-'));
   const mod = path.join(root, 'Example'); fs.mkdirSync(path.join(mod, 'About'), { recursive: true });
@@ -93,7 +93,7 @@ function publisher(t, { existing = true, failTags = false, versions = ['1.6', '1
           }
           if (message.op === 'createItem') result = { itemId: 456n, needsToAcceptAgreement: false };
           if(message.op==='downloadItem') {if(failDownload)throw new Error('Steam is offline');result=path.join(root,'steamapps/workshop/content/294100',existing?'123':'456');fs.mkdirSync(path.dirname(result),{recursive:true});await fsp.cp(uploaded[0].snapshot,result,{recursive:true});if(downloadMismatch)fs.mkdirSync(path.join(result,'Source'));}
-          if(message.op==='downloadState')result=4;
+          if(message.op==='downloadState'){if(failState)throw new Error('Subscription unavailable');result=subscribed?5:4;}
           if (message.op === 'updateItem') {
             const files = [];
             const walk = async (dir, prefix = '') => {for (const e of await fsp.readdir(dir, {withFileTypes:true})) {if(e.isDirectory()) await walk(path.join(dir,e.name),prefix+e.name+'/');else files.push(prefix+e.name);}};
@@ -190,6 +190,18 @@ test('a stray DLL blocks publishing before any Steam initialization or item crea
 
 
 test('post-publish verification compares Steam bytes with the saved upload manifest',async t=>{const p=publisher(t);const result=await p.api.publishToWorkshop('Example',0,'verify',false);assert.equal(result.verification.status,'verified');const status=await p.api.getWorkshopReleaseStatus('Example');assert.equal(status.release.verification.status,'verified');assert.equal(status.release.itemId,'123');});
+test('publishing an unsubscribed mod does not create a second Steam download',async t=>{
+ const p=publisher(t,{subscribed:false});const result=await p.api.publishToWorkshop('Example',0,'verify',false);
+ assert.equal(result.verification.status,'pending');assert.equal(result.verification.downloadRequired,true);assert.equal(p.uploaded.length,1);assert.equal(p.baseline(),true);assert.equal(p.killed(),true);
+ assert(!p.requests.some(r=>r.op==='downloadItem'));assert(!fs.existsSync(path.join(p.mod,'../steamapps')));
+ const retry=await p.api.verifyWorkshopRelease('Example');assert.equal(retry.downloadRequired,true);assert(!p.requests.some(r=>r.op==='downloadItem'));
+ const automatic=await p.api.verifyWorkshopRelease('Example',true,true);assert.equal(automatic.downloadRequired,true);assert(!p.requests.some(r=>r.op==='downloadItem'));
+ const consent=await p.api.verifyWorkshopRelease('Example',false,true);assert.equal(consent.status,'verified');assert.equal(p.requests.filter(r=>r.op==='downloadItem').length,1);
+});
+test('a failed subscription check never starts a verification download or fails the upload',async t=>{
+ const p=publisher(t,{failState:true});const result=await p.api.publishToWorkshop('Example',0,'verify',false);
+ assert.equal(result.verification.status,'unavailable');assert.equal(p.uploaded.length,1);assert.equal(p.baseline(),true);assert(!p.requests.some(r=>r.op==='downloadItem'));assert.equal(p.killed(),true);
+});
 test('download failure keeps upload success and its baseline, with a retryable result',async t=>{const p=publisher(t,{failDownload:true});const result=await p.api.publishToWorkshop('Example',0,'verify',false);assert.equal(result.verification.status,'unavailable');assert.equal(p.uploaded.length,1);assert.equal(p.baseline(),true);assert.equal(p.killed(),true);});
 test('actual development leftovers in the Steam copy fail verification',async t=>{const p=publisher(t,{downloadMismatch:true});const result=await p.api.publishToWorkshop('Example',0,'verify',false);assert.equal(result.verification.status,'mismatch');assert(result.verification.unexpected.includes('Source/'));});
 test('a running game defers download verification without cancelling the successful upload',async t=>{const p=publisher(t,{gameRunning:true});const result=await p.api.publishToWorkshop('Example',0,'verify',false);assert.equal(result.verification.status,'pending');assert.equal(p.requests.some(r=>r.op==='downloadItem'),false);assert.equal(p.baseline(),true);});

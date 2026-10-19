@@ -352,7 +352,7 @@ const api = {
   // Workshop
   dryRunWorkshop: (folder: string) => invoke('atlas:workshop:dry-run', folder),
   getWorkshopReleaseStatus:(folder:string)=>invoke('atlas:workshop:release-status',folder),
-  verifyWorkshopRelease:(folder:string)=>invoke('atlas:workshop:verify',folder),
+  verifyWorkshopRelease:(folder:string,allowDownload?:boolean)=>invoke('atlas:workshop:verify',folder,allowDownload),
   stopWorkshopVerification:(folder:string)=>invoke('atlas:workshop:verify-stop',folder),
   rebuildWorkshopMod:(folder:string)=>invoke('atlas:workshop:rebuild',folder),
   publishToWorkshop: (
