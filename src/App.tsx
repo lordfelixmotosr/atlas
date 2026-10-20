@@ -1,7 +1,7 @@
 import {AtlasActivityButton} from './atlas/activity-center';
-import {confirmProjectDrafts} from './atlas/files-view';
+import {confirmProjectDrafts,forgetProjectDrafts} from './atlas/files-view';
 import { AtlasLogo } from './components/atlas-logo';
-import {AtlasKnowledgeButton} from "./atlas/library-ui";
+import {AtlasKnowledgePage} from "./atlas/library-ui";
 import {ModMixerImportDialog} from './atlas/modmixer-import-ui';
 import { useCallback, useEffect, useState } from 'react';
 import type { Conversation } from './agent/conversations';
@@ -11,7 +11,7 @@ import type { ActiveSession } from './agent/registry';
 import type { RegistryEnvelope } from './preload';
 import { AppSettingsDialog, type SettingsSection } from './components/app-settings-dialog';
 import { GameSetupGate } from './components/game-setup-gate';
-import { TabNav, type AppView, type ModTabDescriptor } from './components/tab-nav';
+import { MainNavigation, ProjectTabs, type AppView, type ModTabDescriptor } from './components/tab-nav';
 import { BuildView } from './components/build-view';
 import { ModsView } from './components/mods-view';
 import { LibraryView } from './components/library-view';
@@ -103,6 +103,7 @@ export function App() {
 
   const openSettings = useCallback((section: SettingsSection = 'general') => {
     setSettingsSection(section);
+    setView('settings');
   }, []);
 
   useEffect(() => {
@@ -298,7 +299,7 @@ export function App() {
       setTabs((prev) =>
         prev.some((t) => t.folder === folder)
           ? prev
-          : [...prev, { folder, conversation: convo, buildPanel: 'chat' }],
+          : [...prev, { folder, conversation: convo, buildPanel: 'files' }],
       );
       setFocusedFolder(folder);
       setView('mod');
@@ -323,6 +324,7 @@ export function App() {
       const idx = tabs.findIndex((t) => t.folder === folder);
       if (idx < 0) return;
       const tab = tabs[idx];
+      forgetProjectDrafts(folder);
       void window.modmixer.closeConversation(tab.conversation.id);
       dropConversation(tab.conversation.id);
       const next = tabs.filter((t) => t.folder !== folder);
@@ -714,69 +716,30 @@ export function App() {
   });
 
   return (
-    <div className="flex h-full flex-col bg-paper text-ink">
-      <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
-        <div className="flex min-w-0 flex-1 items-center gap-4">
-          <div className="flex shrink-0 items-center gap-2.5">
-            <AtlasLogo />
-            <span className="font-display text-sm font-medium tracking-tight">
-              Atlas
-            </span>
-            {appVersion && (
-              <span className="ml-1 font-mono text-[10px] uppercase tracking-[0.18em] text-subtle">
-                v{appVersion}
-              </span>
-            )}
-          </div>
-          <GameSelector game={activeGame} onChange={changeActiveGame} />
-          <TabNav
-            view={view}
-            focusedFolder={focusedFolder}
-            tabs={tabDescriptors}
-            sessionActive={!!session}
-            onSelectMods={() => setView('mods')}
-            onSelectLibrary={() => setView('library')}
-            onSelectTab={(folder) => {
-              setFocusedFolder(folder);
-              setView('mod');
-            }}
-            onCloseTab={closeTab}
-          />
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          {skipPermissions && (
-            <button
-              onClick={() => openSettings('advanced')}
-              title="Permission prompts are off — the agent can edit or delete files and run shell commands without asking. Click to change."
-              className="inline-flex items-center gap-1.5 rounded-md border border-failed/50 bg-failed/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-failed transition-colors hover:bg-failed/20"
-            >
-              <span aria-hidden>⚠</span>
-              Permissions off
-            </button>
-          )}
-          <AtlasActivityButton /><AtlasKnowledgeButton />
-          <button
-            onClick={() => openSettings('general')}
-            title="Settings"
-            aria-label="Settings"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-line bg-paper text-muted transition-colors hover:border-ink/40 hover:text-ink"
-          >
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-3.5 w-3.5"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+    <div className="atlas-v3 flex h-full flex-col bg-paper text-ink">
+      <header className="atlas-app-header">
+        <div className="atlas-brand"><AtlasLogo /><strong>Atlas</strong><span>v{appVersion}</span></div>
+        <MainNavigation view={view} onNavigate={next => {
+          if (view === 'settings') refreshSettingsFlags();
+          if (next === 'settings') openSettings();
+          else setView(next);
+        }}/>
+        <div className="atlas-header-tools">
+          <GameSelector game={activeGame} onChange={changeActiveGame}/>
+          {skipPermissions && <button className="atlas-permission-indicator"
+            onClick={() => openSettings('advanced')} title="Permission prompts are off. Open settings to change.">
+            <span aria-hidden>⚠</span> Permissions off
+          </button>}
+          <AtlasActivityButton />
         </div>
       </header>
+      {(view === 'mods' || view === 'library') && <nav className="atlas-project-scope" aria-label="Project collection">
+        <button aria-current={view === 'mods' ? 'page' : undefined} onClick={() => setView('mods')}>My projects</button>
+        <button aria-current={view === 'library' ? 'page' : undefined} onClick={() => setView('library')}>Installed mods{session ? ' · Repair active' : ''}</button>
+        <span>{view === 'mods' ? 'Your editable Atlas workspaces' : 'Game load order and dependencies'}</span>
+      </nav>}
+      {view === 'mod' && tabs.length > 0 && <ProjectTabs focusedFolder={focusedFolder} tabs={tabDescriptors}
+        onSelectTab={folder => setFocusedFolder(folder)} onCloseTab={closeTab}/>}
 
       {storageBannerBytes !== null && (
         <div className="flex items-center gap-3 border-b border-warning/40 bg-warning/5 px-4 py-1.5 text-[12px] text-ink">
@@ -808,7 +771,7 @@ export function App() {
         </div>
       )}
 
-      {view === 'library' ? (
+      {view === 'library' && (
         getGame(resolveGameId(activeGame)).capabilities.steamWorkshop ? (
           <LibraryView
             envelope={registryEnvelope}
@@ -824,13 +787,12 @@ export function App() {
         ) : (
           <LibraryPlaceholder game={activeGame} />
         )
-      ) : view === 'mod' && focusedTab ? (
-        // Only the focused tab's workspace is mounted — live chat state lives
-        // in the conversation store, so unmounting an inactive tab is free
-        // and a background agent keeps streaming regardless. Keyed by folder
-        // so switching tabs cleanly remounts the workspace.
+      )}
+      {focusedTab && <div className={view === 'mod' ? 'atlas-workspace-host' : 'hidden'}>
+        {/* Keep the editor mounted when visiting Projects, Knowledge or Settings. */}
         <BuildView
           key={focusedTab.folder}
+          active={view === 'mod'}
           activeMod={activeMod}
           activeConvo={focusedTab.conversation}
           panel={focusedTab.buildPanel}
@@ -856,7 +818,9 @@ export function App() {
           onArchiveChat={archiveChat}
           onUnarchiveChat={unarchiveChat}
         />
-      ) : (
+      </div>}
+      {view === 'mod' && !focusedTab && <div className="atlas-destination-empty"><h1>Your workspace</h1><p>Open a project to edit files, manage assets, test and publish.</p><button className="atlas-button atlas-primary" onClick={goHome}>Browse projects</button></div>}
+      {view === 'mods' && (
         <ModsView
           game={activeGame}
           mods={mods}
@@ -868,15 +832,18 @@ export function App() {
           onSetModPrefs={setModPrefs}
         />
       )}
-      {settingsSection && (
+      {view === 'knowledge' && <AtlasKnowledgePage/>}
+      {settingsSection && <div className={view === 'settings' ? 'atlas-settings-host' : 'hidden'}>
         <AppSettingsDialog
+          embedded
           initialSection={settingsSection}
           onClose={() => {
             setSettingsSection(null);
+            setView(focusedTab ? 'mod' : 'mods');
             refreshSettingsFlags();
           }}
         />
-      )}
+      </div>}
       {importModMixerOpen && <ModMixerImportDialog onClose={() => setImportModMixerOpen(false)} onImported={refreshMods} />}
 
       <GameSetupGate

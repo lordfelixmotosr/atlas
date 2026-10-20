@@ -3,10 +3,7 @@ import type { GameId } from '../agent/games/types';
 import { GameIcon } from './game-icon';
 import { useConversationRuntime } from '../conversations-store';
 
-/** Home, Library, or a focused mod tab. */
-export type AppView = 'mods' | 'library' | 'mod';
-
-/** One open mod tab, as the nav needs to render it. */
+export type AppView = 'mods' | 'library' | 'mod' | 'knowledge' | 'settings';
 export interface ModTabDescriptor {
   folder: string;
   conversationId: string;
@@ -14,88 +11,34 @@ export interface ModTabDescriptor {
   game: GameId;
 }
 
-export function TabNav({
-  view,
-  focusedFolder,
-  tabs,
-  sessionActive,
-  onSelectMods,
-  onSelectLibrary,
-  onSelectTab,
-  onCloseTab,
-}: {
+export function MainNavigation({view, onNavigate}: {
   view: AppView;
+  onNavigate: (view: AppView) => void;
+}) {
+  const entries = [
+    {id: 'mods', label: 'Projects'},
+    {id: 'mod', label: 'Workspace'},
+    {id: 'knowledge', label: 'Knowledge'},
+    {id: 'settings', label: 'Settings'},
+  ] as const;
+  return <nav className="atlas-main-navigation" aria-label="Main navigation">
+    {entries.map(entry => <button key={entry.id}
+      aria-current={(view === entry.id || (entry.id === 'mods' && view === 'library')) ? 'page' : undefined}
+      onClick={() => onNavigate(entry.id)}>{entry.label}</button>)}
+  </nav>;
+}
+
+export function ProjectTabs({focusedFolder, tabs, onSelectTab, onCloseTab}: {
   focusedFolder: string | null;
   tabs: ModTabDescriptor[];
-  sessionActive?: boolean;
-  onSelectMods: () => void;
-  onSelectLibrary: () => void;
   onSelectTab: (folder: string) => void;
   onCloseTab: (folder: string) => void;
 }) {
-  return (
-    <nav className="flex min-w-0 items-center gap-1">
-      <TabButton label="Home" active={view === 'mods'} onClick={onSelectMods} />
-      <TabButton
-        label="Library"
-        active={view === 'library'}
-        onClick={onSelectLibrary}
-        indicator={sessionActive ? 'session' : undefined}
-      />
-      {tabs.length > 0 && (
-        <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line" />
-      )}
-      {/* One mod tab per open conversation; scrolls horizontally (wheel,
-          no visible bar) once there are more tabs than fit. */}
-      <div className="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto">
-        {tabs.map((t) => (
-          <ModTabButton
-            key={t.folder}
-            title={t.title}
-            game={t.game}
-            conversationId={t.conversationId}
-            active={view === 'mod' && focusedFolder === t.folder}
-            onSelect={() => onSelectTab(t.folder)}
-            onClose={() => onCloseTab(t.folder)}
-          />
-        ))}
-      </div>
-    </nav>
-  );
-}
-
-function TabButton({
-  label,
-  active,
-  onClick,
-  indicator,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  indicator?: 'session';
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors',
-        // Keyboard focus only — no ring on mouse click.
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        active
-          ? 'bg-ink text-paper'
-          : 'text-muted hover:bg-raised/60 hover:text-ink',
-      )}
-    >
-      {label}
-      {indicator === 'session' && (
-        <span
-          className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse"
-          aria-label="session active"
-        />
-      )}
-    </button>
-  );
+  return <nav className="atlas-project-tabs" aria-label="Open projects">
+    {tabs.map(tab => <ModTabButton key={tab.folder} title={tab.title} game={tab.game}
+      conversationId={tab.conversationId} active={focusedFolder === tab.folder}
+      onSelect={() => onSelectTab(tab.folder)} onClose={() => onCloseTab(tab.folder)}/>)}
+  </nav>;
 }
 
 /**

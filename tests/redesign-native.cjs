@@ -1,0 +1,101 @@
+const {app,BrowserWindow}=require('electron');
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+app.disableHardwareAcceleration();
+const root=path.dirname(process.execPath),results=[];
+fs.mkdirSync(path.join(root,'data'),{recursive:true});app.setPath('userData',path.join(root,'data'));
+app.whenReady().then(async()=>{
+ const win=new BrowserWindow({show:false,width:1280,height:900,webPreferences:{sandbox:true,offscreen:true}});
+ let painted;win.webContents.on('paint',(_event,_dirty,image)=>{const bytes=image.toPNG();if(bytes.length)painted=bytes;});
+ const evaluate=code=>win.webContents.executeJavaScript(code);
+ const wait=async code=>{for(let i=0;i<160;i++){if(await evaluate(code))return;await new Promise(r=>setTimeout(r,30));}throw Error('Timed out: '+code+'\n'+await evaluate('JSON.stringify(window.fixtureErrors)'));};
+ const click=async(text,selector='button')=>{await evaluate(`(()=>{const e=[...document.querySelectorAll(${JSON.stringify(selector)})].find(e=>e.textContent.trim()===${JSON.stringify(text)}&&e.getBoundingClientRect().width>0);if(!e||e.disabled)throw Error('Unavailable: '+${JSON.stringify(text)});e.click();})()`);await new Promise(r=>setTimeout(r,90));};
+ const clickSelector=async selector=>{await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);await new Promise(r=>setTimeout(r,90));};
+ const input=async(selector,value)=>evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+ const shot=async name=>{await new Promise(r=>setTimeout(r,250));painted=undefined;win.webContents.invalidate();for(let i=0;i<30&&!painted;i++)await new Promise(r=>setTimeout(r,40));await new Promise(r=>setTimeout(r,120));if(painted)fs.writeFileSync(path.join(root,name+'.png'),painted);};
+ const errors=async()=>assert.deepEqual(await evaluate('window.fixtureErrors'),[]);
+ try{
+  await win.loadFile(path.join(root,'../redesign-ui.html'));await wait('document.querySelectorAll(".atlas-projects-page .grid > div").length===4');
+  await errors();await shot('projects-wide');
+  await input('[aria-label="Search mods"]','One-Piece');await wait('document.querySelectorAll(".atlas-projects-page .grid > div").length===1');
+  await input('[aria-label="Search mods"]','');await wait('document.querySelectorAll(".atlas-projects-page .grid > div").length===4');
+  await click('Import ⌄');await wait('!!document.querySelector(".atlas-actions-popover")');
+  await evaluate('document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
+  assert.equal(await evaluate('document.activeElement.textContent.trim()'),'Import ⌄');
+  await clickSelector('.atlas-projects-page .grid > div > button');
+  await wait('!!document.querySelector(".atlas-workspace-host .atlas-file-list button")');
+  await clickSelector('.atlas-file-list button[title="About.xml"]');await wait('!!document.querySelector(".cm-content")');
+  await evaluate('document.querySelector(".cm-content").focus()');win.webContents.sendInputEvent({type:'keyDown',keyCode:'End',modifiers:['control']});
+  await win.webContents.insertText('\n<!-- unsaved fixture -->');await wait('document.querySelector(".atlas-editor-status").textContent.includes("Unsaved")');
+  await click('Knowledge','.atlas-main-navigation button');await wait('!!document.querySelector(".atlas-reference-search input")');await shot('knowledge-wide');
+  const scansBefore=await evaluate('window.fixtureCalls.filter(c=>["projectFiles","scanAssets","dllUpdateState"].includes(c.method)).length');
+  await evaluate('window.emitFixture("onModChanged",{folder:"fixture-0"})');
+  await new Promise(r=>setTimeout(r,350));
+  assert.equal(await evaluate('window.fixtureCalls.filter(c=>["projectFiles","scanAssets","dllUpdateState"].includes(c.method)).length'),scansBefore,'Hidden workspace is still scanning');
+  await input('[aria-label="Search references"]','apparel');await click('Search');await wait('!!document.querySelector(".atlas-search-result")');
+  await click('Open reference');
+  await click('Settings','.atlas-main-navigation button');await wait('!!document.querySelector(".atlas-settings-layout input")');
+  await click('Updates','.atlas-settings-navigation button');await wait('!!document.querySelector(".atlas-settings-layout details[open]")');await shot('settings-wide');
+  await click('Accounts & models','.atlas-settings-navigation button');await new Promise(r=>setTimeout(r,150));await errors();
+  await click('Workspace','.atlas-main-navigation button');await wait('document.querySelector(".cm-content").textContent.includes("unsaved fixture")');
+  await click('Projects','.atlas-main-navigation button');await wait('document.querySelectorAll(".atlas-projects-page .grid > div").length===4');
+  await evaluate('[...document.querySelectorAll(".atlas-projects-page .grid > div > button")].find(e=>e.textContent.includes("One-Piece Uniform")).click()');
+  await wait('document.querySelector(".atlas-mod-header h1").textContent==="One-Piece Uniform"');
+  await clickSelector('.atlas-project-tabs > div:first-child > button');
+  await wait('document.querySelector(".cm-content").textContent.includes("unsaved fixture")');
+  await evaluate('document.querySelector(".cm-content").focus()');
+  await win.webContents.insertText(' restored edit ');
+  await wait('document.querySelector(".cm-content").textContent.includes("restored edit")');
+  await click('Save','.atlas-editor button');
+  await wait('window.fixtureCalls.some(c=>c.method==="projectSave"&&c.args[2].includes("restored edit"))');
+  await evaluate('document.querySelector(".cm-content").focus()');
+  await win.webContents.insertText(' another draft ');
+  await wait('document.querySelector(".atlas-editor-status").textContent.includes("Unsaved")');
+  await shot('workspace-wide');
+  await clickSelector('.atlas-project-tabs button[aria-label="Close Silvaran Order"]');
+  await wait('!!document.querySelector("[role=dialog]")');await click('Cancel');
+  assert(await evaluate('document.querySelector(".cm-content").textContent.includes("unsaved fixture")'));
+  await click('Test','nav[aria-label="Workspace sections"] button span.block.text-sm');
+  await errors();
+  await shot('test-wide');
+  await click('Activity · 1');await wait('!!document.querySelector("dialog[open]")');
+  assert(await evaluate('(()=>{const r=document.querySelector("dialog[open]").getBoundingClientRect();return r.width>300&&r.right<=innerWidth+1&&r.height>=innerHeight-1})()'),'Activity is not a bounded drawer');
+  await shot('activity-wide');
+  await clickSelector('[aria-label="Close activity"]');
+  for(const width of [900,620]){
+   win.setContentSize(width,800);
+   for(const dest of ['Projects','Knowledge','Settings']){
+    await click(dest,'.atlas-main-navigation button');await new Promise(r=>setTimeout(r,130));
+    assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),dest+' overflows '+width);
+    const boxes=await evaluate('[...document.querySelectorAll(".atlas-main-navigation button")].map(e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom}})');
+    for(let i=1;i<boxes.length;i++)assert(boxes[i].left>=boxes[i-1].right-1,'Navigation overlaps');
+    await shot(dest.toLowerCase()+'-'+width);results.push({dest,width,overflow:false});
+   }
+   await click('Workspace','.atlas-main-navigation button');
+   assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'Workspace overflow '+width);
+   if(width===620){
+    assert(await evaluate('document.querySelector(".atlas-chat-pane")===null'),'Narrow workspace should show one pane');
+    await click('Assistant','nav[aria-label="Workspace sections"] button span.block.text-sm');
+    await wait('!!document.querySelector(".atlas-chat-pane")');
+    assert(await evaluate('document.querySelector(".atlas-chat-pane").getBoundingClientRect().height>350'),'Narrow assistant is too short');
+    await shot('assistant-620');
+    await click('Files','nav[aria-label="Workspace sections"] button span.block.text-sm');
+    await wait('document.querySelector(".cm-content").textContent.includes("another draft")');
+   }
+   await shot('workspace-'+width);
+  }
+  await click('Projects','.atlas-main-navigation button');await click('Installed mods');
+  await errors();
+  await evaluate('document.documentElement.dataset.theme="light"');await click('Knowledge','.atlas-main-navigation button');await shot('knowledge-light');
+  await click('Workspace','.atlas-main-navigation button');
+  await clickSelector('.atlas-project-tabs button[aria-label="Close Silvaran Order"]');
+  await wait('!!document.querySelector("[role=dialog]")');await click('Discard edits');
+  await wait('!document.querySelector(".atlas-project-tabs button[aria-label=\\"Close Silvaran Order\\"]")');
+  await click('Projects','.atlas-main-navigation button');
+  await clickSelector('.atlas-projects-page .grid > div > button');
+  await wait('!!document.querySelector(".atlas-file-list button[title=\\"About.xml\\"]")');
+  await clickSelector('.atlas-file-list button[title="About.xml"]');await wait('!!document.querySelector(".cm-content")');
+  assert(!(await evaluate('document.querySelector(".cm-content").textContent')).includes('another draft'),'Discarded draft resurfaced');
+  assert.equal(await evaluate('window.fixtureCalls.filter(c=>c.method==="setThinkingLevel"||c.method==="setConversationThinkingLevel"||c.method==="setOpenAISpeed").length'),0);
+  fs.writeFileSync(path.join(root,'result.json'),JSON.stringify({passed:true,results,draftsPreserved:true,thinkingUnchanged:true},null,2));app.exit(0);
+ }catch(error){await shot('failure');fs.writeFileSync(path.join(root,'error.txt'),error.stack+'\n'+await evaluate('JSON.stringify(window.fixtureErrors)'));app.exit(1);}
+});

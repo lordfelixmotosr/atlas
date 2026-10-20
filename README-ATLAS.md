@@ -1,4 +1,18 @@
-# Atlas 0.2.31 portable
+# Atlas 0.3.0 portable
+
+## 0.3.0 workspace redesign
+
+Atlas now has four main destinations: **Projects**, **Workspace**, **Knowledge** and **Settings**. **Activity** opens a drawer with the existing task progress, logs, retry and download controls.
+
+- **Projects → My projects** has persistent search, publication filters and a single New mod action. Import offers a mod folder or existing ModMixer projects. Named folder shortcuts and experimental live sessions are under More. **Installed mods** retains game load order, dependency checks and session recovery.
+- **Workspace** gives open projects their own tab strip. Files, Assets, Test and Publish lead the sidebar, with Dependencies, History, Assistant and Project details below. Layout contains editor/assistant focus modes and navigation visibility. In narrow windows, select Files or Assistant to use one pane at a time.
+- **Test** shows the existing bridge monitor. **Test in RimWorld** asks the assistant to run the full test flow; it is not a passive installation check. Manual installation previews, previous runtime restoration and changes remain in the project header.
+- **Knowledge** puts reference search first, followed by installed packs, custom skills and signed pack updates. Source configuration and previous-pack restoration remain available.
+- **Settings** groups accounts and models, games, appearance, storage, updates and advanced preferences. App downloads and Install and restart are under Updates.
+
+Unsaved file tabs and editor history survive switching open projects or visiting another destination. Closing a project with drafts still asks before discarding them. Draft retention is in memory, not crash recovery. The editor, asset scans and installation polling pause while the workspace is hidden. Your current thinking preferences, game files, account sign-ins and existing project paths are retained.
+
+The release includes native renderer checks for navigation, draft editing and saving after a project switch, discard cancellation, reference search, account/settings access, the Activity drawer, and responsive layouts. The UI checks use isolated fixtures rather than real AI requests or Steam uploads.
 
 ## 0.2.31 Workshop update notes
 

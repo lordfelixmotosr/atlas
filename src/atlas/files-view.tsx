@@ -5,17 +5,21 @@ import {appConfirm} from '../components/app-dialog';
 import {CodeEditor,type EditorLocation} from './code-editor';
 import type {EditorState} from '@codemirror/state';
 const unsavedProjects=new Set<string>();
+const retainedProjects=new Set<string>();
+const projectDrafts=new Map<string,{tabs:FileTab[];selected:string;states:Map<string,EditorState>}>();
+export function forgetProjectDrafts(folder:string){retainedProjects.delete(folder);projectDrafts.delete(folder);unsavedProjects.delete(folder);void window.modmixer.projectDraftState(folder,false).catch(()=>{});}
 export async function confirmProjectDrafts(folder:string){return !unsavedProjects.has(folder)||await appConfirm('Close this project and discard its unsaved file edits?',{okLabel:'Discard edits',tone:'danger'});}
 type FileTab={path:string;text:string;hash:string;draft:string;location?:EditorLocation;line:number;column:number};
 type TreeRow={path:string;depth:number;folder:boolean;editable?:boolean};
 export function FilesView({mod,busy,active=true,filesVisible=true,onToggleFiles}: {mod:WorkspaceMod;busy:boolean;active?:boolean;filesVisible?:boolean;onToggleFiles?:()=>void}) {
  const [files,setFiles]=useState<any[]>([]),[query,setQuery]=useState(''),[mode,setMode]=useState<'files'|'contents'>('files'),[caseSensitive,setCase]=useState(false),[expanded,setExpanded]=useState(new Set<string>());
- const [tabs,setTabs]=useState<FileTab[]>([]),[selected,setSelected]=useState(''),[matches,setMatches]=useState<any[]>([]),[searching,setSearching]=useState(false);
+ const [tabs,setTabs]=useState<FileTab[]>(()=>projectDrafts.get(mod.folder)?.tabs??[]),[selected,setSelected]=useState(()=>projectDrafts.get(mod.folder)?.selected??''),[matches,setMatches]=useState<any[]>([]),[searching,setSearching]=useState(false);
  const [error,setError]=useState(''),[working,setWorking]=useState(false),[scanning,setScanning]=useState(false),[notice,setNotice]=useState(''),[searchNotice,setSearchNotice]=useState('');
- const refreshRef=useRef<()=>Promise<void>>(async()=>{}),list=useRef<HTMLDivElement>(null),input=useRef<HTMLInputElement>(null),states=useRef(new Map<string,EditorState>()),tabsRef=useRef(tabs);tabsRef.current=tabs;
+ const refreshRef=useRef<()=>Promise<void>>(async()=>{}),list=useRef<HTMLDivElement>(null),input=useRef<HTMLInputElement>(null),states=useRef(projectDrafts.get(mod.folder)?.states??new Map<string,EditorState>()),tabsRef=useRef(tabs);tabsRef.current=tabs;
+ const selectedRef=useRef(selected);selectedRef.current=selected;
  const current=tabs.find(tab=>tab.path===selected),dirty=!!current&&current.draft!==current.text;
  useEffect(()=>{const dirty=tabs.some(tab=>tab.draft!==tab.text);if(dirty)unsavedProjects.add(mod.folder);else unsavedProjects.delete(mod.folder);void window.modmixer.projectDraftState(mod.folder,dirty).catch(()=>{});},[tabs,mod.folder]);
- useEffect(()=>()=>{unsavedProjects.delete(mod.folder);void window.modmixer.projectDraftState(mod.folder,false).catch(()=>{});},[mod.folder]);
+ useEffect(()=>{retainedProjects.add(mod.folder);return()=>{if(retainedProjects.has(mod.folder))projectDrafts.set(mod.folder,{tabs:tabsRef.current,selected:selectedRef.current,states:states.current});};},[mod.folder]);
  useEffect(()=>{
   if(!active)return;let alive=true,pending=false,repeat=false,timer:ReturnType<typeof setTimeout>;
   const refresh=async()=>{if(pending){repeat=true;return;}pending=true;setScanning(true);try{const result=await window.modmixer.projectFiles(mod.folder);if(alive){setFiles(result.files);if(result.truncated)setNotice('File list capped at 10,000. Open the folder for the remaining files.');}}catch(e){if(alive)setError(String(e));}finally{pending=false;if(alive){setScanning(false);if(repeat){repeat=false;timer=setTimeout(()=>void refresh(),200);}}}};

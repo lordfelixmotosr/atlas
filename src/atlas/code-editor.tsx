@@ -1,7 +1,7 @@
 import {editorText,fileText} from './editor-text';
 import {useEffect,useRef} from 'react';
 import {basicSetup,EditorView} from 'codemirror';
-import {EditorState} from '@codemirror/state';
+import {EditorState,StateEffect} from '@codemirror/state';
 import {keymap} from '@codemirror/view';
 import {indentWithTab} from '@codemirror/commands';
 import {StreamLanguage,syntaxHighlighting,HighlightStyle} from '@codemirror/language';
@@ -37,14 +37,19 @@ export function CodeEditor({path,text,onChange,onSave,location,onCursor,states,l
  useEffect(()=>{
   if(!mount.current)return;
   const language=/\.(xml|csproj|props)$/i.test(path)?xml():/\.cs$/i.test(path)?StreamLanguage.define(csharp):[];
-  const editor=new EditorView({parent:mount.current,state:states?.get(path)??EditorState.create({doc:editorText(text),extensions:[
+  const extensions=[
    basicSetup,language,theme,syntaxHighlighting(colors),EditorView.contentAttributes.of({'aria-label':'Edit '+path}),
    keymap.of([{key:'Mod-s',run:()=>{callbacks.current.onSave();return true;}},indentWithTab]),
    EditorView.updateListener.of(update=>{
     if(update.docChanged)callbacks.current.onChange(fileText(update.state.doc.toString(),callbacks.current.lineSeparator));
     if(update.selectionSet||update.docChanged){const pos=update.state.selection.main.head,line=update.state.doc.lineAt(pos);callbacks.current.onCursor?.(line.number,pos-line.from+1);}
    }),
-  ]})});
+  ];
+  // Retained states include old update listeners. Rebind them to this mounted
+  // editor while keeping the document, selection and undo history.
+  const cached=states?.get(path);
+  const state=cached?cached.update({effects:StateEffect.reconfigure.of(extensions)}).state:EditorState.create({doc:editorText(text),extensions});
+  const editor=new EditorView({parent:mount.current,state});
   view.current=editor;
   return()=>{states?.set(path,editor.state);view.current=null;editor.destroy();};
  },[path]);

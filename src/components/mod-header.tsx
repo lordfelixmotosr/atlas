@@ -7,12 +7,14 @@ import { getGame } from '../agent/games/registry';
 import { cn } from '@/lib/cn';
 
 export function ModHeader({
+  active = true,
   mod,
   conversationId,
   busy,
   onTest,
   hasAi,
 }: {
+  active?: boolean;
   mod: WorkspaceMod;
   conversationId: string;
   busy: boolean;
@@ -23,7 +25,7 @@ export function ModHeader({
   const isRimWorld = getGame(game).capabilities.runningGameControl;
   // The "close running game" affordance only applies to games with a quittable
   // long-lived process; others just show the test/launch button.
-  const running = useRimWorldRunning(isRimWorld);
+  const running = useRimWorldRunning(isRimWorld && active);
   const [closing, setClosing] = useState(false);
   const [installing,setInstalling]=useState(false);
   const [restoreAvailable,setRestoreAvailable]=useState(false),[restoreRequest,setRestoreRequest]=useState(0);
@@ -41,7 +43,7 @@ export function ModHeader({
   };
 
   return (
-    <div className="flex items-center justify-between border-b border-line px-5 py-3">
+    <div className="atlas-mod-header flex items-center justify-between border-b border-line px-5 py-3">
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-3">
           <h1 className="truncate font-display text-base font-medium text-ink">
@@ -62,7 +64,7 @@ export function ModHeader({
       <div className="ml-4 flex flex-wrap items-center gap-2">
         <ModChangesButton mod={mod} busy={busy} />
         <FelixSentenceShortcut conversationId={conversationId} />
-        {isRimWorld&&<ManualInstallControl folder={mod.folder} conversationId={conversationId} busy={busy||closing} onInstalling={setInstalling} restoreRequest={restoreRequest} onRestoreAvailable={setRestoreAvailable}/>}
+        {isRimWorld&&<ManualInstallControl enabled={active} folder={mod.folder} conversationId={conversationId} busy={busy||closing} onInstalling={setInstalling} restoreRequest={restoreRequest} onRestoreAvailable={setRestoreAvailable}/>}
         {isRimWorld && running ? (
           <button
             onClick={onClose}
@@ -72,7 +74,7 @@ export function ModHeader({
             )}
           >
             <CloseIcon />
-            close rimworld
+            Close RimWorld
           </button>
         ) : (
           <button
@@ -86,7 +88,7 @@ export function ModHeader({
           >
             <LaunchIcon />
             {isRimWorld
-              ? 'launch in rimworld'
+              ? 'Test in RimWorld'
               : `test in ${getGame(game).displayName.toLowerCase()}`}
           </button>
         )}

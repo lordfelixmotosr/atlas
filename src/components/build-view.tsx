@@ -1,3 +1,5 @@
+import {ActionsMenu} from './actions-menu';
+import {WorkspaceTestPanel} from './workspace-test-panel';
 import {useState,useRef,useEffect} from "react";
 import {FilesView} from "../atlas/files-view";
 import type { Conversation } from '../agent/conversations';
@@ -14,6 +16,7 @@ import { SavesView, type RestoreResult } from './saves-view';
 import { getGame, resolveGameId } from '../agent/games/registry';
 
 export function BuildView({
+  active = true,
   activeMod,
   activeConvo,
   panel,
@@ -35,6 +38,7 @@ export function BuildView({
   onArchiveChat,
   onUnarchiveChat,
 }: {
+  active?: boolean;
   activeMod: WorkspaceMod | null;
   activeConvo: Conversation;
   panel: BuildPanel;
@@ -67,7 +71,14 @@ export function BuildView({
   useEffect(()=>{const timer=setTimeout(()=>localStorage.setItem('atlas.layout.chatWidth',String(chatWidth)),200);return()=>clearTimeout(timer)},[chatWidth]);
   useEffect(()=>{localStorage.setItem('atlas.layout.editor',editorVisible?'open':'closed')},[editorVisible]);
   useEffect(()=>{localStorage.setItem('atlas.layout.files',filesVisible?'open':'closed')},[filesVisible]);
-  useEffect(()=>{const element=body.current;if(!element)return;const observer=new ResizeObserver(()=>setBodyWidth(element.clientWidth));observer.observe(element);setBodyWidth(element.clientWidth);return()=>observer.disconnect()},[]);
+  useEffect(()=>{
+    const element=body.current;if(!element)return;
+    let frame=0;
+    const measure=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>setBodyWidth(element.clientWidth));};
+    const observer=new ResizeObserver(measure);
+    observer.observe(element);measure();
+    return()=>{observer.disconnect();cancelAnimationFrame(frame);};
+  },[]);
   const maxChatWidth=Math.max(320,bodyWidth-266),visibleChatWidth=Math.min(chatWidth,maxChatWidth);
   const resize=(x:number)=>{const box=body.current?.getBoundingClientRect();if(box)setChatWidth(Math.max(320,Math.min(maxChatWidth,box.right-x)))};
   // Pre-scaffold "new mod" chat: no mod yet, no Assets to browse.
@@ -100,6 +111,8 @@ export function BuildView({
       : panel;
   const filesPanel=effectivePanel==='files'||effectivePanel==='chat';
   const showCenter=!!activeMod&&(!filesPanel||editorVisible||!chatVisible);
+  const narrow=bodyWidth<680;
+  const showChat=(chatVisible||!activeMod)&&(!narrow||!showCenter);
   const compactEditor=()=>{setEditorVisible(true);setChatVisible(true);setFilesVisible(false);setChatWidth(Math.max(320,bodyWidth-326))};
 
   return (
@@ -107,10 +120,15 @@ export function BuildView({
       <div className="atlas-navigation-toggle"><button className="atlas-icon-button" title={navigation?"Collapse navigation":"Expand navigation"} aria-label={navigation?"Collapse navigation":"Expand navigation"} onClick={()=>setNavigation(v=>!v)}>{navigation?"‹":"›"}</button></div>
       <div className={navigation?"atlas-navigation":"hidden"}>
       <ModBuildSidebar
+        active={active}
         mod={activeMod}
         convo={activeConvo}
         panel={effectivePanel}
-        onSelectPanel={onSelectPanel}
+        onSelectPanel={next=>{
+          if(next==='chat'){setChatVisible(true);setEditorVisible(false);}
+          else if(next==='files')setEditorVisible(true);
+          onSelectPanel(next);
+        }}
         onBack={onBack}
         showAssets={!newModInProgress}
         showAssetPanel={showAssetPanel}
@@ -128,6 +146,7 @@ export function BuildView({
       <div className="flex min-w-0 flex-1 flex-col">
         {activeMod && (
           <ModHeader
+            active={active}
             mod={activeMod}
             conversationId={activeConvo.id}
             busy={busy}
@@ -135,10 +154,20 @@ export function BuildView({
             hasAi={hasAi}
           />
         )}
-        <div className="atlas-workspace-toolbar"><span>{effectivePanel==='chat'?'Project workspace':effectivePanel==='files'?'File editor':effectivePanel[0].toUpperCase()+effectivePanel.slice(1)}</span><div className="atlas-actions">{activeMod&&filesPanel&&<><button className="atlas-button" onClick={compactEditor} title="Narrow the editor and give the assistant more room">Compact editor</button><button className="atlas-button" onClick={()=>{setEditorVisible(!showCenter);if(showCenter)setChatVisible(true)}}>{showCenter?'Hide editor':'Show editor'}</button></>}<button className="atlas-button" disabled={!activeMod} onClick={()=>{setChatVisible(v=>!v);if(chatVisible)setEditorVisible(true)}}>{chatVisible?'Hide chat':'Show chat'}</button></div></div>
+        <div className="atlas-workspace-toolbar">
+          <span>{({chat:'Assistant',files:'Files',assets:'Assets',test:'Test',publish:'Publish',schematic:'Project details',deps:'Dependencies',saves:'History'})[effectivePanel]}</span>
+          <ActionsMenu label="Layout">
+            <button disabled={narrow} onClick={()=>{setEditorVisible(true);setChatVisible(true);setFilesVisible(true);setChatWidth(440)}}>Editor and assistant{narrow?' (wider window)':''}</button>
+            <button disabled={narrow||!activeMod||!filesPanel} onClick={compactEditor}>Compact editor</button>
+            <button disabled={!activeMod} onClick={()=>{setChatVisible(false);setEditorVisible(true)}}>Focus on workspace</button>
+            <button onClick={()=>{setEditorVisible(false);setChatVisible(true);onSelectPanel('chat')}}>Focus on assistant</button>
+            <button onClick={()=>setNavigation(v=>!v)}>{navigation?'Hide':'Show'} project navigation</button>
+          </ActionsMenu>
+        </div>
         <div className="atlas-workspace-body" ref={body} data-center-hidden={!showCenter}>
         <div className={showCenter?'atlas-center-pane':'hidden'}>
-        {activeMod&&<div className={filesPanel?'flex flex-1 min-h-0 min-w-0':'hidden'}><FilesView key={activeMod.folder} mod={activeMod} busy={busy} active={showCenter&&filesPanel} filesVisible={filesVisible} onToggleFiles={()=>setFilesVisible(v=>!v)}/></div>}
+        {activeMod&&<div className={filesPanel?'flex flex-1 min-h-0 min-w-0':'hidden'}><FilesView key={activeMod.folder} mod={activeMod} busy={busy} active={active&&showCenter&&filesPanel} filesVisible={filesVisible} onToggleFiles={()=>setFilesVisible(v=>!v)}/></div>}
+        {active && effectivePanel === 'test' && <WorkspaceTestPanel/>}
         {effectivePanel === 'schematic' && activeMod && (
           <ModSchematicPanel mod={activeMod} />
         )}
@@ -162,13 +191,13 @@ export function BuildView({
           />
         )}
         </div>
-        {showCenter&&chatVisible&&<div role="separator" aria-label="Resize editor and chat" aria-orientation="vertical" aria-valuenow={Math.round(visibleChatWidth)} aria-valuemin={320} aria-valuemax={maxChatWidth} tabIndex={0} className="atlas-resize-handle" title="Drag to resize. Arrow keys resize; double-click resets."
+        {showCenter&&showChat&&<div role="separator" aria-label="Resize editor and chat" aria-orientation="vertical" aria-valuenow={Math.round(visibleChatWidth)} aria-valuemin={320} aria-valuemax={maxChatWidth} tabIndex={0} className="atlas-resize-handle" title="Drag to resize. Arrow keys resize; double-click resets."
           onDoubleClick={()=>setChatWidth(440)}
           onKeyDown={e=>{if(e.key==='ArrowLeft'){e.preventDefault();setChatWidth(Math.min(maxChatWidth,visibleChatWidth+24))}if(e.key==='ArrowRight'){e.preventDefault();setChatWidth(Math.max(320,visibleChatWidth-24))}}}
           onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId)}}
           onPointerMove={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId))resize(e.clientX)}}
           onPointerUp={e=>e.currentTarget.releasePointerCapture(e.pointerId)}/>}
-        <div className={chatVisible||!activeMod?'atlas-chat-pane':'hidden'} style={activeMod?{width:visibleChatWidth}:undefined}>
+        <div className={showChat?'atlas-chat-pane':'hidden'} style={activeMod?{width:visibleChatWidth}:undefined}>
           <div className="atlas-pane-heading"><strong>Atlas assistant</strong><span>Steer while working</span></div>
           <ChatPanel
             key={activeConvo.id}

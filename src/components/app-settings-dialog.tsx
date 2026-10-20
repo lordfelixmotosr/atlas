@@ -1,3 +1,4 @@
+import {AdaptersSection} from '../atlas/adapters-ui';
 import {FelixOpenAIAccounts,FelixSpeedControl,FelixUsageControl,FelixAccountControl} from "../atlas/controls";
 import {AtlasApplicationUpdates} from "../atlas/library-ui";
 import { useEffect, useState } from 'react';
@@ -34,16 +35,21 @@ export type SettingsSection =
   | 'games'
   | 'appearance'
   | 'storage'
-  | 'advanced';
+  | 'advanced'
+  | 'updates';
 
 export function AppSettingsDialog({
   onClose,
+  embedded = false,
   initialSection = 'general',
 }: {
+  embedded?: boolean;
   onClose: () => void;
   initialSection?: SettingsSection;
 }) {
   const [section, setSection] = useState<SettingsSection>(initialSection);
+  useEffect(() => setSection(initialSection), [initialSection]);
+  const [saveMessage,setSaveMessage]=useState('');
   const [author, setAuthor] = useState<string>('');
   const [modLicense, setModLicense] = useState<string>(DEFAULT_LICENSE_ID);
   const [analyticsOptIn, setAnalyticsOptIn] = useState<boolean>(false);
@@ -81,12 +87,13 @@ export function AppSettingsDialog({
   }, []);
 
   useEffect(() => {
+    if (embedded) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, embedded]);
 
   const preview = sanitizeAuthorHandle(author);
 
@@ -95,7 +102,9 @@ export function AppSettingsDialog({
     try {
       await window.modmixer.setDefaultAuthor(author);
       await window.modmixer.setAnalyticsOptIn(analyticsOptIn);
-      onClose();
+      if (embedded) setSaveMessage('Settings saved.'); else onClose();
+    } catch (error) {
+      setSaveMessage(error instanceof Error ? error.message : String(error));
     } finally {
       setSaving(false);
     }
@@ -133,8 +142,8 @@ export function AppSettingsDialog({
   };
 
   const sectionTitle =
-    section === 'providers'
-      ? 'AI providers'
+    section === 'updates' ? 'Application updates' : section === 'providers'
+      ? 'Accounts & models'
       : section === 'appearance'
         ? 'Appearance'
         : section === 'games'
@@ -147,21 +156,21 @@ export function AppSettingsDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 px-6"
-      onClick={onClose}
+      className={embedded ? "atlas-settings-page" : "fixed inset-0 z-50 flex items-center justify-center bg-ink/30 px-6"}
+      onClick={embedded ? undefined : onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[80vh] w-full max-w-2xl overflow-hidden rounded-md border border-line bg-paper shadow-lg"
+        className={embedded ? "atlas-settings-layout" : "flex max-h-[80vh] w-full max-w-2xl overflow-hidden rounded-md border border-line bg-paper shadow-lg"}
       >
-        <nav className="flex w-44 shrink-0 flex-col border-r border-line bg-surface/40 p-3">
+        <nav aria-label="Settings sections" className="atlas-settings-navigation flex w-44 shrink-0 flex-col border-r border-line bg-surface/40 p-3">
           <SectionTab
             label="General"
             active={section === 'general'}
             onClick={() => setSection('general')}
           />
           <SectionTab
-            label="AI providers"
+            label="Accounts & models"
             active={section === 'providers'}
             onClick={() => setSection('providers')}
           />
@@ -180,6 +189,7 @@ export function AppSettingsDialog({
             active={section === 'storage'}
             onClick={() => setSection('storage')}
           />
+          <SectionTab label="Updates" active={section === 'updates'} onClick={() => setSection('updates')}/>
           <SectionTab
             label="Advanced"
             active={section === 'advanced'}
@@ -193,10 +203,10 @@ export function AppSettingsDialog({
             </h2>
             <button
               onClick={onClose}
-              aria-label="Close"
+              aria-label={embedded ? "Done with settings" : "Close"}
               className="font-mono text-xs text-muted transition-colors hover:text-ink"
             >
-              ✕
+              {embedded ? 'Done' : '✕'}
             </button>
           </div>
 
@@ -205,7 +215,8 @@ export function AppSettingsDialog({
             {section === 'appearance' && (
               <AppearanceSection theme={theme} onChange={changeTheme} />
             )}
-            {section === 'games' && <GamesSection />}
+            {section === 'games' && <><GamesSection /><AdaptersSection /></>}
+            {section === 'updates' && <AtlasApplicationUpdates expanded/>}
             {section === 'storage' && <StorageSection />}
             {section === 'advanced' &&
               (!loaded ? (
@@ -224,7 +235,6 @@ export function AppSettingsDialog({
                   <p className="text-sm text-muted">Loading…</p>
                 ) : (
                   <div className="space-y-4">
-                    <UpdateRow />
                     <div>
                       <label className="mb-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
                         Default model for new chats
@@ -264,7 +274,6 @@ export function AppSettingsDialog({
                         onChange={(e) => setAuthor(e.target.value)}
                         className="w-full rounded-md border border-line bg-paper px-2.5 py-1.5 font-mono text-sm text-ink focus:border-accent focus:outline-none"
                         placeholder="petersmith"
-                        autoFocus
                       />
                       <p className="mt-1.5 text-xs text-muted">
                         Used as the prefix for new mods' package IDs (
@@ -317,6 +326,7 @@ export function AppSettingsDialog({
 
 
 
+                    {saveMessage && <p role="status">{saveMessage}</p>}
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                       <div className="flex flex-wrap items-center gap-4">
                         <button
@@ -337,7 +347,7 @@ export function AppSettingsDialog({
                           disabled={saving}
                           className="rounded-md border border-line bg-paper px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted transition-colors hover:border-ink/30 hover:text-ink disabled:opacity-40"
                         >
-                          Cancel
+                          {embedded ? 'Done' : 'Cancel'}
                         </button>
                         <button
                           onClick={() => void save()}
@@ -362,7 +372,7 @@ export function AppSettingsDialog({
 function UpdateRow(){return <AtlasApplicationUpdates/>;}
 
 const THEME_OPTIONS: {value:ThemePreference;label:string;hint:string}[]=[
-  {value:'dark',label:'Dark',hint:'Neutral charcoal with soft blue accents.'},
+  {value:'dark',label:'Dark',hint:'Neutral charcoal with soft forest green accents.'},
   {value:'auto',label:'Auto',hint:'Follow the system setting.'},
   {value:'light',label:'Light',hint:'Soft gray with dark text.'},
 ];

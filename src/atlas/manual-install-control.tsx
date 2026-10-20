@@ -4,17 +4,18 @@ import {appAlert} from '../components/app-dialog';
 import {RuntimeInstallDialog} from './runtime-install-dialog';
 
 type Review=Extract<DllInstallResult,{status:'confirmation'}>;
-export function ManualInstallControl({folder,conversationId,busy,onInstalling,restoreRequest=0,onRestoreAvailable}:{folder:string;conversationId:string;busy:boolean;onInstalling:(value:boolean)=>void;restoreRequest?:number;onRestoreAvailable?:(available:boolean)=>void}) {
+export function ManualInstallControl({enabled=true,folder,conversationId,busy,onInstalling,restoreRequest=0,onRestoreAvailable}:{enabled?:boolean;folder:string;conversationId:string;busy:boolean;onInstalling:(value:boolean)=>void;restoreRequest?:number;onRestoreAvailable?:(available:boolean)=>void}) {
   const [state,setState]=useState<DllUpdateOverview|null>(null),[working,setWorking]=useState(false),[notice,setNotice]=useState(''),[review,setReview]=useState<Review|null>(null),[error,setError]=useState('');
   const lastRestore=useRef(restoreRequest),active=useRef(false);
   useEffect(()=>{if(!notice)return;const timer=window.setTimeout(()=>setNotice(''),6000);return()=>window.clearTimeout(timer);},[notice]);
   useEffect(()=>{
+    if(!enabled)return;
     let cancelled=false,inFlight=false;
     const refresh=async()=>{if(inFlight||active.current)return;inFlight=true;try{const next=await window.modmixer.dllUpdateState(folder,conversationId);if(!cancelled){setState(next);onRestoreAvailable?.(!!next.previous);}}catch{/* ordinary launch remains available */}finally{inFlight=false;}};
     void refresh();const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void refresh();},6000);
     const changed=()=>void refresh();const off=window.modmixer.onModChanged(changed),offAssets=window.modmixer.onAssetsChanged(changed);
     return()=>{cancelled=true;window.clearInterval(timer);off();offAssets();};
-  },[folder,conversationId,onRestoreAvailable]);
+  },[folder,conversationId,onRestoreAvailable,enabled]);
   const run=async(mode:RuntimeInstallMode,token?:string)=>{
     if(active.current)return;active.current=true;setWorking(true);onInstalling(true);setNotice('');setError('');
     try{

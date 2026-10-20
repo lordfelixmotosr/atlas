@@ -272,3 +272,5 @@ body {
 @import './atlas/controls.css';
 @import './atlas/renderer.css';
 @import './atlas/workspace.css';
+
+@import './atlas/redesign.css';

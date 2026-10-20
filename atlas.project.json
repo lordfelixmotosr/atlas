@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.2.31 native source release built and verified",
+  "status": "Atlas 0.3.0 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -177,7 +177,8 @@
     "0.2.28: on-demand installation preview, one retained previous runtime per mod, restore in the existing overflow menu and unchanged-runtime reuse",
     "0.2.29: bounded alerts and installation reviews, visible action buttons, collapsed complete warning details and completed-install status handling",
     "0.2.30: prevent automatic verification downloads of unsubscribed mods, require explicit download confirmation, and keep mod registry scans read-only",
-    "0.2.31: Steam BBCode conversion and safe previews for update notes; structured AI descriptions with separately stored private review warnings"
+    "0.2.31: Steam BBCode conversion and safe previews for update notes; structured AI descriptions with separately stored private review warnings",
+    "0.3.0: Projects, Workspace, Knowledge and Settings redesign; Activity drawer; responsive focus layouts and in-memory file draft retention"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -192,7 +193,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.2.31",
+  "version": "0.3.0",
   "supportedGames": [
     "rimworld"
   ],
@@ -207,7 +208,8 @@
       "Git Bash 2.55.0.windows.2 public runtime",
       "Python 3.12 runtime",
       "RimWorldForge"
-    ]
+    ],
+    "ui": "Four main destinations, separate open-project tabs, grouped actions, searchable projects and references, full-page settings, Activity drawer; narrow workspaces show one pane at a time"
   },
   "acceptanceResults": {
     "pending": [],
@@ -348,24 +350,27 @@
       "0.2.30 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
       "0.2.31 41 focused formatting, description, baseline and actual Workshop payload tests passed; source type checking passed",
       "0.2.31 actual Changes and publish UI verified in isolated Electron at 900x650, 620x460 and 420x540; 200-item notes keep actions visible; copied and saved public notes exclude private warnings; production startup API and second-launch checks passed",
-      "0.2.31 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
+      "0.2.31 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
+      "0.3.0 45 focused editor, activity, thinking, installation and Workshop-note tests passed; source type checking passed",
+      "0.3.0 isolated native renderer verified navigation, search, account settings, draft restoration and editing, discard cancellation, explicit discard, paused hidden-workspace scans, Activity drawer, and dark/light responsive layouts; production startup and second-launch checks passed",
+      "0.3.0 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks"
     ]
   },
   "release": {
     "application-update": {
-      "path": "Atlas-0.2.31-win-x64-application-update.zip",
-      "size": 97099906,
-      "sha256": "7d86779ac1de20cad054eaf9e128928eb65bb9104f4b05928d124ed99dbb1063"
+      "path": "Atlas-0.3.0-win-x64-application-update.zip",
+      "size": 97106288,
+      "sha256": "52ed2c2d1b0379ce7d61ad35904b8805bb705c615bcd6767ccb9461c316ad754"
     },
     "portable": {
-      "path": "Atlas-0.2.31-win-x64-portable.zip",
-      "size": 397260407,
-      "sha256": "b32b1b3c4ccf24736c56b6ff1d25b01a27bd87fbeabd53e9727d57fbde0d4d20"
+      "path": "Atlas-0.3.0-win-x64-portable.zip",
+      "size": 397266789,
+      "sha256": "5e4a00b679d9cb01a8eb41e198fcfe2cf1557030b7800b090efb1955f547a555"
     },
     "full-update": {
-      "path": "Atlas-0.2.31-win-x64-full-update.zip",
-      "size": 396693915,
-      "sha256": "8cd430684852f1505315c98a74aabc3f5de32360e9884f3a2bfcbe888bdd3590"
+      "path": "Atlas-0.3.0-win-x64-full-update.zip",
+      "size": 396700297,
+      "sha256": "2d4d9de1be4965705d0440d1e90e1a92efccff12a61a0b6d16c8f9cc41a431a3"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"

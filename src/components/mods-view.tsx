@@ -1,3 +1,4 @@
+import {ActionsMenu} from './actions-menu';
 import { useState } from 'react';
 import type { WorkspaceMod } from '../agent/workspace';
 import type { GameId } from '../agent/games/types';
@@ -105,61 +106,22 @@ export function ModsView({
   );
 
   return (
-    <div className="flex-1 overflow-auto px-8 py-8">
-      <div className="mx-auto max-w-5xl">
-        {gameMods.length > 0 && (
-          <div className="mb-8 flex items-center gap-12 border-b border-line pb-6">
-            <Stat label="Mods created" value={gameMods.length} />
-            <Stat label="Published" value={publishedCount} />
+    <main className="atlas-page atlas-projects-page">
+      <div className="atlas-page-inner">
+        <header className="atlas-page-heading">
+          <div><h1>My projects</h1><p>{gameMods.length} {def.displayName} projects · {publishedCount} published</p></div>
+          <div className="atlas-actions">
+            <ActionsMenu label="More">
+              <button disabled={!mods.length||openingFolders} onClick={()=>void openFolders()}>{openingFolders?'Preparing folders…':'Open named mod folders'}</button>
+              {def.capabilities.liveSession&&<button disabled={launching} onClick={()=>void launchLive()}>{launching?'Launching…':'Live game session (experimental)'}</button>}
+            </ActionsMenu>
+            {canImport&&<ActionsMenu label="Import">
+              <button onClick={onImportMod}>Import mod folder…</button>
+              <button onClick={onImportModMixer}>Import ModMixer projects…</button>
+            </ActionsMenu>}
+            <NewModButton game={game} onNewMod={onNewMod}/>
           </div>
-        )}
-
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="font-display text-xl font-medium text-ink">
-              Your {def.displayName} mods
-            </h2>
-            <p className="text-sm text-muted">
-              {def.displayName} mods you've built in Atlas.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {mods.length>0&&<button className="atlas-button" disabled={openingFolders} onClick={()=>void openFolders()} title="Open readable Windows shortcuts to your mod folders. Existing project paths stay fixed.">{openingFolders?'Preparing folders…':'Open named mod folders'}</button>}
-            {def.capabilities.liveSession && (
-              <button
-                onClick={() => void launchLive()}
-                disabled={launching}
-                title="Start RimWorld in a sandboxed test colony and prompt Atlas from inside the game. Experimental."
-                className="rounded-md border border-line bg-paper px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted transition-colors hover:border-ink/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {launching ? (
-                  'launching…'
-                ) : (
-                  <>
-                    launch live session{' '}
-                    <span className="ml-1 rounded-sm bg-warning/15 px-1 py-0.5 text-[9px] text-warning">
-                      experimental
-                    </span>
-                  </>
-                )}
-              </button>
-            )}
-            {canImport && (
-              <button onClick={onImportModMixer} className="atlas-button" title="Copy all your old ModMixer RimWorld projects into Atlas">
-                Import ModMixer mods
-              </button>
-            )}
-            {canImport && (
-              <button
-                onClick={onImportMod}
-                className="rounded-md border border-line bg-paper px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted transition-colors hover:border-ink/40 hover:text-ink"
-              >
-                import mod
-              </button>
-            )}
-            <NewModButton game={game} onNewMod={onNewMod} />
-          </div>
-        </div>
+        </header>
 
         {gameMods.length === 0 ? (
           <EmptyState
@@ -173,11 +135,11 @@ export function ModsView({
             {/* Low-emphasis toolbar: search stays a lone icon until clicked,
                 the published filter is plain ghost text — deliberately quiet so
                 it doesn't compete with the mod list. */}
-            <div className="mb-5 flex items-center justify-end gap-4">
+            <div className="atlas-project-filters">
               <SearchControl
                 value={query}
                 onChange={setQuery}
-                placeholder={`Search ${def.displayName} mods…`}
+                placeholder="Find a project by name, ID or description…"
               />
               <span aria-hidden className="h-4 w-px bg-line" />
               <PublishedFilter value={publishFilter} onChange={setPublishFilter} />
@@ -215,7 +177,7 @@ export function ModsView({
           </>
         )}
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -241,50 +203,28 @@ function SearchControl({
   onChange: (v: string) => void;
   placeholder: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const expanded = open || value !== '';
-
-  if (!expanded) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        aria-label="Search mods"
-        title="Search mods"
-        className="flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-raised/60 hover:text-ink"
-      >
-        <SearchGlyph />
-      </button>
-    );
-  }
-
   return (
-    <div className="relative">
+    <div className="atlas-project-search relative">
       <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle">
         <SearchGlyph />
       </span>
       <input
         type="text"
-        autoFocus
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onBlur={() => {
-          if (value === '') setOpen(false);
-        }}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
             onChange('');
-            setOpen(false);
           }
         }}
         placeholder={placeholder}
         aria-label="Search mods"
-        className="w-64 rounded-md border border-line bg-paper py-1.5 pl-8 pr-8 text-sm text-ink placeholder:text-subtle focus:border-ink/40 focus:outline-none"
+        className="w-full rounded-md border border-line bg-paper py-1.5 pl-8 pr-8 text-sm text-ink placeholder:text-subtle focus:border-ink/40 focus:outline-none"
       />
       {value && (
         <button
           onClick={() => {
             onChange('');
-            setOpen(false);
           }}
           aria-label="Clear search"
           title="Clear search"
@@ -420,7 +360,7 @@ function NewModButton({
       onClick={() => onNewMod(game)}
       className="rounded-md bg-accent px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-accent-foreground transition-colors hover:bg-accent-soft"
     >
-      + new {getGame(game).displayName} mod
+      + New mod
     </button>
   );
 }

@@ -19,7 +19,7 @@ export function ApplicationUpdateProgress({progress}:{progress?:UpdateProgress|n
   </section>;
 }
 
-export function AtlasApplicationUpdates(){
+export function AtlasApplicationUpdates({expanded=false}:{expanded?:boolean}={}){
   const [value,setValue]=useState<UpdateState|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   useEffect(()=>{
     let alive=true;
@@ -32,7 +32,7 @@ export function AtlasApplicationUpdates(){
     try{setValue(await fn());}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
   }
   const working=busy||!!value?.working;
-  return <details className="atlas-source-settings">
+  return <details className="atlas-source-settings" open={expanded||undefined}>
     <summary>Atlas application updates</summary>
     <p>Atlas {value?.version??'…'} portable · checked daily with your library. Verified app updates download automatically; you choose when to restart.</p>
     {(error||value?.error)&&<p role="alert" className="atlas-error">{error||value?.error}</p>}

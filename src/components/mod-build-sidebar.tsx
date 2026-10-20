@@ -14,9 +14,11 @@ export type BuildPanel =
   | 'assets'
   | 'deps'
   | 'saves'
-  | 'publish';
+  | 'publish'
+  | 'test';
 
 export function ModBuildSidebar({
+  active = true,
   mod,
   convo,
   panel,
@@ -34,6 +36,7 @@ export function ModBuildSidebar({
   onArchiveChat,
   onUnarchiveChat,
 }: {
+  active?: boolean;
   mod: WorkspaceMod | null;
   convo: Conversation;
   panel: BuildPanel;
@@ -62,7 +65,7 @@ export function ModBuildSidebar({
   const showMultiChat = multiChat && !!mod;
 
   useEffect(() => {
-    if (!mod || !showAssetPanel) {
+    if (!active || !mod || !showAssetPanel) {
       setAssetCounts(null);
       return;
     }
@@ -83,7 +86,7 @@ export function ModBuildSidebar({
       cancelled = true;
       off();
     };
-  }, [mod?.folder, showAssetPanel]);
+  }, [mod?.folder, showAssetPanel, active]);
 
   const missing = assetCounts?.missing ?? 0;
   const invalid = assetCounts?.invalid ?? 0;
@@ -99,42 +102,15 @@ export function ModBuildSidebar({
           <span aria-hidden className="transition-transform group-hover:-translate-x-0.5">
             ←
           </span>
-          <span>back</span>
+          <span>All projects</span>
         </button>
         <div className="mt-1 truncate font-display text-sm font-medium text-ink">
           {mod ? mod.about.name || mod.folder : convo.title || 'Draft'}
         </div>
       </div>
 
-      <nav className="no-scrollbar flex-1 overflow-auto py-1">
+      <nav aria-label="Workspace sections" className="no-scrollbar flex-1 overflow-auto py-1">
         {mod&&<SidebarRow label="Files" subtitle="Browse and edit source" icon={<span aria-hidden>▤</span>} active={panel==='files'} onClick={()=>onSelectPanel('files')} />}
-        <SidebarRow
-          label="Chat"
-          subtitle="Make or fix your mod"
-          icon={<ChatIcon />}
-          active={panel === 'chat'}
-          onClick={() => onSelectPanel('chat')}
-        />
-        {showMultiChat && mod && (
-          <ModChatList
-            modFolder={mod.folder}
-            activeConversationId={convo.id}
-            refreshKey={chatListRev}
-            onSelect={onSelectChat}
-            onNewChat={onNewChatMulti}
-            onArchive={onArchiveChat}
-            onUnarchive={onUnarchiveChat}
-          />
-        )}
-        {showAssets && (
-          <SidebarRow
-            label="Schematic"
-            subtitle="Learn how your mod works"
-            icon={<SchematicIcon />}
-            active={panel === 'schematic'}
-            onClick={() => onSelectPanel('schematic')}
-          />
-        )}
         {showAssetPanel && (
           <SidebarRow
             label="Assets"
@@ -156,15 +132,7 @@ export function ModBuildSidebar({
             }
           />
         )}
-        {showDepsPanel && (
-          <SidebarRow
-            label="Deps"
-            subtitle="What this mod needs"
-            icon={<DepsIcon />}
-            active={panel === 'deps'}
-            onClick={() => onSelectPanel('deps')}
-          />
-        )}
+        {mod && <SidebarRow label="Test" subtitle="Run and monitor in game" icon={<span aria-hidden>▷</span>} active={panel==='test'} onClick={()=>onSelectPanel('test')}/>}
         {showAssets && publishSubtitle && (
           <SidebarRow
             label="Publish"
@@ -174,10 +142,20 @@ export function ModBuildSidebar({
             onClick={() => onSelectPanel('publish')}
           />
         )}
+        <div className="atlas-sidebar-label">Project</div>
+        {showDepsPanel && (
+          <SidebarRow
+            label="Dependencies"
+            subtitle="What this mod needs"
+            icon={<DepsIcon />}
+            active={panel === 'deps'}
+            onClick={() => onSelectPanel('deps')}
+          />
+        )}
         {showAssets && (
           <SidebarRow
             label="History"
-            subtitle="Rollback your mod"
+            subtitle="Snapshots and restore"
             icon={<SavesIcon />}
             active={panel === 'saves'}
             onClick={() => onSelectPanel('saves')}
@@ -190,6 +168,33 @@ export function ModBuildSidebar({
                   }
                 : undefined
             }
+          />
+        )}
+        <SidebarRow
+          label="Assistant"
+          subtitle="Make or fix your mod"
+          icon={<ChatIcon />}
+          active={panel === 'chat'}
+          onClick={() => onSelectPanel('chat')}
+        />
+        {showMultiChat && mod && (
+          <ModChatList
+            modFolder={mod.folder}
+            activeConversationId={convo.id}
+            refreshKey={chatListRev}
+            onSelect={onSelectChat}
+            onNewChat={onNewChatMulti}
+            onArchive={onArchiveChat}
+            onUnarchive={onUnarchiveChat}
+          />
+        )}
+        {showAssets && (
+          <SidebarRow
+            label="Project details"
+            subtitle="Learn how your mod works"
+            icon={<SchematicIcon />}
+            active={panel === 'schematic'}
+            onClick={() => onSelectPanel('schematic')}
           />
         )}
       </nav>
@@ -234,6 +239,7 @@ function SidebarRow({
   return (
     <button
       onClick={onClick}
+      aria-current={active ? 'page' : undefined}
       className={cn(
         'flex w-full items-center gap-3 px-4 py-2 text-left transition-colors',
         active ? 'bg-raised text-ink' : 'text-ink/85 hover:bg-raised/60',
