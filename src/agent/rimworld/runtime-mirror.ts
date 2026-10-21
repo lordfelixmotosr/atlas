@@ -13,6 +13,8 @@ interface MirrorRecord {
   publishedId: string | null;
   plan?: ReleasePlan;
   heldWorkspace?: string;
+  /** Durable removal intent prevents launch recovery from reinstalling a removed copy. */
+  removed?: boolean;
 }
 const locks = new Map<string, Promise<unknown>>();
 const watchers = new Map<string, () => void>();
@@ -121,7 +123,7 @@ export async function missingRecordedMirror(source: string, target: string, stat
   if (await stat(target)) return false;
   try {
     const r = JSON.parse(await fsp.readFile(recordPath(target, stateDir), 'utf8')) as MirrorRecord;
-    return r.format === 'atlas-runtime-mirror-v1' && same(r.source, source) && same(r.target, target);
+    return r.format === 'atlas-runtime-mirror-v1' && !r.removed && same(r.source, source) && same(r.target, target);
   } catch { return false; }
 }
 
@@ -210,6 +212,7 @@ export async function restoreMirrorWatchers(stateDir: string, workspaceRoot: str
     try {
       const r = JSON.parse(await fsp.readFile(path.join(stateDir, name), 'utf8')) as MirrorRecord;
       if (!same(path.dirname(r.source), workspaceRoot) || !same(path.dirname(r.target), modsRoot) || path.basename(r.source) !== path.basename(r.target)) continue;
+      if (r.removed && !await stat(r.target)) continue;
       await exclusive(r.target, async () => {
         await recoverPending(r.source, r.target, stateDir, path.join(path.dirname(path.dirname(path.resolve(r.target))), '.atlas-release-stage'));
         if (await ownedMirror(r.source, r.target, stateDir)) watchMirrorId(r.source, r.target, stateDir, () => onChange?.(path.basename(r.source)));
@@ -489,18 +492,55 @@ async function installRuntimeMirror(source: string, target: string, stateDir: st
 }
 
 export async function removeRuntimeMirror(source: string, target: string, stateDir: string): Promise<boolean> {
+  return (await uninstallRuntimeMirror(source, target, stateDir)).removed;
+}
+
+export interface RuntimeRemovalResult {removed: boolean; retainedPath?: string}
+
+/** Remove only an owned runtime. Move it out of Mods atomically before cleanup,
+ * so a Windows lock cannot leave a half-deleted installed directory. */
+export async function uninstallRuntimeMirror(source: string, target: string, stateDir: string): Promise<RuntimeRemovalResult> {
   return exclusive(target, async () => {
-    const owned = await record(source, target, stateDir);
-    if (await isLegacyWorkspaceLink(source, target)) {await fsp.unlink(target); return true;}
-    if (!owned) return false;
+    let owned = await record(source, target, stateDir);
+    const legacy = await isLegacyWorkspaceLink(source, target);
+    if (!owned && !legacy) return {removed: false};
+    const relative = path.relative(path.resolve(source), path.resolve(target));
+    const reverse = path.relative(path.resolve(target), path.resolve(source));
+    if (!relative || !reverse || !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative) || !reverse.startsWith('..' + path.sep) && !path.isAbsolute(reverse)) throw new Error('Workspace and game installation paths must be separate.');
     await reconcile(source, target, stateDir);
-    await checkDllLocks(target);
-    // The filesystem identity was checked above; never delete an unowned folder.
-    if (!await ownedMirror(source, target, stateDir)) throw new Error('Runtime mirror ownership changed before removal.');
+    owned = await record(source, target, stateDir);
+    if (!legacy) await checkDllLocks(target);
+    if (!owned && !await isLegacyWorkspaceLink(source, target)) throw new Error('Runtime mirror ownership changed before removal.');
+    const callback = callbacks.get(key(target));
     watchers.get(key(target))?.(); watchers.delete(key(target));
     callbacks.delete(key(target));
-    await fsp.rm(target, {recursive: true, force: true});
-    await fsp.unlink(recordPath(target, stateDir));
-    return true;
+    const staging = await fsp.mkdtemp(path.join(path.dirname(path.dirname(path.resolve(target))), '.atlas-release-stage', 'uninstall-'));
+    const parked = path.join(staging, 'runtime');
+    const original = owned ?? {format:'atlas-runtime-mirror-v1' as const,source:path.resolve(source),target:path.resolve(target),identity:identity(await fsp.lstat(target)),publishedId:null};
+    await fsp.writeFile(path.join(staging, 'uninstall.json'), JSON.stringify({source:path.resolve(source),target:path.resolve(target),identity:original.identity,createdAt:new Date().toISOString()}));
+    try {
+      await saveRecord({...original, removed:true}, stateDir);
+      if (legacy ? !await isLegacyWorkspaceLink(source,target) : !await ownedMirror(source,target,stateDir)) throw new Error('Runtime mirror ownership changed before removal.');
+      await retry('uninstall runtime ' + target, () => fsp.rename(target, parked));
+    } catch (error) {
+      let recordError = '';
+      try {if(owned)await saveRecord(original,stateDir);else await fsp.unlink(recordPath(target,stateDir));}
+      catch (cause) {recordError = ` Ownership recovery: ${String(cause)}.`;}
+      if(owned)watchMirrorId(source,target,stateDir,callback);
+      throw new Error(`Could not uninstall the game copy: ${String(error)}.${recordError} Close RimWorld and programs using its files, then retry. Removal details: ${staging}. Your Atlas project is retained.`, {cause:error});
+    }
+    try {
+      // Until this succeeds the removal marker remains, so launch recovery
+      // cannot recreate a deliberately uninstalled runtime after a crash.
+      await retry('remove runtime ownership', () => fsp.unlink(recordPath(target,stateDir)));
+      if (legacy) await fsp.unlink(parked); // never recurse through a workspace junction
+      const expected = path.join(path.dirname(path.dirname(path.resolve(target))), '.atlas-release-stage') + path.sep;
+      if (!staging.startsWith(expected) || (await fsp.lstat(staging)).isSymbolicLink()) throw new Error('Unsafe uninstall cleanup path.');
+      await retry('clean uninstalled runtime', () => fsp.rm(staging,{recursive:true,force:true}));
+      return {removed:true};
+    } catch (error) {
+      console.warn('[runtime mirror] uninstalled; cleanup retained:', staging, String(error));
+      return {removed:true,retainedPath:staging};
+    }
   });
 }

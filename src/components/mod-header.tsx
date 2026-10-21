@@ -29,6 +29,7 @@ export function ModHeader({
   const [closing, setClosing] = useState(false);
   const [installing,setInstalling]=useState(false);
   const [restoreAvailable,setRestoreAvailable]=useState(false),[restoreRequest,setRestoreRequest]=useState(0);
+  const [installedAvailable,setInstalledAvailable]=useState(false),[uninstallRequest,setUninstallRequest]=useState(0);
 
   const onClose = async () => {
     if (closing) return;
@@ -64,7 +65,7 @@ export function ModHeader({
       <div className="ml-4 flex flex-wrap items-center gap-2">
         <ModChangesButton mod={mod} busy={busy} />
         <FelixSentenceShortcut conversationId={conversationId} />
-        {isRimWorld&&<ManualInstallControl enabled={active} folder={mod.folder} conversationId={conversationId} busy={busy||closing} onInstalling={setInstalling} restoreRequest={restoreRequest} onRestoreAvailable={setRestoreAvailable}/>}
+        {isRimWorld&&<ManualInstallControl enabled={active} folder={mod.folder} name={mod.about.name} conversationId={conversationId} busy={busy||closing} onInstalling={setInstalling} restoreRequest={restoreRequest} onRestoreAvailable={setRestoreAvailable} uninstallRequest={uninstallRequest} onInstalledAvailable={setInstalledAvailable}/>}
         {isRimWorld && running ? (
           <button
             onClick={onClose}
@@ -92,7 +93,7 @@ export function ModHeader({
               : `test in ${getGame(game).displayName.toLowerCase()}`}
           </button>
         )}
-        <SessionMenu conversationId={conversationId} restoreAvailable={isRimWorld&&restoreAvailable} busy={busy||closing||installing} onRestore={()=>setRestoreRequest(n=>n+1)} />
+        <SessionMenu conversationId={conversationId} restoreAvailable={isRimWorld&&restoreAvailable} installedAvailable={isRimWorld&&installedAvailable} busy={busy||closing||installing} onRestore={()=>setRestoreRequest(n=>n+1)} onUninstall={()=>setUninstallRequest(n=>n+1)} />
       </div>
     </div>
   );
@@ -100,11 +101,11 @@ export function ModHeader({
 
 /**
  * Discrete overflow menu for rarely-used, per-chat troubleshooting actions.
- * Today its only entry copies this chat's raw session transcript (.jsonl) to
- * the clipboard so a tester can paste it into a bug report. Closes on
+ * Includes runtime restore/removal and copying this chat's raw session
+ * transcript (.jsonl) for a bug report. Closes on
  * outside-click and flips the item to a confirmation for a beat after copying.
  */
-function SessionMenu({ conversationId,restoreAvailable,busy,onRestore }: { conversationId: string;restoreAvailable:boolean;busy:boolean;onRestore:()=>void }) {
+function SessionMenu({ conversationId,restoreAvailable,installedAvailable,busy,onRestore,onUninstall }: { conversationId: string;restoreAvailable:boolean;installedAvailable:boolean;busy:boolean;onRestore:()=>void;onUninstall:()=>void }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -162,6 +163,7 @@ function SessionMenu({ conversationId,restoreAvailable,busy,onRestore }: { conve
       {open && (
         <div className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-md border border-line bg-paper shadow-xl">
           {restoreAvailable&&<button type="button" disabled={busy} onClick={()=>{setOpen(false);onRestore();}} className="block w-full border-b border-line px-3 py-2 text-left text-[12px] text-ink hover:bg-surface disabled:opacity-40">Restore previous version…</button>}
+          {installedAvailable&&<button type="button" disabled={busy} onClick={()=>{setOpen(false);onUninstall();}} className="block w-full border-b border-line px-3 py-2 text-left text-[12px] text-ink hover:bg-surface disabled:opacity-40">Uninstall from RimWorld…</button>}
           <button
             type="button"
             onClick={() => void copyLog()}

@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.3.1 native source release built and verified",
+  "status": "Atlas 0.3.2 native source release built and verified",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -179,7 +179,8 @@
     "0.2.30: prevent automatic verification downloads of unsubscribed mods, require explicit download confirmation, and keep mod registry scans read-only",
     "0.2.31: Steam BBCode conversion and safe previews for update notes; structured AI descriptions with separately stored private review warnings",
     "0.3.0: Projects, Workspace, Knowledge and Settings redesign; Activity drawer; responsive focus layouts and in-memory file draft retention",
-    "0.3.1: Claude OAuth uses Chromium transport for token exchange and refresh; bounded timeout, cancellation and concise recovery messages"
+    "0.3.1: Claude OAuth uses Chromium transport for token exchange and refresh; bounded timeout, cancellation and concise recovery messages",
+    "0.3.2: Uninstall from RimWorld in the existing mod menu; retain workspace and publication identity; serialized atomic removal with Windows lock checks"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -194,7 +195,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.3.1",
+  "version": "0.3.2",
   "supportedGames": [
     "rimworld"
   ],
@@ -211,7 +212,8 @@
       "RimWorldForge"
     ],
     "ui": "Four main destinations, separate open-project tabs, grouped actions, searchable projects and references, full-page settings, Activity drawer; narrow workspaces show one pane at a time",
-    "claudeOAuth": "Endpoint-scoped Chromium token transport; no automatic replay of potentially consumed authorization codes; cancellation and timeout; no token bodies in error diagnostics"
+    "claudeOAuth": "Endpoint-scoped Chromium token transport; no automatic replay of potentially consumed authorization codes; cancellation and timeout; no token bodies in error diagnostics",
+    "modUninstall": "Owned runtime/junction only; game closed and no active agent/build work; preserves workspace/chats/Workshop/subscriptions/load order; atomic move outside Mods with bounded retries and explicit cleanup paths; durable removal marker prevents automatic reinstallation"
   },
   "acceptanceResults": {
     "pending": [],
@@ -358,24 +360,27 @@
       "0.3.0 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks",
       "0.3.1 21 Claude OAuth, usage and thinking-control regression tests passed; source type checking passed",
       "0.3.1 isolated Windows Chromium token-endpoint probe reached the provider with no credentials; production startup and second-launch checks passed; real account approval remains a user action",
-      "0.3.1 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks; compact update includes the patched OAuth dependency and transport"
+      "0.3.1 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks; compact update includes the patched OAuth dependency and transport",
+      "0.3.2 51 uninstall, install, runtime history/release and scan regression tests passed, including native Windows DLL and directory locks; source type checking passed",
+      "0.3.2 isolated native UI verified menu visibility, named confirmation, cancellation without IPC, blocked removal, project retention and bounded narrow layout; production startup and second-launch checks passed",
+      "0.3.2 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks; no user game mod was uninstalled during verification"
     ]
   },
   "release": {
     "application-update": {
-      "path": "Atlas-0.3.1-win-x64-application-update.zip",
-      "size": 97111324,
-      "sha256": "a7e83949fa117aa7e5485fca6b321ff0c374f9072e4946fc87b590384501b671"
+      "path": "Atlas-0.3.2-win-x64-application-update.zip",
+      "size": 97113023,
+      "sha256": "3f40d6ed955cba8876dc868c2381860356bd01b510dee87803784cef10df49b4"
     },
     "portable": {
-      "path": "Atlas-0.3.1-win-x64-portable.zip",
-      "size": 397268595,
-      "sha256": "d5ec7c77bca77862f098252532e01dfe9d375d8a0c9eca5206b3951975f873b6"
+      "path": "Atlas-0.3.2-win-x64-portable.zip",
+      "size": 397270294,
+      "sha256": "14160825c43f15afebd465cc216e7c0769eae794df9406214c24db80846d1a88"
     },
     "full-update": {
-      "path": "Atlas-0.3.1-win-x64-full-update.zip",
-      "size": 396702103,
-      "sha256": "646fe379e4ab334d955f47d7d7176dbbfc82afc43b96c4f4388acc5cad676845"
+      "path": "Atlas-0.3.2-win-x64-full-update.zip",
+      "size": 396703802,
+      "sha256": "2ed7e805e7fb6cfe8bf6dd8de5dbe49d650c79a20bea7ec58582eb269d080ab3"
     }
   },
   "repository": "https://github.com/lordfelixmotosr/atlas"

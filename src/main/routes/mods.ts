@@ -9,7 +9,6 @@ import {
   listWorkspaceMods,
   readModAbout,
   syncModToGame,
-  unsyncModFromGame,
   writeAbout,
   type AboutMetadata,
   type ImportModResult,
@@ -38,6 +37,7 @@ import { loadSettings } from '../../agent/settings.js';
 import { getGame, resolveGameId } from '../../agent/games/registry.js';
 import type { GameId } from '../../agent/games/types.js';
 import type { RouteContext } from './context.js';
+import {registerModUninstallRoute} from './mod-uninstall.js';
 import {registerDllUpdateRoutes} from './dll-updates.js';
 
 /**
@@ -57,10 +57,7 @@ export function registerModRoutes(ctx: RouteContext): void {
     return await listWorkspaceMods();
   });
 
-  ipc.handle('modmixer:mods:unsync-from-game', async (_evt, folder: string) => {
-    await unsyncModFromGame(folder);
-    return await listWorkspaceMods();
-  });
+  registerModUninstallRoute(ctx);
 
   ipc.handle('modmixer:mods:delete', async (_evt, folder: string) => {
     // Order matters: read packageId before the folder is gone, then drop it

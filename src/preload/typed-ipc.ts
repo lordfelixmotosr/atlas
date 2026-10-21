@@ -237,7 +237,7 @@ export interface Channels {
   // Mods (workspace)
   'modmixer:mods:list-workspace': () => WorkspaceMod[];
   'modmixer:mods:sync-to-game': (folder: string) => WorkspaceMod[];
-  'modmixer:mods:unsync-from-game': (folder: string) => WorkspaceMod[];
+  'modmixer:mods:unsync-from-game': (folder: string) => import('../agent/rimworld/runtime-mirror').RuntimeRemovalResult;
   'modmixer:mods:delete': (folder: string) => WorkspaceMod[];
   'modmixer:mods:import-from-folder': () => {
     result: ImportModResult;

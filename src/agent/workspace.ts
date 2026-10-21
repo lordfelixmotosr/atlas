@@ -14,7 +14,7 @@ import { scanAssets } from './assets/scanner.js';
 import { parseAboutXml, type ModDependency } from './registry/about-xml.js';
 import { loadSettings } from './settings.js';
 import { track } from './telemetry.js';
-import { ownedMirror, refreshRuntimeMirror, removeRuntimeMirror, isLegacyWorkspaceLink, watchMirrorId, withRuntimeSync, missingRecordedMirror } from './rimworld/runtime-mirror.js';
+import { ownedMirror, refreshRuntimeMirror, removeRuntimeMirror, uninstallRuntimeMirror, isLegacyWorkspaceLink, watchMirrorId, withRuntimeSync, missingRecordedMirror, type RuntimeRemovalResult } from './rimworld/runtime-mirror.js';
 import { emitModChanged } from './mod-events.js';
 import {
   SKIP_DIRS,
@@ -409,10 +409,12 @@ function checkModFolder(folder: string): void {
   if (!folder || folder === '.' || folder === '..' || /[\\/\x00]/.test(folder)) throw new Error('Invalid mod folder.');
 }
 
-export async function unsyncModFromGame(folder: string): Promise<void> {
+export async function unsyncModFromGame(folder: string): Promise<RuntimeRemovalResult> {
   checkModFolder(folder);
   const target = path.join(getRimWorldModsDir(), folder);
-  await removeRuntimeMirror(path.join(getWorkspacePaths().workspaceDir, folder), target, getMirrorStateDir());
+  const result = await uninstallRuntimeMirror(path.join(getWorkspacePaths().workspaceDir, folder), target, getMirrorStateDir());
+  if (!result.removed && fs.existsSync(target)) throw new Error('This game folder is not an Atlas-managed copy. It has been left unchanged.');
+  return result;
 }
 
 async function removeRimWorldLink(folder: string): Promise<void> {

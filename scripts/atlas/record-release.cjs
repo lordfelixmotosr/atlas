@@ -13,9 +13,9 @@ project.repository='https://github.com/lordfelixmotosr/atlas';
 project.libraryDesign.onlinePublishing='Signed GitHub Release assets from lordfelixmotosr/atlas; restricted release redirects, daily checks, offline starter feed retained';
 project.buildPhases=project.buildPhases.filter(entry=>!entry.startsWith(version+':'));
 project.acceptanceResults.passed=project.acceptanceResults.passed.filter(entry=>!entry.startsWith(version+' '));
-project.buildPhases.push(version+': Claude OAuth uses Chromium transport for token exchange and refresh; bounded timeout, cancellation and concise recovery messages');
-project.implementation.claudeOAuth='Endpoint-scoped Chromium token transport; no automatic replay of potentially consumed authorization codes; cancellation and timeout; no token bodies in error diagnostics';
-project.acceptanceResults.passed.push(version+' 21 Claude OAuth, usage and thinking-control regression tests passed; source type checking passed',version+' isolated Windows Chromium token-endpoint probe reached the provider with no credentials; production startup and second-launch checks passed; real account approval remains a user action',version+' portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks; compact update includes the patched OAuth dependency and transport');
+project.buildPhases.push(version+': Uninstall from RimWorld in the existing mod menu; retain workspace and publication identity; serialized atomic removal with Windows lock checks');
+project.implementation.modUninstall='Owned runtime/junction only; game closed and no active agent/build work; preserves workspace/chats/Workshop/subscriptions/load order; atomic move outside Mods with bounded retries and explicit cleanup paths; durable removal marker prevents automatic reinstallation';
+project.acceptanceResults.passed.push(version+' 51 uninstall, install, runtime history/release and scan regression tests passed, including native Windows DLL and directory locks; source type checking passed',version+' isolated native UI verified menu visibility, named confirmation, cancellation without IPC, blocked removal, project retention and bounded narrow layout; production startup and second-launch checks passed',version+' portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks; no user game mod was uninstalled during verification');
 project.release=JSON.parse(fs.readFileSync(path.join(out,'Atlas-'+version+'-checksums.json')));
 fs.writeFileSync(path.join(root,'atlas.project.json'),JSON.stringify(project,null,2)+'\n');
 fs.copyFileSync(path.join(out,'Atlas-'+version+'-checksums.json'),path.join(root,'release-result.json'));
@@ -33,11 +33,11 @@ If you need to configure the signed source, open Knowledge > Knowledge update se
 https://github.com/lordfelixmotosr/atlas/releases/latest/download/
 
 New in this release:
-Claude token exchange and refresh use Chromium networking to address intermittent Node ECONNRESET failures observed on Windows. Errors now provide concise recovery instructions, cancellation reaches the token request, and the exchange has a 30-second timeout.
-Interrupted token requests are not automatically replayed: the server may already have consumed the authorization code. Click Sign in again for a fresh attempt. The browser callback acknowledges receipt and directs you back to Atlas to finish.
-The compact updater includes the patched OAuth dependency. Current thinking preferences, project paths, mods, chats and saved accounts are preserved. Other providers and chat transports retain their existing behavior.
+Open a project and choose More mod actions (the three-dot menu) > Uninstall from RimWorld. The option appears for Atlas-managed runtime copies and older workspace junctions. Confirm the named game copy to remove it while keeping the Atlas project, source files, chats and publication identity.
+Save and close RimWorld first. Active agent work or C# compilation blocks removal. Uninstall shares the install queue and checks Windows file locks. The runtime moves outside Mods before cleanup; any retained cleanup folder is reported. Ordinary launches and library scans do not recreate a successfully removed runtime. Test or Sync can explicitly install it again.
+Workshop files/subscriptions, the normal ModsConfig.xml and saved runtime history remain unchanged. A subscribed Workshop copy can still appear in the game. Current thinking preferences, project paths, mods, chats and saved accounts are preserved.
 
-Validated with 21 OAuth, usage and thinking-control regression checks, source type checking, credential-free Windows endpoint probes and production startup/second-launch checks. A real account sign-in still requires browser approval by the account holder.
+Validated with 51 runtime/install/uninstall regression checks, real Windows DLL/directory sharing locks, source type checking, isolated native UI checks and production startup/second-launch checks. No user game mod was removed during verification.
 Knowledge updates require reviewed versions published by the maintainer. Existing packs work offline. Windows executable code signing is separate from Atlas's signed feed and pack envelopes.
 See README-ATLAS.md for details.
 `);

@@ -3,13 +3,14 @@ const fs=require('node:fs'),path=require('node:path'),{createRequire}=require('n
 process.chdir(path.resolve(__dirname,'../..'));
 const version=JSON.parse(fs.readFileSync('package.json')).version;
 const {buildSync}=createRequire(require.resolve('vite'))('esbuild');
-const base=path.resolve('dist/Atlas-'+version),root=path.resolve('build-check/redesign-electron');
+const uninstall=process.argv.includes('--uninstall');
+const base=path.resolve('dist/Atlas-'+version),root=path.resolve('build-check/'+(uninstall?'uninstall-electron':'redesign-electron'));
 fs.mkdirSync(path.join(root,'resources'),{recursive:true});
 for(const e of fs.readdirSync(base,{withFileTypes:true}))if(e.isFile()&&e.name!=='Atlas.exe')fs.copyFileSync(path.join(base,e.name),path.join(root,e.name));
 fs.cpSync(path.join(base,'locales'),path.join(root,'locales'),{recursive:true});
 const original=fs.readFileSync(path.join(base,'resources/app.asar')),parsed={header:{files:{}},files:[]};
 asar.add(parsed,'package.json',Buffer.from(JSON.stringify({name:'atlas-redesign-fixture',version:'0.0.0',main:'main.cjs'})));
-asar.add(parsed,'main.cjs',fs.readFileSync('tests/redesign-native.cjs'));
+asar.add(parsed,'main.cjs',fs.readFileSync(uninstall?'tests/mod-uninstall-native.cjs':'tests/redesign-native.cjs'));
 const archive=asar.write(parsed);fs.writeFileSync(path.join(root,'resources/app.asar'),archive);
 fs.writeFileSync(path.join(root,'Atlas.exe'),asar.patchExe(fs.readFileSync(path.join(base,'Atlas.exe')),asar.sha(asar.read(original).raw),asar.sha(asar.read(archive).raw)));
 buildSync({entryPoints:['tests/redesign-fixture.tsx'],outfile:'build-check/redesign-ui.js',bundle:true,format:'iife',platform:'browser',jsx:'automatic',loader:{'.png':'dataurl'},alias:{'@':path.resolve('src')},define:{'import.meta.env.DEV':'false','process.env.NODE_ENV':'"production"'}});

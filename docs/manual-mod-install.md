@@ -18,6 +18,14 @@ If the game is running, Atlas asks the user to save and confirm closing it. A fa
 
 First installations still use Sync to game or a test launch. Atlas refuses to overwrite an unmanaged directory. Dependency detection includes transitive workspace dependencies and companions saved after the last successful test. Plans are checked again when accepting a close/warning confirmation; a changed package requires fresh confirmation.
 
+## Uninstall from RimWorld and keep the project
+
+In an open project's **⋯ More mod actions** menu, choose **Uninstall from RimWorld…**. This appears only for an Atlas-owned runtime copy or a legacy junction to that project. Review the named mod and confirm **Uninstall game copy**. Cancel makes no filesystem changes.
+
+RimWorld must be closed and agent/build work must finish first. Atlas removes only the game-folder copy, retaining the workspace, development files, chats, Workshop publication identity and previous-runtime history. A game-written Workshop ID is copied back before removal. Unmanaged local installations and Workshop files are not removed. Normal ModsConfig.xml and subscriptions are unchanged, so a subscribed copy may remain visible.
+
+Removal shares the install queue and retries transient Windows locks. The whole copy moves outside Mods before cleanup, so rename or DLL locks leave the installed files intact. An incomplete cleanup is reported with its retained path. A durable removal marker prevents missing-mirror recovery from undoing an intentional uninstall after a crash. Library scans and ordinary launches leave it uninstalled; an explicit Test, Sync or Restore operation may install it again.
+
 ## Library scans and duplicate entries
 
 Opening Atlas or refreshing the library does not install workspace mods. Active package IDs alone do not authorize copying a workspace into the game's Mods directory. This keeps **Unsync** effective when the same package remains enabled. Explicit Sync, Install and Test still install runtime files; launches still refresh previously managed installations and recover missing recorded runtime mirrors.

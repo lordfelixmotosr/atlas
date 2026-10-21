@@ -6,7 +6,7 @@ import type {RegistrySnapshot} from '../registry/types.js';
 
 export interface DllChange {path: string; action: 'added' | 'modified' | 'removed'}
 export interface ModDllUpdate {folder: string; name: string; changes: DllChange[]; error?: string}
-export interface DllUpdateOverview {running: boolean; pending: boolean; mods: ModDllUpdate[]; error?: string;previous?:{savedAt:number;files:number;bytes:number}|null}
+export interface DllUpdateOverview {running: boolean; pending: boolean; installed?: boolean; mods: ModDllUpdate[]; error?: string;previous?:{savedAt:number;files:number;bytes:number}|null}
 export type RuntimeInstallMode='install'|'restore';
 export interface RuntimeFileChange {path:string;action:'added'|'modified'|'removed';beforeBytes:number;afterBytes:number}
 export interface RuntimeModPreview {folder:string;name:string;changes:RuntimeFileChange[];unchanged:number;runtimeBytes:number;previousSavedAt?:number}

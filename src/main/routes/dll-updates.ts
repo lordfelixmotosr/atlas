@@ -6,7 +6,7 @@ import {getConversation} from '../../agent/conversations.js';
 import {getRegistry} from '../../agent/registry/index.js';
 import {isRimWorldRunning,quitRimWorld} from '../../agent/rimworld/game.js';
 import {syncModToGame} from '../../agent/workspace.js';
-import {withRuntimeSync,previousRuntimeInfo,restoreRuntimeMirror} from '../../agent/rimworld/runtime-mirror.js';
+import {withRuntimeSync,previousRuntimeInfo,restoreRuntimeMirror,ownedMirror,isLegacyWorkspaceLink} from '../../agent/rimworld/runtime-mirror.js';
 import {previewRuntimeMod} from '../../agent/rimworld/install-preview.js';
 import {runtimeSignature} from '../../agent/rimworld/release-package.js';
 import {isBuildInProgress} from '../../agent/rimworld/build-state.js';
@@ -36,7 +36,8 @@ export function registerDllUpdateRoutes(ctx: RouteContext): void {
         catch(error){mods.push({folder:name,name,changes:[],error:String(error)});}
       }
       let previous=null;try{previous=await previousRuntimeInfo(path.join(root,folder),path.join(game,folder),getMirrorStateDir());}catch{/* invalid history is reported when explicitly opened */}
-      return {running:await isRimWorldRunning(),pending:mods.some(m=>m.changes.length>0),mods,error:mods.find(m=>m.error)?.error,previous};
+      const installed=await ownedMirror(path.join(root,folder),path.join(game,folder),getMirrorStateDir())||await isLegacyWorkspaceLink(path.join(root,folder),path.join(game,folder));
+      return {running:await isRimWorldRunning(),pending:mods.some(m=>m.changes.length>0),installed,mods,error:mods.find(m=>m.error)?.error,previous};
     })();cache.set(folder,{at:Date.now(),task});return task;
   };
   ctx.ipc.handle('atlas:mods:dll-update-state',(_evt,folder:string,conversationId:string)=>state(folder,conversationId));

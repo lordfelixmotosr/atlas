@@ -1,4 +1,12 @@
-# Atlas 0.3.1 portable
+# Atlas 0.3.2 portable
+
+## 0.3.2 Uninstall a game copy
+
+Open a project and choose **⋯ → Uninstall from RimWorld…**. The action appears when Atlas detects its managed runtime copy (or an older workspace junction) in RimWorld's Mods folder. Confirm the named mod to remove it. Your Atlas project, source files, chats, Workshop ID and saved previous runtime stay available. Workshop subscriptions and the normal game load order are unchanged; a subscribed Workshop copy can still appear in RimWorld.
+
+Save and close RimWorld first. Active agent work or C# compilation blocks removal. Atlas serializes uninstall with installation, checks ownership, and moves the runtime out of Mods before cleanup. Windows locks leave the installed directory intact. If cleanup cannot finish, Atlas reports the retained folder outside Mods. Ordinary launches and library scans do not reinstall a successfully removed copy; explicitly testing or syncing that project can install it again.
+
+Verified with 51 runtime/install/uninstall regression tests, including real Windows DLL/directory locks, plus source type checking and a native UI fixture for confirmation, cancellation, blocked removal and project retention. No user mod was uninstalled during verification.
 
 ## 0.3.1 Claude sign-in repair
 
