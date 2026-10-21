@@ -1,4 +1,12 @@
-# Atlas 0.3.0 portable
+# Atlas 0.3.1 portable
+
+## 0.3.1 Claude sign-in repair
+
+Claude's authorization-code exchange and session refresh now use Electron's Chromium networking instead of Node fetch. On the affected Windows connection, Node intermittently returned `ECONNRESET` while Chromium reached the same endpoint. This change is limited to Claude's token endpoint; chat requests and other providers retain their existing transports.
+
+Sign-in has a 30-second exchange timeout, respects cancellation, and shows concise recovery instructions. Interrupted exchanges are not automatically replayed because the server may already have consumed the code or rotated a refresh token. Click **Sign in** again to start a fresh attempt. The manual-code prompt clears after the browser callback, and the callback page acknowledges authorization without claiming that token exchange has finished.
+
+Verified with OAuth and Claude-usage regression tests, isolated Windows endpoint checks with no credentials, and native startup checks. Completing a real account sign-in still requires the account holder's browser approval. Existing sign-ins, mods, chats and thinking settings are retained.
 
 ## 0.3.0 workspace redesign
 

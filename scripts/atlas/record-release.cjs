@@ -13,9 +13,9 @@ project.repository='https://github.com/lordfelixmotosr/atlas';
 project.libraryDesign.onlinePublishing='Signed GitHub Release assets from lordfelixmotosr/atlas; restricted release redirects, daily checks, offline starter feed retained';
 project.buildPhases=project.buildPhases.filter(entry=>!entry.startsWith(version+':'));
 project.acceptanceResults.passed=project.acceptanceResults.passed.filter(entry=>!entry.startsWith(version+' '));
-project.buildPhases.push(version+': Projects, Workspace, Knowledge and Settings redesign; Activity drawer; responsive focus layouts and in-memory file draft retention');
-project.implementation.ui='Four main destinations, separate open-project tabs, grouped actions, searchable projects and references, full-page settings, Activity drawer; narrow workspaces show one pane at a time';
-project.acceptanceResults.passed.push(version+' 45 focused editor, activity, thinking, installation and Workshop-note tests passed; source type checking passed',version+' isolated native renderer verified navigation, search, account settings, draft restoration and editing, discard cancellation, explicit discard, paused hidden-workspace scans, Activity drawer, and dark/light responsive layouts; production startup and second-launch checks passed',version+' portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks');
+project.buildPhases.push(version+': Claude OAuth uses Chromium transport for token exchange and refresh; bounded timeout, cancellation and concise recovery messages');
+project.implementation.claudeOAuth='Endpoint-scoped Chromium token transport; no automatic replay of potentially consumed authorization codes; cancellation and timeout; no token bodies in error diagnostics';
+project.acceptanceResults.passed.push(version+' 21 Claude OAuth, usage and thinking-control regression tests passed; source type checking passed',version+' isolated Windows Chromium token-endpoint probe reached the provider with no credentials; production startup and second-launch checks passed; real account approval remains a user action',version+' portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks; compact update includes the patched OAuth dependency and transport');
 project.release=JSON.parse(fs.readFileSync(path.join(out,'Atlas-'+version+'-checksums.json')));
 fs.writeFileSync(path.join(root,'atlas.project.json'),JSON.stringify(project,null,2)+'\n');
 fs.copyFileSync(path.join(out,'Atlas-'+version+'-checksums.json'),path.join(root,'release-result.json'));
@@ -33,12 +33,11 @@ If you need to configure the signed source, open Knowledge > Knowledge update se
 https://github.com/lordfelixmotosr/atlas/releases/latest/download/
 
 New in this release:
-Projects, Workspace, Knowledge and Settings replace the crowded toolbar. Installed mods and their load order are under Projects. Open-project tabs have their own strip. Workspace has Files, Assets, Test and Publish sections, a Layout menu and the existing assistant. Narrow windows show one workspace pane at a time. Activity opens a drawer.
-Knowledge provides reference search, custom skills and pack management. Application updates have their own Settings section.
-Unsaved editor tabs and undo state survive navigation and project switches. Closing a project with drafts asks before discarding. This retention is in memory, not crash recovery. Hidden workspaces pause file/asset scans and installation polling.
-Current thinking preferences, project paths and accounts are preserved. Manual install previews, restore, safe runtime mirrors, changes, Workshop publication and signed update recovery remain available.
+Claude token exchange and refresh use Chromium networking to address intermittent Node ECONNRESET failures observed on Windows. Errors now provide concise recovery instructions, cancellation reaches the token request, and the exchange has a 30-second timeout.
+Interrupted token requests are not automatically replayed: the server may already have consumed the authorization code. Click Sign in again for a fresh attempt. The browser callback acknowledges receipt and directs you back to Atlas to finish.
+The compact updater includes the patched OAuth dependency. Current thinking preferences, project paths, mods, chats and saved accounts are preserved. Other providers and chat transports retain their existing behavior.
 
-Validated with 45 focused regression checks, source type checking, isolated native UI checks and production startup/second-launch checks. UI fixtures do not call AI providers, launch RimWorld or publish to Steam.
+Validated with 21 OAuth, usage and thinking-control regression checks, source type checking, credential-free Windows endpoint probes and production startup/second-launch checks. A real account sign-in still requires browser approval by the account holder.
 Knowledge updates require reviewed versions published by the maintainer. Existing packs work offline. Windows executable code signing is separate from Atlas's signed feed and pack envelopes.
 See README-ATLAS.md for details.
 `);

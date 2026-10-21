@@ -30,6 +30,7 @@ const bridge17=path.join(root,'build-check/bridge17/Assemblies');
 require('./stage-rimworld-bridge.cjs').stage(base,bridge17,path.join(output,'resources/modmixer-bridge'));
 fs.copyFileSync('scripts/atlas/inputs/forge_bridge.py',path.join(output,'tools/forge/forge_bridge.py'));
 fs.copyFileSync('src/atlas/oauth-page.mjs',path.join(output,'resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/oauth-page.js'));
+require('./patch-claude-oauth.cjs').installClaudeOAuthPatch(path.join(output,'resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth'));
 const signedSeed=path.join(root,'release-assets/seed');
 if(fs.existsSync(path.join(signedSeed,'index.atlas.json'))){
  const library=require('../../src/atlas/library.cjs'),trust=JSON.parse(fs.readFileSync(path.join(output,'resources/atlas/trust.json'))),index=library.verifyEnvelope(fs.readFileSync(path.join(signedSeed,'index.atlas.json')),trust,Date.now(),true);

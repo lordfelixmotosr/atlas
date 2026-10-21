@@ -2138,6 +2138,7 @@ export class AgentHost {
             return this.awaitPrompt(providerId, {
               message: 'Paste the authorization code from your browser:',
               placeholder: 'Authorization code',
+              signal: prompt.signal,
             });
           }
           // Atlas targets individual users, not orgs. pi's GitHub Copilot

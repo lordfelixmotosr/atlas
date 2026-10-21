@@ -30,6 +30,8 @@ compact_roots = {
     "Atlas.exe", "LICENSE", "NOTICE", "README-ATLAS.md", "atlas-build.json",
     "resources/app.asar", "resources/modmixer-bridge/About/About.xml",
     "resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/oauth-page.js",
+    "resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/anthropic.js",
+    "resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/atlas-claude-oauth-transport.js",
     "resources/modmixer-bridge/1.7/Assemblies/ModMixerBridge.dll",
     "resources/modmixer-bridge/1.7/Assemblies/0Harmony.dll",
     "resources/modmixer-bridge/LoadFolders.xml",
