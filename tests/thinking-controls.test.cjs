@@ -141,10 +141,13 @@ test('refreshed RimWorld prompt requires targeted source checks and verification
   };
   const prompt = load('agent/system-prompt.ts', imports);
   const text = prompt.buildRimworldSystemPrompt({type: 'new'});
-  assert.equal(prompt.PROMPT_VERSION, 4);
+  assert.equal(prompt.PROMPT_VERSION, 5);
   assert.match(text, /operating inside Atlas/);
   assert.match(text, /verify unfamiliar Def fields/);
   assert.match(text, /run build_mod, read the diagnostics/);
   assert.match(text, /Keep my chosen thinking settings/);
+  assert.match(text, /Only design a preview when the user explicitly asks/);
+  assert.match(text, /Never overwrite, delete, rename or replace About\/Preview\.png/);
+  assert.match(text, /separate Workshop preview candidate/);
   assert.doesNotMatch(text, /half-right code|~5 read-only|write.*speculatively/);
 });

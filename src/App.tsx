@@ -591,7 +591,7 @@ export function App() {
   // "Generate Preview Image" hands off to the chat panel: switch the build
   // sub-panel from publish → chat so the user can watch the agent compose
   // the image, then auto-submit a request. The agent's system prompt
-  // teaches it to write to {folder}/About/Preview.png at 1280×720.
+  // requests a separate candidate for explicit review in the Publish panel.
   const generatePreview = async () => {
     if (!focusedTab || !hasAi) return;
     const folder = focusedTab.folder;
@@ -610,7 +610,7 @@ export function App() {
         : '';
       await window.modmixer.send(
         conversationId,
-        `Generate a Steam Workshop preview image for "${displayName}" and save it to ${folder}/About/Preview.png. Use render_preview — pick a template, choose a sprite from Textures/ if any exist, and pick a background and title treatment that fits the mod's tone.${bgInstruction}`,
+        `Generate a proposed Steam Workshop preview image for "${displayName}". Use render_preview to save a separate candidate, preserving the current preview. Pick a template, choose a sprite from Textures/ if any exist, and pick a background and title treatment that fits the mod's tone. Tell me to review the candidate in Publish and choose Use this preview if I want to apply it.${bgInstruction}`,
       );
     } catch (err) {
       console.error(err);

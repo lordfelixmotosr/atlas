@@ -5,7 +5,7 @@ const repository='lordfelixmotosr/atlas';
 let credential;
 function auth(){
  if(credential!==undefined)return credential;
- try{const raw=cp.execFileSync('git',['credential','fill'],{input:'protocol=https\nhost=github.com\npath='+repository+'.git\n\n',encoding:'utf8',env:{...process.env,GIT_TERMINAL_PROMPT:'0',GCM_INTERACTIVE:'Never'},stdio:['pipe','pipe','pipe'],windowsHide:true});credential=raw.split(/\r?\n/).find(line=>line.startsWith('password='))?.slice(9)||'';}catch{credential='';}
+ try{const raw=cp.execFileSync('git',['credential','fill'],{input:'protocol=https\nhost=github.com\nusername='+repository.split('/')[0]+'\npath='+repository+'.git\n\n',encoding:'utf8',env:{...process.env,GIT_TERMINAL_PROMPT:'0',GCM_INTERACTIVE:'Never'},stdio:['pipe','pipe','pipe'],windowsHide:true});credential=raw.split(/\r?\n/).find(line=>line.startsWith('password='))?.slice(9)||'';}catch{credential='';}
  return credential;
 }
 async function api(endpoint,options={}){
@@ -20,6 +20,8 @@ async function main(){
  const mode=process.argv[2],root=path.resolve(__dirname,'../..'),version=JSON.parse(fs.readFileSync(path.join(root,'package.json'))).version;
  if(mode==='inspect'){const repo=await api('');console.log(JSON.stringify({repository:repo.full_name,private:repo.private,defaultBranch:repo.default_branch,authenticated:!!credential,push:repo.permissions?.push??null},null,2));return;}
  if(mode!=='publish')throw new Error('Use inspect or publish.');
+ const holdPath=path.join(root,'build-check/publish-hold.json');
+ if(fs.existsSync(holdPath)){const approval=JSON.parse(fs.readFileSync(holdPath,'utf8'));if(approval.blocked||approval.approvedVersion&&approval.approvedVersion!==version)throw new Error('Publishing this version is on hold until the user explicitly authorises it. No GitHub request was sent.');}
  const repo=await api('');if(repo.private)throw new Error('The release feed requires a public repository; no visibility changes were made.');if(!auth())throw new Error('GitHub sign-in is required to publish.');
  const out=path.resolve(root,'../outputs'),checks=JSON.parse(fs.readFileSync(path.join(out,'Atlas-'+version+'-checksums.json'))),feed=path.join(out,'Atlas-update-feed');
  const body=fs.readFileSync(path.join(root,'build-check/github-release-notes.md'),'utf8');
@@ -38,6 +40,7 @@ async function main(){
   const url=release.upload_url.replace(/\{.*$/,'')+'?name='+encodeURIComponent(name),stream=fs.createReadStream(file);
   await api(url,{method:'POST',headers:{'Content-Type':'application/octet-stream','Content-Length':String(fs.statSync(file).size)},body:stream,duplex:'half'});console.log('Uploaded '+name);
  }
+ if(process.argv.includes('--keep-draft')){console.log('Draft ready '+release.html_url);return;}
  const published=await api('/releases/'+release.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({draft:false})});console.log('Published '+published.html_url);
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1});

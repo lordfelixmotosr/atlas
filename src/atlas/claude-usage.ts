@@ -16,6 +16,7 @@ export type ClaudeUsage = {
 };
 
 type UsageHost = {
+  isOAuthLoginPending?(provider: string): boolean;
   modelRuntime?: {
     isUsingOAuth(provider: string): boolean;
     getAuth(provider: string): Promise<{auth?: {apiKey?: string}} | undefined>;
@@ -23,7 +24,8 @@ type UsageHost = {
 };
 
 type UsageCache = {
-  key: string;
+  runtime: NonNullable<UsageHost['modelRuntime']>;
+  key: string | null;
   value: ClaudeUsage | null;
   checkedAt: number;
   retryAt: number;
@@ -89,24 +91,48 @@ export function parseClaudeUsage(payload: unknown, now = Date.now()): ClaudeUsag
 export async function getClaudeUsage(host: UsageHost, force = false): Promise<ClaudeUsage> {
   const runtime = host.modelRuntime;
   if (!runtime) return empty('loading');
-  let token: string | undefined;
+  if (host.isOAuthLoginPending?.('anthropic')) return empty('loading');
+  let oauth: boolean;
   try {
-    const oauth = runtime.isUsingOAuth('anthropic');
-    const auth = await runtime.getAuth('anthropic');
-    token = auth?.auth?.apiKey;
-    if (!token) { clearClaudeUsage(); return empty('disconnected'); }
-    if (!oauth) { clearClaudeUsage(); return empty('api-key'); }
-  } catch { clearClaudeUsage(); return empty('unavailable'); }
-
-  const key = createHash('sha256').update(token).digest('hex');
-  if (!cache || cache.key !== key) cache = {key, value: null, checkedAt: 0, retryAt: 0, inflight: null};
+    oauth = runtime.isUsingOAuth('anthropic');
+  } catch { return empty('unavailable'); }
+  if (!oauth) {
+    // This local auth lookup cannot refresh an OAuth credential. Detect logout
+    // and API-key changes immediately instead of serving cached plan usage.
+    if (cache) clearClaudeUsage();
+    try {return empty((await runtime.getAuth('anthropic'))?.auth?.apiKey ? 'api-key' : 'disconnected');}
+    catch {return empty('unavailable');}
+  }
+  if (cache && cache.runtime !== runtime) clearClaudeUsage();
+  if (!cache) cache = {runtime, key: null, value: null, checkedAt: 0, retryAt: 0, inflight: null};
   const current = cache;
+  // getAuth may POST to the token endpoint for expired credentials. It must
+  // share the same single-flight and backoff as the usage request itself.
   if (current.inflight) return current.inflight;
   const now = Date.now();
   if (now < current.retryAt) return current.value ?? empty('unavailable');
   if (current.value && now - current.checkedAt < (force ? 30000 : 300000)) return current.value;
   const requestEpoch = epoch;
   current.inflight = (async () => {
+    const store = (value: ClaudeUsage, retryAt = 0): ClaudeUsage => {
+      if (cache !== current || epoch !== requestEpoch) return empty('loading');
+      current.value = value;
+      current.checkedAt = Date.now();
+      current.retryAt = retryAt;
+      return value;
+    };
+    const failed = (): ClaudeUsage => current.value?.updatedAt ? {...current.value, status: 'stale'} : empty('unavailable');
+    let token: string | undefined;
+    try {token = (await runtime.getAuth('anthropic'))?.auth?.apiKey;}
+    catch {
+      // Do not clear this failure state: visibility events, manual refreshes
+      // and multiple open chats must not repeatedly trigger token refresh.
+      return store(failed(), Date.now() + 300000);
+    }
+    if (cache !== current || epoch !== requestEpoch) return empty('loading');
+    if (!token) return store(empty('disconnected'));
+    const key = createHash('sha256').update(token).digest('hex');
+    if (current.key !== key) {current.key = key;current.value = null;}
     let value: ClaudeUsage;
     let retryAt = 0;
     try {
@@ -120,13 +146,9 @@ export async function getClaudeUsage(host: UsageHost, force = false): Promise<Cl
       }
       value = parseClaudeUsage(await response.json());
     } catch {
-      value = current.value?.updatedAt ? {...current.value, status: 'stale'} : empty('unavailable');
+      value = failed();
     }
-    if (cache !== current || epoch !== requestEpoch) return empty('loading');
-    current.value = value;
-    current.checkedAt = Date.now();
-    current.retryAt = retryAt;
-    return value;
+    return store(value, retryAt);
   })();
   try { return await current.inflight; }
   finally { current.inflight = null; }

@@ -32,6 +32,7 @@ compact_roots = {
     "resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/oauth-page.js",
     "resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/anthropic.js",
     "resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/atlas-claude-oauth-transport.js",
+    "resources/node_modules/@earendil-works/pi-ai/dist/auth/oauth/claude-oauth-state.cjs",
     "resources/modmixer-bridge/1.7/Assemblies/ModMixerBridge.dll",
     "resources/modmixer-bridge/1.7/Assemblies/0Harmony.dll",
     "resources/modmixer-bridge/LoadFolders.xml",
@@ -42,7 +43,7 @@ def compact(relative):
 
 output.mkdir(parents=True, exist_ok=True)
 receipts = {}
-for kind in ("portable", "full-update", "application-update"):
+for kind in (("application-update",) if "--application-only" in sys.argv[3:] else ("portable", "full-update", "application-update")):
     members = [(path, relative) for path, relative in files
                if (kind == "portable" or not relative.startswith("updates/"))
                and (kind != "application-update" or compact(relative))]

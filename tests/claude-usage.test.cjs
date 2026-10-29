@@ -9,8 +9,10 @@ const ts = require('../build-tools/native/node_modules/typescript');
 function fixture() {
   const clock = {now: 1900000000000};
   const calls = [];
+  const authCalls = [];
   let oauth = true;
   let token = 'fixture-oauth-token';
+  let authResponse = async () => token ? {auth: {apiKey: token}} : undefined;
   let response = async () => ({ok: true, json: async () => ({
     five_hour: {utilization: 25, resets_at: '2030-03-17T00:00:00Z'},
     seven_day: {utilization: 80, resets_at: '2030-03-23T00:00:00Z'},
@@ -28,11 +30,12 @@ function fixture() {
   }, {filename: file})(require, module, module.exports);
   const host = {modelRuntime: {
     isUsingOAuth: () => oauth,
-    getAuth: async () => token ? {auth: {apiKey: token}} : undefined,
+    getAuth: async () => {authCalls.push(clock.now);return authResponse();},
   }};
-  return {api: module.exports, host, clock, calls,
+  return {api: module.exports, host, clock, calls, authCalls,
     setOAuth: value => {oauth = value;}, setToken: value => {token = value;},
     respond: value => {response = value;},
+    authRespond: value => {authResponse = value;},
   };
 }
 
@@ -72,6 +75,7 @@ test('Claude plan request uses only Claude OAuth, caches reads, and never calls 
   assert.equal(f.calls[0].options.headers.Authorization, 'Bearer fixture-oauth-token');
   await f.api.getClaudeUsage(f.host);
   assert.equal(f.calls.length, 1);
+  assert.equal(f.authCalls.length, 1, 'cached usage does not resolve or refresh auth again');
   f.setOAuth(false);
   assert.equal((await f.api.getClaudeUsage(f.host)).status, 'api-key');
   assert.equal(f.calls.length, 1);
@@ -92,6 +96,7 @@ test('Claude usage stays stale on a failed refresh and backs off after 429', asy
   f.clock.now += 300001;
   await f.api.getClaudeUsage(f.host, true);
   assert.equal(f.calls.length, 2, '429 backs off even after manual refresh');
+  assert.equal(f.authCalls.length, 2, '429 backoff is checked before resolving auth');
 });
 
 test('Claude logout invalidates an in-flight usage response', async () => {
@@ -104,4 +109,100 @@ test('Claude logout invalidates an in-flight usage response', async () => {
   f.api.clearClaudeUsage();
   resolve({ok: true, json: async () => ({five_hour: {utilization: 99}})});
   assert.equal((await pending).status, 'loading');
+});
+
+test('auth failure backs off before getAuth even with repeated forced usage refreshes', async () => {
+  const f = fixture();
+  f.authRespond(async () => {throw new Error('OAuth refresh limited');});
+  assert.equal((await f.api.getClaudeUsage(f.host)).status, 'unavailable');
+  for (let i=0;i<10;i++) await f.api.getClaudeUsage(f.host, true);
+  f.clock.now += 299999;
+  await f.api.getClaudeUsage(f.host, true);
+  assert.equal(f.authCalls.length, 1);
+  assert.equal(f.calls.length, 0);
+  f.clock.now += 1;
+  await f.api.getClaudeUsage(f.host);
+  assert.equal(f.authCalls.length, 2, 'auth may be retried once the bounded cooldown ends');
+});
+
+test('concurrent usage callers share one pending auth refresh and logout prevents a late usage request', async () => {
+  const f=fixture();let resolveAuth;
+  f.authRespond(()=>new Promise(resolve=>{resolveAuth=resolve;}));
+  const pending=Array.from({length:8},()=>f.api.getClaudeUsage(f.host,true));
+  assert.equal(f.authCalls.length,1);
+  f.api.clearClaudeUsage();
+  resolveAuth({auth:{apiKey:'late-account-token'}});
+  assert((await Promise.all(pending)).every(result=>result.status==='loading'));
+  assert.equal(f.calls.length,0,'logout prevents sending the now-stale token to the usage endpoint');
+});
+
+test('sign-in invalidation clears auth-failure backoff and changed credentials cannot display another account usage', async () => {
+  const f=fixture();
+  const first=await f.api.getClaudeUsage(f.host);
+  f.clock.now += 300001;
+  f.authRespond(async()=>{throw new Error('Expired auth');});
+  const stale=await f.api.getClaudeUsage(f.host);
+  assert.equal(stale.status,'stale');assert.equal(stale.updatedAt,first.updatedAt);
+  f.api.clearClaudeUsage();
+  f.authRespond(async()=>({auth:{apiKey:'new-account-token'}}));
+  f.respond(async()=>{throw new Error('Usage unavailable');});
+  const next=await f.api.getClaudeUsage(f.host);
+  assert.equal(next.status,'unavailable');assert.equal(next.windows.length,0);assert.equal(next.updatedAt,undefined);
+  assert.equal(f.authCalls.length,3);
+});
+
+test('runtime replacement and token changes invalidate cached account usage', async()=>{
+  const f=fixture();await f.api.getClaudeUsage(f.host);
+  f.host.modelRuntime={isUsingOAuth:()=>true,getAuth:async()=>({auth:{apiKey:'replacement-account-token'}})};
+  f.respond(async()=>{throw new Error('New account usage unavailable');});
+  assert.equal((await f.api.getClaudeUsage(f.host)).status,'unavailable');
+  assert.equal(f.calls.length,2);
+  f.api.clearClaudeUsage();f.respond(async()=>({ok:true,json:async()=>({five_hour:{utilization:10}})}));
+  await f.api.getClaudeUsage(f.host);
+  f.clock.now += 300001;
+  f.host.modelRuntime.getAuth=async()=>({auth:{apiKey:'another-account-token'}});
+  f.respond(async()=>{throw new Error('New account usage unavailable');});
+  const result=await f.api.getClaudeUsage(f.host);
+  assert.equal(result.status,'unavailable');assert.equal(result.windows.length,0);
+});
+
+test('usage does not resolve auth when the host reports a pending Claude login', async()=>{
+  const f=fixture();let pending=true;
+  f.host.isOAuthLoginPending=provider=>provider==='anthropic'&&pending;
+  assert.equal((await f.api.getClaudeUsage(f.host,true)).status,'loading');
+  assert.equal(f.authCalls.length,0);assert.equal(f.calls.length,0);
+  pending=false;
+  assert.equal((await f.api.getClaudeUsage(f.host)).status,'ready');
+});
+
+function usageControlFixture() {
+  const effects=[],states=[],calls=[],intervals=[],listeners=new Map();let cursor=0,oauthHandler;
+  const hooks={useRef:value=>({current:value}),useEffect:fn=>effects.push(fn),useState:initial=>{
+    const index=cursor++;states[index]=initial;
+    return [initial,value=>{states[index]=typeof value==='function'?value(states[index]):value;}];
+  }};
+  const file=path.resolve(__dirname,'../src/atlas/claude-usage-control.tsx');
+  const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX},fileName:file}).outputText;
+  const module={exports:{}};
+  vm.runInNewContext('(function(require,module,exports){'+code+'\n})',{
+    Date,window:{modmixer:{getClaudeUsage:async force=>{calls.push(force);return {status:'ready',windows:[],updatedAt:1};},onOAuthEvent:handler=>{oauthHandler=handler;return()=>{};}}},
+    document:{hidden:false,addEventListener:(name,handler)=>listeners.set(name,handler),removeEventListener:name=>listeners.delete(name)},
+    setInterval:fn=>{intervals.push(fn);return 1;},clearInterval:()=>{},
+  },{filename:file})(name=>name==='react'?hooks:require(name),module,module.exports);
+  const button=module.exports.ClaudeUsageControl({model:{provider:'anthropic'}});
+  const cleanups=effects.map(effect=>effect());
+  return {calls,button,event:payload=>oauthHandler(payload),visible:()=>listeners.get('visibilitychange')(),tick:()=>intervals.forEach(fn=>fn()),cleanup:()=>cleanups.forEach(fn=>fn?.())};
+}
+
+test('usage UI pauses auth-related reads throughout login and resumes only after successful credential change',async()=>{
+  const f=usageControlFixture();const settle=()=>new Promise(resolve=>setImmediate(resolve));
+  try{
+    await settle();assert.equal(f.calls.length,1);
+    f.event({type:'login-start',providerId:'anthropic'});
+    for(const type of ['login-progress','prompt-needed','prompt-resolved','login-error','login-cancelled'])f.event({type,providerId:'anthropic'});
+    f.event({type:'links-changed'});f.tick();f.visible();f.button.props.onClick();await settle();
+    assert.equal(f.calls.length,1,'progress, terminal failure, catalog events and timers do not start token work');
+    f.event({type:'login-success',providerId:'anthropic'});await settle();assert.equal(f.calls.length,2);
+    f.event({type:'logout',providerId:'anthropic'});await settle();assert.equal(f.calls.length,3);
+  }finally{f.cleanup();}
 });

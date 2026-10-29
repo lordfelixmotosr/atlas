@@ -1,0 +1,17 @@
+{
+  "portable": {
+    "path": "Atlas-0.3.8-win-x64-portable.zip",
+    "size": 402483685,
+    "sha256": "5e19ba7dffac5a5036a7830e33e8336fe17bd7a655de1e3fdc20e0bb922380f1"
+  },
+  "full-update": {
+    "path": "Atlas-0.3.8-win-x64-full-update.zip",
+    "size": 401901256,
+    "sha256": "d949357ce10da56e6520598db6fdd6467a05594ce504972109d0d8de3c7f6546"
+  },
+  "application-update": {
+    "path": "Atlas-0.3.8-win-x64-application-update.zip",
+    "size": 99821547,
+    "sha256": "f05b61e115d82c6b5486960dfbf50503ebfdd49326b4e568d23eb29a7e96ea7b"
+  }
+}

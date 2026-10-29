@@ -1,4 +1,5 @@
 import {AdaptersSection} from '../atlas/adapters-ui';
+import {SubagentSettingsControl} from '../atlas/subagents-control';
 import {FelixOpenAIAccounts,FelixSpeedControl,FelixUsageControl,FelixAccountControl} from "../atlas/controls";
 import {AtlasApplicationUpdates} from "../atlas/library-ui";
 import { useEffect, useState } from 'react';
@@ -211,7 +212,7 @@ export function AppSettingsDialog({
           </div>
 
           <div className="flex-1 overflow-auto px-5 py-4">
-            {section === 'providers' && <ProvidersSection />}
+            {section === 'providers' && <><SubagentSettingsControl /><ProvidersSection /></>}
             {section === 'appearance' && (
               <AppearanceSection theme={theme} onChange={changeTheme} />
             )}
@@ -750,21 +751,22 @@ function ProvidersSection() {
           setPrompt(null);
           break;
         case 'login-success':
-          setBusyId(null);
-          setProgress(null);
-          setPrompt(null);
+          setBusyId((current) => current === event.providerId ? null : current);
+          setProgress((current) => current?.providerId === event.providerId ? null : current);
+          setPrompt((current) => current?.providerId === event.providerId ? null : current);
           refresh();
           break;
         case 'login-error':
-          setBusyId(null);
-          setProgress(null);
-          setPrompt(null);
+          setBusyId((current) => current === event.providerId ? null : current);
+          setProgress((current) => current?.providerId === event.providerId ? null : current);
+          setPrompt((current) => current?.providerId === event.providerId ? null : current);
           setError(event.message);
+          refresh();
           break;
         case 'login-cancelled':
-          setBusyId(null);
-          setProgress(null);
-          setPrompt(null);
+          setBusyId((current) => current === event.providerId ? null : current);
+          setProgress((current) => current?.providerId === event.providerId ? null : current);
+          setPrompt((current) => current?.providerId === event.providerId ? null : current);
           break;
         case 'logout':
         case 'links-changed':
@@ -1393,6 +1395,20 @@ function ProviderRow({
   onSignOut: () => void;
 }) {
   const [code, setCode] = useState('');
+  const [now, setNow] = useState(Date.now);
+  const retrySeconds = Math.max(0, Math.ceil(((link.retryAt ?? 0) - now) / 1000));
+  const retryCountdown = `${Math.floor(retrySeconds / 60)}:${String(retrySeconds % 60).padStart(2, '0')}`;
+
+  useEffect(() => {
+    setNow(Date.now());
+    if (!link.retryAt || link.retryAt <= Date.now()) return;
+    const timer = window.setInterval(() => {
+      const time = Date.now();
+      setNow(time);
+      if (time >= link.retryAt!) window.clearInterval(timer);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [link.retryAt]);
 
   useEffect(() => {
     if (!prompt) setCode('');
@@ -1429,12 +1445,21 @@ function ProviderRow({
         ) : (
           <button
             onClick={onSignIn}
-            className="rounded-md bg-accent px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-accent-foreground transition-opacity hover:bg-accent-soft"
+            disabled={retrySeconds > 0}
+            className="rounded-md bg-accent px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-accent-foreground transition-opacity hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Sign in
+            {retrySeconds > 0 ? `Try again in ${retryCountdown}` : 'Sign in'}
           </button>
         )}
       </div>
+      {retrySeconds > 0 && (
+        <p className="text-xs text-muted" role="status">
+          {link.retrySource === 'provider'
+            ? 'Claude requested this wait before another sign-in attempt.'
+            : 'Atlas is pausing attempts locally because Claude gave no retry time. The limit may last longer.'}
+          {' '}Sign-in will not retry automatically.
+        </p>
+      )}
       {busy && progress && !prompt && (
         <div className="rounded-md border border-line bg-surface/60 px-3 py-2 text-xs text-ink">
           {progress.message}

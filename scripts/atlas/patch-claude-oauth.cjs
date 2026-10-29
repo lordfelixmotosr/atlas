@@ -36,6 +36,7 @@ function installClaudeOAuthPatch(directory) {
   const result = patchClaudeOAuth(fs.readFileSync(target, 'utf8'));
   const transport = fs.readFileSync(path.join(__dirname, '../../src/atlas/claude-oauth-transport.mjs'));
   fs.writeFileSync(path.join(directory, 'atlas-claude-oauth-transport.js'), transport);
+  fs.copyFileSync(path.join(__dirname, '../../src/atlas/claude-oauth-state.cjs'), path.join(directory, 'claude-oauth-state.cjs'));
   fs.writeFileSync(target, result);
 }
 

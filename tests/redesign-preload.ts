@@ -7,14 +7,34 @@ window.addEventListener('unhandledrejection',event=>window.fixtureErrors.push(St
 window.fixtureCalls=[];
 const model={key:'openai-codex/gpt-6.1-sol',provider:'openai-codex',modelId:'gpt-6.1-sol',label:'ChatGPT — GPT-6.1 Sol',contextWindow:272000,thinking:{levels:['low','medium','high','xhigh','max'],effectiveLevels:{low:'low',medium:'medium',high:'high',xhigh:'xhigh',max:'max'}}};
 const settings={defaultAuthor:'Felix',defaultModLicense:'MIT',analyticsOptIn:false,theme:'dark',model,thinkingLevel:'xhigh',multiChat:false,useCommunityLore:false,autoLaunch:false,dangerouslySkipPermissions:false,selectedGameId:'rimworld',openaiSpeed:'standard',sentenceShortcut:{label:'My shortcut',text:'Check the result in game.'}};
+settings.subagents={enabled:true,mode:'efficient',maxHelpers:4};
+window.fixtureHelperTasks=[];
+window.fixtureHelperConversation='';
+const helperSnapshot=conversationId=>({conversationId,settings:settings.subagents,tasks:window.fixtureHelperTasks.filter(task=>task.conversationId===conversationId)});
+const emitHelpers=conversationId=>window.emitFixture('onSubagentsChanged',helperSnapshot(conversationId));
+window.fixtureSetHelpers=(tasks,conversationId=window.fixtureHelperConversation)=>{window.fixtureHelperTasks=tasks.map(task=>({...task,conversationId}));emitHelpers(conversationId);};
 const mods=['Silvaran Order','One-Piece Uniform','A Rim of Ice and Fire','The Long Night'].map((name,i)=>({folder:`fixture-${i}`,prefs:{game:'rimworld',pinned:i===0,archived:false},about:{name,packageId:'felix.fixture'+i,description:['Build a mercenary order with new uniforms, weapons and missions.','A lightweight uniform with independent material and dye colors.','A world of great houses, unique factions and detailed landscapes.','Survive a winter campaign with new events and threats.'][i]},createdAt:Date.now()-86400000,updatedAt:Date.now()-3600000,publishedFileId:i===1?'123':null,changes:{status:'changed',label:'Unpublished changes',count:i+1}}));
 const library={config:{source:'https://example.invalid/index.atlas.json',autoUpdate:true,lastSuccessAt:new Date().toISOString()},packs:['RimWorld Core','C# & Harmony','RimWorld Forge','Art References'].map((name,i)=>({id:'pack'+i,name,category:i===3?'Art':'Code',version:'1.0.0',description:['Game structures, XML definitions and release conventions.','C# examples, Harmony patches and runtime compatibility.','Mod planning, validation and reusable coding references.','Directional assets, texture formats and style guidance.'][i],gameVersions:['1.6','1.7'],license:'MIT',source:'https://example.invalid',previous:'0.9.0'})),available:[],changes:[],working:false,busy:false};
 const conversation=folder=>({id:'chat-'+folder,title:mods.find(m=>m.folder===folder)?.about.name,scope:{type:'mod',modFolder:folder},game:'rimworld',model,thinkingLevel:'xhigh',createdAt:Date.now(),updatedAt:Date.now()});
 const task={id:'task',kind:'download',title:'Atlas application update',status:'running',phase:'Downloading update',fraction:.42,startedAt:Date.now()-60000,updatedAt:Date.now(),logs:[{at:Date.now(),text:'Verified update found. Downloading the application package.'}]};
 const api={
   getAppVersion:()=> '0.3.0', getSettings:()=>settings, listModels:()=>[model],
+  getSubagents:conversationId=>{window.fixtureHelperConversation=conversationId;return helperSnapshot(conversationId);},
+  setSubagentSettings:patch=>{settings.subagents={...settings.subagents,...patch};if(!settings.subagents.enabled)window.fixtureHelperTasks=window.fixtureHelperTasks.map(task=>['running','queued'].includes(task.status)?{...task,status:'cancelled',phase:'Stopped because helpers are off',lastActivityAt:Date.now()}:task);emitHelpers(window.fixtureHelperConversation);return settings.subagents;},
+  cancelSubagent:(conversationId,id)=>{const task=window.fixtureHelperTasks.find(task=>task.id===id&&task.conversationId===conversationId);if(!task)throw Error('Helper not found');Object.assign(task,{status:'cancelled',phase:'Cancelled',lastActivityAt:Date.now()});emitHelpers(conversationId);},
+  retrySubagent:(conversationId,id)=>{const task=window.fixtureHelperTasks.find(task=>task.id===id&&task.conversationId===conversationId);if(!task)throw Error('Helper not found');window.fixtureHelperTasks.push({...task,id:id+'-retry',status:'queued',phase:'Queued',summary:undefined,error:undefined,lastActivityAt:Date.now()});emitHelpers(conversationId);},
+  steerSubagent:(conversationId,id,text)=>{const task=window.fixtureHelperTasks.find(task=>task.id===id&&task.conversationId===conversationId);if(!task||!['queued','running'].includes(task.status))throw Error('Helper is not active');Object.assign(task,{phase:'Instruction queued',lastActivityAt:Date.now()});emitHelpers(conversationId);},
+  extendSubagent:(conversationId,id)=>{const task=window.fixtureHelperTasks.find(task=>task.id===id&&task.conversationId===conversationId);if(!task||task.status!=='running'||task.stopReason)throw Error('Helper is not active');task.deadlineAt=Math.min(task.deadlineAt+15*60000,task.maxDeadlineAt);emitHelpers(conversationId);return task;},
+  reviewSubagentPatch:(conversationId,id)=>{const task=window.fixtureHelperTasks.find(task=>task.id===id&&task.conversationId===conversationId);if(!task||task.applied)throw Error('Saved work is unavailable');task.fixtureReviewed=true;return {changes:task.changes??[],diff:'--- a/Source/Fixture.cs\n+++ b/Source/Fixture.cs\n-class Before {}\n+class Partial {}\n'};},
+  applySubagentPatch:(conversationId,id)=>{const task=window.fixtureHelperTasks.find(task=>task.id===id&&task.conversationId===conversationId);if(!task?.fixtureReviewed)throw Error('Review saved work first');task.applied=true;emitHelpers(conversationId);return {files:task.changes.map(file=>file.path)};},
   listWorkspaceMods:()=>mods, getRegistry:()=>({snapshot:{mods:[],activeOrder:[]},analysis:{byPackageId:{},issues:[]}}),getActiveSession:()=>null,
   getSnapshotUsage:()=>({totalBytes:0,mods:[]}),readAssetDataUrl:()=>null,
+  readPreviewImage:()=>window.fixtureCurrentPreview??null,getPreviewBg:()=>null,
+  getPreviewCandidate:()=>window.fixturePreviewCandidate??null,
+  applyPreviewCandidate:(_folder,id)=>{if(window.fixturePreviewCandidate?.id!==id)throw Error('Preview proposal changed');window.fixtureCurrentPreview=window.fixturePreviewCandidate.dataUrl;window.fixturePreviewCandidate=null;},
+  discardPreviewCandidate:(_folder,id)=>{if(window.fixturePreviewCandidate?.id!==id)throw Error('Preview proposal changed');window.fixturePreviewCandidate=null;},
+  getWorkshopReleaseStatus:()=>({build:{status:'unknown',message:'Fixture status'},release:null}),
+  readModAbout:folder=>mods.find(mod=>mod.folder===folder)?.about,
   getGameSetupSnapshot:()=>({status:{state:'fresh',detail:'Ready'}}),checkGameRequirements:()=>({satisfied:true,checks:[]}),
   atlasTasksStatus:()=>[task],atlasTasksClear:()=>{},atlasTaskAction:()=>{},
   atlasLibraryStatus:()=>library,atlasLibraryCheck:()=>library,atlasLibrarySearch:()=>[{id:'pack0',path:'references/apparel.md',excerpt:'Directional textures use south, east and north views.'}],
@@ -30,7 +50,7 @@ const api={
   getAgentStatus:()=>({busy:false,compacting:false}),
   getContextUsage:()=>({tokens:14000,contextWindow:272000}),
   getOpenAIAccounts:()=>({activeId:'pro',busy:false,accounts:[{id:'pro',label:'GPT Pro',active:true}]}),
-  getOpenAIUsage:()=>({status:'ready',buckets:[],credits:{hasCredits:true,balance:25}}), getClaudeUsage:()=>({status:'unavailable'}), listOAuthLinks:()=>[],listProviders:()=>[],
+  getOpenAIUsage:()=>({status:'ready',buckets:[],credits:{hasCredits:true,balance:25}}), getClaudeUsage:()=>({status:'unavailable'}), listOAuthLinks:()=>window.fixtureOAuthLinks??[],listProviders:()=>[],loginOAuth:()=>{},cancelOAuthLogin:()=>{},
   getOpenRouterConfig:()=>null,listLocalProviders:()=>[],
   projectFiles:()=>({files:[{path:'About.xml',editable:true},{path:'Main.cs',editable:true}],truncated:false}),
   projectRead:(_folder,path)=>({path,text:path==='About.xml'?'<ModMetaData>\n  <name>Fixture</name>\n</ModMetaData>':'class Fixture {}',hash:'initial'}),

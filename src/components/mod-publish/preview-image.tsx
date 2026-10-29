@@ -1,6 +1,7 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import { useAsyncAction } from '@/lib/use-async-action';
 import { ErrorBanner, Field } from './ui';
+import type { PreviewCandidate } from '@/agent/assets/preview-protection';
 
 /**
  * Workshop GIF/static preview viewer + browse/regenerate buttons. Loads the
@@ -25,6 +26,16 @@ export function PreviewImage({
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [previewReadError, setPreviewReadError] = useState<string | null>(null);
   const [bgDataUrl, setBgDataUrl] = useState<string | null>(null);
+  const [candidate, setCandidate] = useState<PreviewCandidate | null>(null);
+  const [candidateReadError, setCandidateReadError] = useState<string | null>(null);
+  const candidateAction = useAsyncAction(async (action: 'apply' | 'discard') => {
+    if (!candidate) return;
+    if (action === 'apply') await window.modmixer.applyPreviewCandidate(modFolder, candidate.id);
+    else await window.modmixer.discardPreviewCandidate(modFolder, candidate.id);
+    setCandidate(await window.modmixer.getPreviewCandidate(modFolder));
+    setPreviewDataUrl(await window.modmixer.readPreviewImage(modFolder));
+    setCandidateReadError(null);
+  });
 
   const browse = useAsyncAction(async () => {
     const sourceAbs = await window.modmixer.pickPreviewImage();
@@ -73,6 +84,10 @@ export function PreviewImage({
         const url = await window.modmixer.readPreviewImage(modFolder);
         if (!cancelled) { setPreviewDataUrl(url); setPreviewReadError(null); }
       } catch (error) { if (!cancelled) setPreviewReadError(error instanceof Error ? error.message : String(error)); }
+      try {
+        const next = await window.modmixer.getPreviewCandidate(modFolder);
+        if (!cancelled) { setCandidate(next); setCandidateReadError(null); }
+      } catch (error) { if (!cancelled) setCandidateReadError(error instanceof Error ? error.message : String(error)); }
     };
     void refresh();
     void refreshBg();
@@ -81,9 +96,11 @@ export function PreviewImage({
     const offAssets = window.modmixer.onAssetsChanged(({ folder }) => {
       if (folder === modFolder) void refresh();
     });
+    const offMod = window.modmixer.onModChanged(({folder}) => { if (folder === modFolder) void refresh(); });
     return () => {
       cancelled = true;
       offAssets();
+      offMod();
     };
     // refreshBg is intentionally omitted — it captures modFolder via closure
     // and we want it re-bound on folder change, which the dep array handles.
@@ -112,7 +129,7 @@ export function PreviewImage({
         label="Preview image"
         hint="PNG, JPEG or animated GIF. GIFs must fit Steam’s 1 MiB limit; RimWorld uses a static first frame. 1280×720 recommended."
       >
-        <div className="flex items-start gap-3">
+        <div className="flex flex-wrap items-start gap-3">
           <div data-atlas-workshop-preview className="aspect-video w-40 shrink-0 overflow-hidden rounded-md border border-line bg-surface/60">
             {previewDataUrl ? (
               <img src={previewDataUrl} alt="Preview" className="h-full w-full object-cover" />
@@ -122,22 +139,22 @@ export function PreviewImage({
               </div>
             )}
           </div>
-          <div className="flex flex-1 flex-col gap-2">
+          <div className="flex min-w-0 flex-1 basis-40 flex-col gap-2">
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => void browse.run()}
-                disabled={browse.busy}
+                disabled={browse.busy || candidateAction.busy}
                 className="rounded-md border border-line bg-paper px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-ink transition-colors hover:border-ink/40 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {browse.busy ? 'Copying…' : previewDataUrl ? 'Replace…' : 'Browse…'}
               </button>
               <button
                 onClick={onGeneratePreview}
-                disabled={!hasAi || browse.busy}
+                disabled={!hasAi || browse.busy || candidateAction.busy}
                 title={!hasAi ? 'Connect an AI provider in Settings to generate.' : undefined}
                 className="rounded-md bg-accent px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-accent-foreground transition-opacity hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {previewDataUrl ? 'Regenerate' : 'Generate'}
+                {previewDataUrl ? 'Design replacement' : 'Generate'}
               </button>
             </div>
             {previewDataUrl?.startsWith('data:image/gif;') && <p className="text-xs text-muted">GIF preserved for Workshop. The in-game browser shows its first frame.</p>}
@@ -145,6 +162,21 @@ export function PreviewImage({
           </div>
         </div>
       </Field>
+      {(candidate || candidateReadError) && <div className="rounded-md border border-line bg-surface/40 p-3" data-atlas-preview-candidate>
+        <p className="text-sm font-medium">Proposed preview</p>
+        <p className="mt-1 text-xs text-muted">Your current preview stays unchanged until you choose Use this preview. Atlas keeps a backup when applying it.</p>
+        {candidate && <div className="mt-3 flex flex-wrap items-start gap-3">
+          <img src={candidate.dataUrl} alt="Proposed Workshop preview" className="aspect-video w-64 max-w-full rounded border border-line object-contain" />
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            {candidate.warning && <p className="text-xs text-muted">{candidate.warning}</p>}
+            <div className="flex flex-wrap gap-2">
+              <button className="rounded-md bg-accent px-3 py-1.5 text-xs text-accent-foreground disabled:opacity-40" disabled={candidateAction.busy || browse.busy} onClick={() => void candidateAction.run('apply')}>{candidateAction.busy ? 'Working…' : 'Use this preview'}</button>
+              <button className="rounded-md border border-line px-3 py-1.5 text-xs disabled:opacity-40" disabled={candidateAction.busy || browse.busy} onClick={() => void candidateAction.run('discard')}>Discard proposal</button>
+            </div>
+          </div>
+        </div>}
+        {(candidateReadError || candidateAction.error) && <ErrorBanner>{candidateReadError || candidateAction.error}</ErrorBanner>}
+      </div>}
 
       <Field
         label="Background image (optional)"

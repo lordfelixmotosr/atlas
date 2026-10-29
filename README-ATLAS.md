@@ -1,4 +1,60 @@
-# Atlas 0.3.2 portable
+# Atlas 0.3.8 portable
+
+## 0.3.8 Complete change-note evidence
+
+The note writer now reads changed source files on demand instead of relying on the library's small text-preview budget. Earlier source can be recovered read-only from retained Atlas history only when the complete file hash matches the selected publication/update baseline. Future publication and marked-update comparisons capture full source separately from library previews, within bounded local storage. These operations preserve workspace sources, saved comparisons, history and Workshop files.
+
+Empty or boilerplate-only AI results report **No update notes were generated** with reasons near the Generate button and open **Detected changes**. They do not replace existing notes or trigger another paid request. Older AI-only **Mod files updated.** placeholders are hidden from public copy/preview while the original saved record and private warnings remain intact; manually written notes keep their wording.
+
+Verified the repaired comparison against RimContractors: readable evidence now includes all seven changed source/XML files, including the mission-departure implementation previously omitted. Main model/thinking settings remain unchanged. Version 0.3.8 is approved for public release with a signed update feed.
+
+## 0.3.7 Player-facing update notes
+
+Open **Changes → Write update notes with AI** to turn the selected saved comparison into short notes about what players can do and what behaves differently. Related edits are grouped under **New features**, **Improvements**, **Fixes** and **Removed**, with empty sections omitted. Technical summaries are available under **Detected changes**. Public notes remain editable and keep the existing Steam formatting preview and conversion.
+
+The writer receives focused before/after excerpts and recorded definition changes, with player-facing labels where available. Generated items reference that evidence internally; Atlas rejects missing references, exposed source filenames and malformed output before saving a draft. Instructions require supported behavior changes rather than inferred features from class names, DLLs or image hashes. Related edits should become one player-facing item, not a list of files. Evidence references establish provenance, not proof that every AI interpretation is correct, so review notes before publishing.
+
+Missing earlier source, shortened evidence, ambiguous definitions and other uncertainty stay in private review warnings. Existing saved and manual drafts are preserved until explicitly replaced. Generation remains a single request on the selected default model, using normal account usage; opening the dialog does not run the AI or change model/thinking settings. Version 0.3.8 replaces the original generic fallback with an explicit no-draft result.
+
+This build is local only. GitHub publication remains blocked until user confirmation.
+
+## 0.3.6 Preview protection and helper recovery
+
+Atlas preserves the current Workshop preview during coding and testing. Requested AI previews are saved as separate proposals: open **Publish → Preview image**, review the proposal and choose **Use this preview** or **Discard proposal**. Existing PNG/GIF originals are backed up before an accepted replacement. A proposal cannot overwrite a preview that changed after it was generated. Main-agent file/image tools block direct preview writes; shell and other mutating tools retain originals before running and restore unexpected preview changes, reporting recovery paths if restoration fails. User Browse and proposal application share the same per-mod serialization.
+
+Routine research helpers get 20 minutes; implementation, reviews and complex research get 30 minutes. Running helpers show time remaining and **Extend 15 min**, up to two hours total. The separate connection watchdog still stops a provider request after ten minutes without response data. Current model, thinking and speed settings remain unchanged.
+
+Stopped implementation helpers retain checkpointed partial patches. Under **Helpers → Actions**, choose **Review saved work** before explicitly applying an unfinished patch, or ask the lead to inspect it with its helper tools. Stale sources, conflicting helper ownership and modified staging are rejected. The lead must complete and validate recovered work; applying a partial patch does not mark the failed task successful. After application, **Continue remaining work** starts a fresh helper against the recovered source. Existing failed-task staging remains available when its original files still match. No saved partial work is automatically applied, retried or published.
+
+This build is local only. GitHub publication remains blocked until user confirmation.
+
+## 0.3.5 Local helper repair
+
+Efficient mode skips GPT-5.4 mini on the ChatGPT connection after the observed unsupported-model rejection. API-key connections retain their own model choices. Explicit model-access rejections in a chat's helper history are excluded from later automatic routing, including Retry after reopening Atlas; queued helpers recheck their model when they start. With no eligible lighter model, helpers retain the main model and requested thinking. Network failures and quota errors do not trigger model switching or automatic retries.
+
+Implementation helpers now support PowerShell, Python and other source-script text files. Assignments are checked before a helper starts, with specific file errors for unsupported assets. Scripts remain isolated, reviewed text patches and cannot be executed by helpers. Existing source, private-path, size, binary-content and conflict protections remain in place.
+
+This update is local only. GitHub publishing remains blocked until user confirmation. Existing failed tasks stay visible; use their **Actions → Retry** control or ask the lead to delegate again after reviewing the current project state.
+
+## 0.3.4 Local helper-team build
+
+Atlas can delegate independent work to research, implementation and review helpers inside an existing mod chat. Helpers start in **Efficient** mode with **four simultaneous helpers across the app**, adjustable from one to eight. Routine research may use a lighter model available on the same provider; implementation, complex tasks and reviews keep the main model and requested thinking level. The main chat's model, thinking and speed settings are retained. Match main and Off are also available.
+
+Expand **Helpers** above the composer to see queued/running/completed work, the model and effort used, progress, reported token usage and results. Actions let you steer or cancel a helper, retry failed/interrupted tasks, or discard an unapplied patch. Stop cancels the chat's team and queued instructions. Turning helpers off stops active and queued helpers. No requests are sent simply by opening this panel.
+
+Implementation helpers can edit only assigned text files in private overlays. The lead reviews and explicitly integrates patches; source conflicts, stale reviews and unsafe paths are rejected. The lead retains builds, game testing, installation and publishing. Helpers cannot run a shell or spawn more helpers. Searches, context output, queue size and runtime are bounded; progress is not an invented percentage.
+
+Task history survives reopening Atlas. Interrupted requests do not restart automatically. Completed patches can reopen for review if their dependencies still match. Conflicted or uncertain recovery data is retained and its location is reported. Helpers consume the connected provider's normal usage; lower-model subscription savings are not guaranteed. See [helper teams](docs/subagents.md).
+
+This build is local only. GitHub source uploads and online release publication remain blocked until the user confirms it works.
+
+## 0.3.3 Local Claude sign-in validation build
+
+Claude sign-in is serialized, and cancelled attempts finish closing before another starts. Background usage checks share authentication work, pause during sign-in, and back off after failed token refreshes. Login progress no longer triggers extra usage requests. Current thinking preferences are retained.
+
+HTTP 429 responses respect Claude's `Retry-After` header. When it is absent, Atlas applies a clearly labelled five-minute local pause; this is not a claim about Claude's reset time. The sign-in button shows the remaining wait. The pause survives app restarts, and expiration does not automatically retry authentication. Safe diagnostics retain HTTP status, error type and request ID when available, without response bodies or credentials.
+
+This build is for local verification. A real browser sign-in is still needed to establish whether the provider-side failure is resolved. GitHub uploads and online release publication are on hold until the user confirms it works.
 
 ## 0.3.2 Uninstall a game copy
 

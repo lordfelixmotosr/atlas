@@ -12,17 +12,27 @@ import {readModChanges,recordModBaseline,prepareModDescription,saveModDescriptio
 import {readModPrefs} from '../agent/mod-prefs';
 import {felixSetSpeed,felixSetShortcut,felixSessionStatus,felixSteer,felixCancelSteering,felixCompactContext,felixAccountsInfo,felixChangeOpenAIAccount,felixLoginOpenAIAccount,felixGetUsage,felixAgentWorking} from './agent-features';
 import {getClaudeUsage} from './claude-usage';
+import {getConversation} from '../agent/conversations';
 export function registerAtlasRoutes(ctx){
  const {ipc,host,getWindow,requireConsent}=ctx,root=process.env.ATLAS_ROOT;
  const drafts=new Set();
  const files=require('./atlas/project-files.cjs'),bulk=require('./atlas/bulk-assets.cjs');
  const modRoot=folder=>files.projectRoot(getWorkspacePaths().workspaceDir,folder);
  const descriptions=new Map();
- const busy=()=>host.atlasModImport||host.felixAccountOperation||host.pendingOAuth||descriptions.size>0||[...host.sessions.values()].some(x=>felixAgentWorking(x.session));
+ const busy=()=>host.atlasModImport||host.felixAccountOperation||host.pendingOAuth||descriptions.size>0||host.subagentsBusy()||[...host.sessions.values()].some(x=>felixAgentWorking(x.session));
  registerModMixerImportRoutes(ctx,busy);
  const runtime=require('./atlas/runtime.cjs').init({root,resources:path.join(process.resourcesPath,"atlas"),host,getWindow,electron,rebuildIndex:()=>startRebuild(),isBusy:busy,hasDrafts:()=>drafts.size>0,cancelIndex:cancelActiveRebuild,requireConsent});
  onSetupProgress((game,event)=>{if(game==='rimworld')runtime.tasks.observeIndex(event);});
  const h=(name,fn)=>ipc.handle(name,(_e,...args)=>fn(...args));
+ const helperChat=id=>{if(typeof id!=='string'||!getConversation(id))throw new Error('Choose an existing mod chat.');return host.helperTeam();};
+ h('atlas:subagents:get',id=>helperChat(id).snapshot(id));
+ h('atlas:subagents:settings',patch=>{if(!patch||typeof patch!=='object'||Array.isArray(patch))throw new Error('Invalid helper settings.');return host.helperTeam().settings(patch);});
+ h('atlas:subagents:cancel',(conversationId,id)=>helperChat(conversationId).cancel(conversationId,id));
+ h('atlas:subagents:retry',(conversationId,id)=>{requireConsent();return helperChat(conversationId).retry(conversationId,id);});
+ h('atlas:subagents:extend',(conversationId,id)=>{requireConsent();return helperChat(conversationId).extend(conversationId,id);});
+ h('atlas:subagents:review-patch',(conversationId,id)=>helperChat(conversationId).reviewPatch(conversationId,id));
+ h('atlas:subagents:apply-patch',(conversationId,id)=>{requireConsent();if(busy())throw new Error('Finish or stop active work before applying saved helper files.');return helperChat(conversationId).applyPatch(conversationId,id,true);});
+ h('atlas:subagents:steer',(conversationId,id,text)=>{requireConsent();return helperChat(conversationId).steer(conversationId,id,text);});
  h('atlas:mods:changes',async(folder,comparison='latest')=>{if(!['latest','published','updated'].includes(comparison))throw new Error('Choose a saved comparison.');return readModChanges(modRoot(folder),(await readModPrefs(folder)).lastPublishedAt,comparison)});
  h('atlas:mods:mark-updated',async(folder,note='')=>{if(busy())throw new Error('Finish active work before marking an update.');if(typeof note!=='string'||note.length>4000)throw new Error('Use a note of up to 4,000 characters.');await recordModBaseline(modRoot(folder),'updated',note);emitModChanged(folder);return readModChanges(modRoot(folder),(await readModPrefs(folder)).lastPublishedAt)});
  const checkDescription=(folder,comparison,key)=>{const project=modRoot(folder);if(!['latest','published','updated'].includes(comparison)||typeof key!=='string'||!/^[a-f0-9]{64}$/.test(key))throw new Error('Refresh the saved comparison first.');return project;};
@@ -30,8 +40,8 @@ export function registerAtlasRoutes(ctx){
  h('atlas:mods:description-generate',async(folder,comparison,key)=>{
   requireConsent();const project=checkDescription(folder,comparison,key);if(descriptions.has(folder))throw new Error('A description is already running for this mod.');if(host.felixAccountOperation||host.pendingOAuth)throw new Error('Finish sign-in before writing a description.');
   const controller=new AbortController();descriptions.set(folder,controller);const timer=setTimeout(()=>controller.abort(),120000),id='description:'+folder;
-  runtime.tasks.update(id,{kind:'description',title:'Describe mod changes',status:'running',phase:'Writing feature description',fraction:null,restart:true},'Reading the saved change comparison');
-  try{const evidence=await prepareModDescription(project,comparison,key),result=await host.describeModChanges(evidence,controller.signal);if(controller.signal.aborted)throw new Error('Description cancelled.');await saveModDescription(project,comparison,key,result.text,'ai',result.model,result.reviewWarnings);emitModChanged(folder);runtime.tasks.update(id,{status:'completed',phase:'Description saved'},'Saved a description for this exact comparison');return readModChanges(project,(await readModPrefs(folder)).lastPublishedAt,comparison);}
+  runtime.tasks.update(id,{kind:'description',title:'Write update notes',status:'running',phase:'Writing update notes for players',fraction:null,restart:true},'Reading the saved change comparison');
+  try{const evidence=await prepareModDescription(project,comparison,key,{snapshotDir:path.join(electron.app.getPath('userData'),'snapshots',folder)}),result=await host.describeModChanges(evidence,controller.signal);if(controller.signal.aborted)throw new Error('Description cancelled.');await saveModDescription(project,comparison,key,result.text,'ai',result.model,result.reviewWarnings);emitModChanged(folder);runtime.tasks.update(id,{status:'completed',phase:'Update notes saved'},'Saved player-facing notes for this exact comparison');return readModChanges(project,(await readModPrefs(folder)).lastPublishedAt,comparison);}
   catch(error){runtime.tasks.update(id,{status:controller.signal.aborted?'cancelled':'failed',phase:controller.signal.aborted?'Description stopped':error.message},error.message);throw error;}
   finally{clearTimeout(timer);descriptions.delete(folder);}
  });

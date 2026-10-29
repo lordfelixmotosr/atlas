@@ -3,8 +3,10 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { metadataReadPath, metadataWritePath } from '../agent/mod-metadata';
+import { buildChangeNoteEvidence } from './change-note-evidence';
+import {captureModNoteSources, hydrateModNoteSources} from './change-note-sources';
 
-type DefinitionRecord = { hash: string; type: string; label: string; description?: string; kind?: string; fields?: Record<string, string> };
+type DefinitionRecord = { hash: string; type: string; label: string; description?: string; kind?: string; fields?: Record<string, string>; fieldFormat?: 2; ambiguousFields?: string[]; fieldsTruncated?: boolean };
 type FileRecord = { hash: string; size: number; modifiedAt: number; preview?: string; previewTruncated?: boolean; defs?: Record<string, DefinitionRecord> };
 export type ModInventory = { signature: string; modifiedAt: number; files: Record<string, FileRecord> };
 
@@ -48,14 +50,18 @@ function definitions(text: string): FileRecord['defs'] {
     const name = match[0].match(/<defName>\s*([^<]+)\s*<\/defName>/i)?.[1]?.trim();
     if (!name) continue;
     const label = match[0].match(/<label>\s*([^<]+)\s*<\/label>/i)?.[1]?.trim() ?? '';
-    const fields: Record<string, string> = Object.create(null);
+    const fields: Record<string, string> = Object.create(null), ambiguousFields = new Set<string>();
+    let fieldsTruncated = false;
     for (const field of match[0].matchAll(/<([A-Za-z_][\w.]*)>\s*([^<>]{1,500})\s*<\/\1>/g)) {
-      if (['defName','label','description','li'].includes(field[1]) || Object.keys(fields).length >= 40) continue;
-      fields[field[1]] = plain(field[2]).slice(0, 160);
+      if (['defName','label','description','li'].includes(field[1])) continue;
+      if (Object.hasOwn(fields, field[1]) || ambiguousFields.has(field[1])) { delete fields[field[1]]; ambiguousFields.add(field[1]); continue; }
+      if (Object.keys(fields).length >= 40) { fieldsTruncated = true; continue; }
+      const value = plain(field[2]); if (value.length > 160) fieldsTruncated = true;
+      fields[field[1]] = value.slice(0, 160);
     }
     const description = plain(match[0].match(/<description>\s*([\s\S]*?)\s*<\/description>/i)?.[1] ?? '').slice(0, 320);
     const kind = match[1] === 'ThingDef' ? /<apparel\b/.test(match[0]) ? 'apparel' : /<category>\s*Building\s*<\/category>/.test(match[0]) ? 'building' : /<category>\s*Pawn\s*<\/category>/.test(match[0]) ? 'creature' : /<weaponTags\b|<verbs\b/.test(match[0]) ? 'weapon / equipment' : 'item / object' : ({RecipeDef:'recipe',GeneDef:'gene',HediffDef:'health condition',PawnKindDef:'pawn type',FactionDef:'faction',AbilityDef:'ability',ResearchProjectDef:'research',ThoughtDef:'thought',TraitDef:'trait',JobDef:'job'} as Record<string,string>)[match[1]] ?? words(match[1].replace(/Def$/, '')).toLowerCase();
-    result[name] = { hash: hash(match[0]), type: match[1], label, description, kind, fields };
+    result[name] = { hash: hash(match[0]), type: match[1], label, description, kind, fields, fieldFormat: 2, ambiguousFields: [...ambiguousFields], fieldsTruncated };
   }
   return result;
 }
@@ -115,12 +121,12 @@ async function saveState(root: string, state: State) {
 }
 function category(file: string) {
   if (/\.cs$/i.test(file)) return 'C# source';
-  if (/\.(png|dds|jpg|jpeg|webp)$/i.test(file)) return 'textures / images';
+  if (/\.(png|dds|jpg|jpeg|webp|gif)$/i.test(file)) return 'textures / images';
   if (/\.(ogg|wav|mp3)$/i.test(file)) return 'audio';
-  if (/^Defs\//i.test(file)) return 'Def XML';
-  if (/^Patches\//i.test(file)) return 'patch XML';
+  if (/(?:^|\/)Defs\//i.test(file)) return 'Def XML';
+  if (/(?:^|\/)Patches\//i.test(file)) return 'patch XML';
   if (/^About\//i.test(file)) return 'mod metadata';
-  if (/^Languages\//i.test(file)) return 'translations';
+  if (/(?:^|\/)Languages\//i.test(file)) return 'translations';
   if (/\.(dll|pdb)$/i.test(file)) return 'compiled assemblies';
   return 'other files';
 }
@@ -185,14 +191,26 @@ export function describeModFeatures(previous: ModInventory, current: ModInventor
 }
 function chooseBaseline(state: State, comparison: 'latest'|'published'|'updated') { return comparison === 'latest' ? [state.published,state.updated].filter((x):x is Baseline=>!!x).sort((a,b)=>b.at-a.at)[0] ?? state.first : state[comparison]; }
 const descriptionKey = (baseline: Baseline, current: ModInventory) => hash(baseline.kind+'\0'+baseline.at+'\0'+baseline.inventory.signature+'\0'+current.signature);
-export function prepareModDescription(root: string, comparison: 'latest'|'published'|'updated', expectedKey: string) {
+export function prepareModDescription(root: string, comparison: 'latest'|'published'|'updated', expectedKey: string, options: {snapshotDir?: string} = {}) {
   return exclusive(root, async()=>{
     const state=await readState(root),current=await collectModInventory(root),baseline=state&&chooseBaseline(state,comparison);
     if(!baseline || descriptionKey(baseline,current)!==expectedKey)throw new Error('The mod or comparison changed. Refresh before describing it.');
     const rows=compareModInventories(baseline.inventory,current); if(!rows.length)throw new Error('There are no changes to describe.');
-    const evidence=[];let budget=0,omitted=0;
-    for(const row of rows){const before=baseline.inventory.files[row.path],after=current.files[row.path];const entry={...row,before:before?.preview??null,after:after?.preview??null,earlierTextAvailable:!!before?.preview,beforeTextTruncated:!!before?.previewTruncated,afterTextTruncated:!!after?.previewTruncated};const size=JSON.stringify(entry).length;if(budget+size>130000){omitted++;continue};budget+=size;evidence.push(entry);}
-    return JSON.stringify({comparison:baseline.kind,baselineAt:baseline.at,features:describeModFeatures(baseline.inventory,current,rows),totalChangedFiles:rows.length,omittedFiles:omitted,evidence});
+    const hydrated = await hydrateModNoteSources(root,baseline.inventory,current,rows,baseline.at,options.snapshotDir);
+    const prepared = buildChangeNoteEvidence(hydrated.previous, hydrated.current, rows);
+    prepared.evidenceWarnings.push(...hydrated.warnings);
+    if (baseline.kind === 'tracking') prepared.evidenceWarnings.push('This comparison starts when Atlas began tracking the mod, not necessarily at its last Workshop release. Earlier changes cannot be reconstructed.');
+    const features = describeModFeatures(baseline.inventory,current,rows.filter(row => !/(?:^|\/)(?:auth|credentials?|secrets?|tokens?)(?:[.-]|$)/i.test(row.path)));
+    // This remains a navigation aid, not evidence that an item became enabled
+    // in every supported game version or that a code change fixed a bug.
+    let overviewSize = 0;
+    const overview = Object.fromEntries(Object.entries(features).map(([key, items]) => [key, items.slice(0, 6).flatMap(item => {
+      const text = item.slice(0, 350), cost = JSON.stringify(text).length + 2;
+      if (overviewSize + cost > 7000) return []; overviewSize += cost; return [text];
+    })]));
+    const payload = JSON.stringify({comparison:baseline.kind,baselineAt:baseline.at,features:overview,featuresAreHeuristics:true,...prepared});
+    if (payload.length > 150000) throw new Error('The change comparison is too large to describe safely. Narrow the comparison before generating notes.');
+    return payload;
   });
 }
 export function saveModDescription(root: string, comparison: 'latest'|'published'|'updated', expectedKey: string, text: string, origin: 'ai'|'manual'='manual', model?: string, reviewWarnings?: string[]) {
@@ -219,6 +237,7 @@ function exclusive<T>(root: string, run: () => Promise<T>): Promise<T> {
 export function recordModBaseline(root: string, kind: 'published' | 'updated', note = '', captured?: ModInventory, savedAt = Date.now()): Promise<void> {
   return exclusive(root, async () => {
     const inventory = captured ?? await collectModInventory(root), now = savedAt;
+    await captureModNoteSources(root, inventory);
     const baseline: Baseline = { at: now, kind, note: note.trim().slice(0, 4000), inventory };
     const previous = await readState(root);
     const state: State = previous ?? { version: 1, first: baseline, observed: { signature: inventory.signature, at: inventory.modifiedAt || now } };
@@ -244,7 +263,11 @@ export function readModChanges(root: string, lastPublishedAt: number | null = nu
       if (baseline?.kind === 'published' && lastPublishedAt && lastPublishedAt > baseline.at) return { ...common, lastPublishedAt, status: 'unavailable', label: 'Published comparison missing', description: 'The latest publication did not save a file comparison. An older publication snapshot cannot describe the latest upload.', baselineAt: null, baselineKind: null, count: 0, files: [] };
       if (!baseline) return { ...common, status: 'unavailable', label: 'No comparison saved', description: `No file snapshot exists for the last ${comparison === 'published' ? 'publication' : 'marked update'}. Tracking started ${new Date(state.first.at).toLocaleString()}.`, baselineAt: null, baselineKind: null, count: 0, files: [] };
       const files = compareModInventories(baseline.inventory, current), tracking = baseline.kind === 'tracking';
-      const key=descriptionKey(baseline,current),saved=state.descriptions?.[key];
+      const key=descriptionKey(baseline,current),stored=state.descriptions?.[key];
+      // Retain the old record, but do not offer an unsuccessful AI placeholder
+      // as public notes. Identical manual wording remains the user's choice.
+      const placeholder=stored?.origin==='ai'&&stored.text.trim()==='Mod files updated.';
+      const saved=placeholder?{...stored!,text:'',reviewWarnings:['The previous AI attempt did not produce useful update notes. Generate again to read the available source changes.',...(stored!.reviewWarnings??[])]}:stored;
       return { ...common, features:describeModFeatures(baseline.inventory,current,files),descriptionKey:key,featureDescription:saved?.text??'',descriptionNeedsReview:saved?.origin==='ai'&&saved.reviewWarnings===undefined,reviewWarnings:saved?.reviewWarnings??[],descriptionOrigin:saved?.origin,descriptionAt:saved?.at,status: files.length ? 'modified' : tracking ? 'tracking' : 'clean', label: files.length ? baseline.kind === 'published' ? 'Unpublished changes' : baseline.kind === 'updated' ? 'Changes since update' : 'Changes since tracking started' : tracking ? 'Tracking started' : 'No changes since ' + (baseline.kind === 'published' ? 'publication' : 'update'), description: files.length ? description(files) : tracking ? 'No earlier file snapshot exists. Future changes will be compared from this point.' : 'Mod content matches the saved comparison.', baselineAt: baseline.at, baselineKind: baseline.kind, count: files.length, files };
     } catch (error) {
       return { status: 'unavailable', label: 'Change comparison unavailable', description: error instanceof Error ? error.message : String(error), baselineAt: null, baselineKind: null, lastModifiedAt: 0, lastPublishedAt, lastUpdatedAt: null, note: '', count: 0, files: [] };

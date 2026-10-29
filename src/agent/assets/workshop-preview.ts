@@ -109,6 +109,21 @@ async function atomicPreviewWrite(filename: string, bytes: Buffer): Promise<void
   finally { try { assertPreviewPathSafe(temporary); await fsp.unlink(temporary); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; } }
 }
 
+/** Windows timestamp round-trips can lose sub-millisecond precision. Keep the
+ * previously selected image when restoring a PNG/GIF pair after failure. */
+export async function preserveWorkshopPreviewSelection(modRoot: string, preferred: string | null): Promise<void> {
+  if (!preferred) return;
+  if (!['Preview.png', 'WorkshopPreview.gif'].includes(preferred)) throw new Error('Invalid preferred preview.');
+  const png = assertPreviewPathSafe(path.join(modRoot, 'About', 'Preview.png')), gif = assertPreviewPathSafe(path.join(modRoot, 'About', 'WorkshopPreview.gif'));
+  if (!fs.existsSync(png) || !fs.existsSync(gif)) return;
+  const pngStat = await fsp.stat(png), gifStat = await fsp.stat(gif);
+  if (!pngStat.isFile() || !gifStat.isFile()) throw new Error('Cannot restore preview selection because a preview is not a regular file.');
+  const selected = gifStat.mtimeMs >= pngStat.mtimeMs ? 'WorkshopPreview.gif' : 'Preview.png';
+  if (selected === preferred) return;
+  const target = preferred === 'Preview.png' ? png : gif, stat = preferred === 'Preview.png' ? pngStat : gifStat;
+  await fsp.utimes(target, stat.atime, new Date(Math.ceil(Math.max(pngStat.mtimeMs, gifStat.mtimeMs)) + 1));
+}
+
 /** Commit GIF and its static companion together, restoring originals on failure. */
 export async function writeWorkshopPreview(modRoot: string, prepared: PreparedWorkshopPreview, backupRoot?: string): Promise<void> {
   const about = assertPreviewPathSafe(path.join(modRoot, 'About'));
@@ -117,6 +132,7 @@ export async function writeWorkshopPreview(modRoot: string, prepared: PreparedWo
     { filename: path.join(about, 'Preview.png'), bytes: prepared.png as Buffer | null },
     { filename: path.join(about, 'WorkshopPreview.gif'), bytes: prepared.gif ?? null },
   ].map(record => { const before = regularFile(record.filename); return { ...record, before, beforeTimes: before ? fs.statSync(record.filename) : null }; });
+  const previousSelection = records[1].before && (!records[0].before || records[1].beforeTimes!.mtimeMs >= records[0].beforeTimes!.mtimeMs) ? 'WorkshopPreview.gif' : records[0].before ? 'Preview.png' : null;
   let backup: string | null = null;
   if (backupRoot && records.some(record => record.before)) {
     const safeRoot = assertPreviewPathSafe(backupRoot), relative = path.relative(path.resolve(modRoot), safeRoot);
@@ -147,6 +163,7 @@ export async function writeWorkshopPreview(modRoot: string, prepared: PreparedWo
       }
       catch (rollbackError) { failures.push(String(rollbackError)); }
     }
+    if (!failures.length) try { await preserveWorkshopPreviewSelection(modRoot, previousSelection); } catch (rollbackError) { failures.push(String(rollbackError)); }
     if (failures.length) throw new Error(`Preview import failed and some originals could not be restored: ${failures.join('; ')}.${backup ? ` Original previews were saved at ${backup}.` : ''}`);
     throw error;
   }

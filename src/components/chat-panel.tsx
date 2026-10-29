@@ -1,5 +1,6 @@
 import {AgentActivity} from "../atlas/activity";
 import {ClaudeUsageControl} from '../atlas/claude-usage-control';
+import {SubagentsControl} from '../atlas/subagents-control';
 import {FelixSpeedControl,FelixUsageControl,FelixAccountControl,FelixSteeringQueue,felixUseComposerFocus} from "../atlas/controls";
 import {applyCompactResult,applySteeringQueue} from "../conversations-store";
 import {
@@ -675,6 +676,7 @@ export function ChatPanel({
       </div>
       <AgentActivity conversationId={conversation.id} busy={busy} compacting={compacting} />
       <div className="atlas-composer border-t border-line px-6 py-3">
+        {hasAi && <SubagentsControl key={conversation.id} conversationId={conversation.id} />}
         <FelixSteeringQueue lines={steering} items={steeringItems} busy={busy} resuming={retryAction.busy} cancelling={steerCanceller.busy} onResume={()=>void retry()} onCancel={(ids:string[])=>void cancelSteering(ids)} />
         {notice&&<p className="atlas-inline-notice" role="status">{notice}</p>}
         {hasAi && (

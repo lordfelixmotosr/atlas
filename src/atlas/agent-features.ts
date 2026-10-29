@@ -192,13 +192,14 @@ function felixObserveModelStream(id,stream){
 }
 function felixSessionStatus(host,id,includeMessages=false){
   const entry=host.sessions.get(id),session=entry?.session;
-  if(!session)return{exists:false,busy:host.constructing.has(id),compacting:false};
-  const compacting=!!session.felixManualCompacting||!!session.isCompacting,busy=!!session.felixManualCompacting||!session.isIdle||compacting;
+  if(!session)return{exists:false,busy:host.constructing.has(id)||!!host.subagentsBusy?.(id),compacting:false};
+  const compacting=!!session.felixManualCompacting||!!session.isCompacting,busy=!!session.felixManualCompacting||!session.isIdle||compacting||!!host.subagentsBusy?.(id);
   if(!busy)host.busyConversations.delete(id);
   return{exists:true,busy,compacting,steering:felixSteeringPreview(session),steeringItems:felixSteeringItems(session),activity:felixSessionActivity.get(id)??null,...(!busy&&includeMessages===true?{messages:session.agent.state.messages}:{})};
 }
 async function felixInterrupt(host,id,waitMs=15000){
   const entry=host.sessions.get(id);if(!entry)return;
+  entry.session.clearQueue?.();entry.session.abortRetry?.();
   entry.session.abortCompaction();entry.session.abortBranchSummary();
   let timer;
   try{await Promise.race([Promise.all([entry.session.abort(),entry.session.agent.waitForIdle()]),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("Cancellation is still in progress. The activity indicator will update when the current operation finishes.")),waitMs);})]);}
@@ -275,6 +276,7 @@ async function felixSteer(host,id,text,attachments){
 
 let felixOpenAIAccountEpoch=0;
 function felixOpenAIWorkBusy(host){
+  if(host.subagentsProviderBusy?.('openai-codex'))return true;
   if(host.atlasChangeDescriptionsOpenAI>0)return true;
   if(host.felixOpenAIStarting>0)return true;
   for(const {session} of host.sessions.values())if(session.model?.provider==="openai-codex"&&felixAgentWorking(session))return true;

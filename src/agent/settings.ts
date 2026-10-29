@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import {normalizeSubagentSettings} from '../atlas/subagents-types';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -64,6 +65,7 @@ export const CURRENT_CONSENT_VERSION = '1.0';
 export const CURRENT_ONBOARDING_VERSION = '1.0';
 
 export interface Settings {
+  subagents: import('../atlas/subagents-types').SubagentSettings;
   /**
    * User-selected model. Null means "use the first available model from any
    * linked provider" — handled at resolution time, not persistence time.
@@ -219,6 +221,7 @@ function computeDefaults(): Settings {
   return {
     model: null,
     openaiSpeed:"standard",
+    subagents: normalizeSubagentSettings(undefined),
     sentenceShortcut:{label:"Insert shortcut",text:""},
     defaultAuthor: sanitizeAuthorHandle(os.userInfo().username),
     defaultModLicense: DEFAULT_LICENSE_ID,
@@ -269,6 +272,7 @@ function normalize(raw: unknown, defaults: Settings): Settings {
   const obj = raw as Record<string, unknown>;
   const next: Settings = { ...defaults };
   next.openaiSpeed=obj.openaiSpeed==="fast"?"fast":"standard";
+  next.subagents=normalizeSubagentSettings(obj.subagents);
   if(obj.sentenceShortcut&&typeof obj.sentenceShortcut==="object"){const v=obj.sentenceShortcut as any;if(typeof v.label==="string"&&typeof v.text==="string")next.sentenceShortcut={label:v.label.trim().slice(0,40)||"Insert shortcut",text:v.text.slice(0,10000)};}
 
   const defaultAuthor = readString(obj.defaultAuthor);

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { assertPathAllowed } from '../security/path-policy.js';
 import { getPathPolicyRoots } from '../security/policy-roots.js';
 import { getWorkspacePaths } from '../workspace.js';
+import { renderPreviewCandidate } from '../assets/preview-protection.js';
 import {
   renderPreview,
   type PreviewParams,
@@ -33,7 +34,7 @@ const Params = Type.Object({
   ),
   outPath: Type.String({
     description:
-      "Output PNG path, relative to the mod folder (your working directory) — e.g. 'About/Preview.png'. Parent dirs are created. Must be inside the workspace.",
+      "Intended preview path, normally 'About/Preview.png'. Atlas always stages the rendered image privately as a proposal; this parameter cannot authorize overwriting the existing preview.",
   }),
   spritePath: Type.Optional(
     Type.String({
@@ -98,6 +99,8 @@ export interface RenderPreviewDetails {
   width: number;
   height: number;
   template: PreviewParams['template'];
+  candidateId: string;
+  pendingApproval: true;
 }
 
 /**
@@ -113,7 +116,7 @@ export function createRenderPreviewTool(
   name: 'render_preview',
   label: 'Render preview image',
   description:
-    "Render a Steam Workshop preview image (1280×720) using a curated template. Pick 'classic', 'icon-left', or 'banner'; supply the title, an optional sprite path, background, and color/effect choices. The template handles layout, font loading, intelligent wrapping, and auto-fit text sizing — short titles scale up to ~200px, long titles shrink and wrap to fit. Bundled fonts: Inter (400/700) and RimWorld (a RimWorld-style display font). Use this for the Steam Workshop preview image at About/Preview.png (relative to the mod folder). The agent does NOT control raw HTML or font sizes — it picks a template and slots. This is the only image-composition tool: do not shell out to imagemagick / inkscape / python / sharp; they are not bundled.",
+    "Prepare a proposed Steam Workshop preview image (1280×720) only when the user requests a preview change. Existing previews are preserved: Atlas stores the proposal privately and the user chooses Use this preview in Publish to apply it. Never use another file or shell tool to bypass this review. Pick 'classic', 'icon-left', or 'banner'; supply the title, optional sprite/background and effects. Bundled fonts: Inter and RimWorld. This tool does not authorize preview changes during unrelated coding, testing or publishing work.",
   parameters: Params,
   async execute(_id, params): Promise<AgentToolResult<RenderPreviewDetails>> {
     const { workspaceDir } = getWorkspacePaths();
@@ -143,7 +146,7 @@ export function createRenderPreviewTool(
       );
     }
 
-    const { width, height, bytes } = await renderPreview(
+    const proposal = await renderPreviewCandidate(cwd, outputPath => renderPreview(
       {
         template: params.template,
         title: params.title,
@@ -157,23 +160,26 @@ export function createRenderPreviewTool(
         titleEffect: params.titleEffect,
         accentColor: params.accentColor,
       },
-      absOutPath,
+      outputPath,
       { workspaceDir },
-    );
+    ));
+    const { width, height, bytes } = proposal.result;
 
     return {
       content: [
         {
           type: 'text',
-          text: `Wrote ${bytes} bytes to ${absOutPath} (${width}×${height} PNG, template=${params.template}).`,
+          text: `Prepared a preview proposal at ${proposal.outPath} (${width}×${height} PNG, template=${params.template}). The existing preview is unchanged. Ask the user to review it in Publish → Preview image and choose Use this preview.`,
         },
       ],
       details: {
-        outPath: absOutPath,
+        outPath: proposal.outPath,
         bytes,
         width,
         height,
         template: params.template,
+        candidateId: proposal.candidateId,
+        pendingApproval: true,
       },
     };
   },

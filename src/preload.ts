@@ -15,8 +15,20 @@ export type {
 } from './preload/typed-ipc.js';
 
 const api = {
+  getSubagents:(id:string)=>invoke('atlas:subagents:get',id),
+  setSubagentSettings:(patch:Partial<import('./atlas/subagents-types').SubagentSettings>)=>invoke('atlas:subagents:settings',patch),
+  cancelSubagent:(conversationId:string,id:string)=>invoke('atlas:subagents:cancel',conversationId,id),
+  retrySubagent:(conversationId:string,id:string)=>invoke('atlas:subagents:retry',conversationId,id),
+  extendSubagent:(conversationId:string,id:string)=>invoke('atlas:subagents:extend',conversationId,id),
+  reviewSubagentPatch:(conversationId:string,id:string)=>invoke('atlas:subagents:review-patch',conversationId,id),
+  applySubagentPatch:(conversationId:string,id:string)=>invoke('atlas:subagents:apply-patch',conversationId,id),
+  steerSubagent:(conversationId:string,id:string,text:string)=>invoke('atlas:subagents:steer',conversationId,id,text),
+  onSubagentsChanged:(handler:(snapshot:import('./atlas/subagents-types').SubagentSnapshot)=>void)=>on('atlas:subagents:changed',handler),
   pickPreviewImage: ():Promise<string|null>=>ipcRenderer.invoke('atlas:assets:pick-preview-image'),
   readPreviewImage: (folder:string):Promise<string|null>=>ipcRenderer.invoke('atlas:assets:read-preview-image',folder),
+  getPreviewCandidate:(folder:string):Promise<import('./agent/assets/preview-protection').PreviewCandidate|null>=>ipcRenderer.invoke('atlas:assets:preview-candidate/get',folder),
+  applyPreviewCandidate:(folder:string,id:string):Promise<void>=>ipcRenderer.invoke('atlas:assets:preview-candidate/apply',folder,id),
+  discardPreviewCandidate:(folder:string,id:string):Promise<void>=>ipcRenderer.invoke('atlas:assets:preview-candidate/discard',folder,id),
   modChanges:(folder:string,comparison:'latest'|'published'|'updated'='latest'):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:changes',folder,comparison),
   markModUpdated:(folder:string,note:string):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:mark-updated',folder,note),
   saveModDescription:(folder:string,comparison:'latest'|'published'|'updated',key:string,text:string):Promise<import('./atlas/mod-changes').ModChangeReport>=>ipcRenderer.invoke('atlas:mods:description-save',folder,comparison,key,text),

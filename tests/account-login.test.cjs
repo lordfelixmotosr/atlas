@@ -20,7 +20,7 @@ function loginModule(closeConnections = async () => {}) {
       if (id.startsWith('node:')) return require(id);
       if (id === './account-label') return load('atlas/account-label.ts');
       if (id === 'electron') return {BrowserWindow: {getAllWindows: () => []}};
-      if (['@earendil-works/pi-coding-agent', '../agent/settings', '../agent/conversations', '../lib/thinking-levels', '../agent/agent-host'].includes(id)) return {};
+      if (['@earendil-works/pi-coding-agent', '../agent/settings', '../agent/conversations', '../agent/thinking', '../lib/thinking-levels', '../agent/agent-host'].includes(id)) return {};
       throw new Error('Unexpected dependency in login fixture: ' + id);
     };
     const connectionMock = relative === 'atlas/agent-features.ts' ? '\nfelixCloseOpenAIConnections = closeConnections;' : '';

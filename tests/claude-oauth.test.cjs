@@ -10,6 +10,17 @@ const transportModule = import(pathToFileURL(path.resolve(__dirname, '../src/atl
 const endpoint = 'https://platform.claude.com/v1/oauth/token';
 const body = {grant_type:'authorization_code',code:'private-fixture-code',code_verifier:'private-fixture-verifier'};
 
+test('429 headers establish cooldown even when reading the body fails', async () => {
+  const {createClaudeOAuthPostJson} = await transportModule;
+  const {createOAuthState} = require('../src/atlas/claude-oauth-state.cjs');
+  const now=1900000000000,state=createOAuthState({now:()=>now});let calls=0;
+  const post=createClaudeOAuthPostJson(async()=>{calls++;return {status:429,ok:false,headers:new Headers({'Retry-After':'120'}),text:async()=>{throw new Error('body reset');}};},30000,{state,now:()=>now});
+  await assert.rejects(post(endpoint,body),/HTTP 429/);
+  assert.equal(state.read().retryAt,now+120000);
+  await assert.rejects(post(endpoint,body),/HTTP 429/);
+  assert.equal(calls,1);
+});
+
 test('token transport is confined to Claude, sends JSON without browser cookies and refuses redirects', async () => {
   const {createClaudeOAuthPostJson} = await transportModule;
   const calls = [];
@@ -38,10 +49,54 @@ test('connection reset and response-body loss do not replay a possibly consumed 
 
 test('HTTP failures have actionable messages without logging raw token/error bodies', async () => {
   const {createClaudeOAuthPostJson} = await transportModule;
-  for (const [status, message] of [[400,/fresh authorization/],[401,/fresh authorization/],[429,/Wait a little/],[503,/HTTP 503/]]) {
+  for (const [status, message] of [[400,/fresh authorization/],[401,/fresh authorization/],[429,/HTTP 429.*local delay/],[503,/HTTP 503/]]) {
     const post = createClaudeOAuthPostJson(async () => new Response('private-fixture-code',{status}));
     await assert.rejects(post(endpoint, body), error => message.test(error.message) && !error.message.includes('private-fixture'));
   }
+});
+
+test('Retry-After blocks both login and refresh, survives reload, and does not replay after expiry', async () => {
+  const {createClaudeOAuthPostJson}=await transportModule;
+  const {createOAuthState}=require('../src/atlas/claude-oauth-state.cjs');
+  let now=1900000000000,saved,calls=0;
+  const state=createOAuthState({now:()=>now,persist:value=>saved=JSON.stringify(value)});
+  const request=async()=>{calls++;return new Response(JSON.stringify({error:{type:'rate_limit_error',message:'private-fixture-secret'}}),{status:429,headers:{'retry-after':'90','request-id':'req_fixture','content-type':'application/json'}});};
+  const post=createClaudeOAuthPostJson(request,1000,{state,now:()=>now});
+  await assert.rejects(post(endpoint,body),error=>error.retryAt===now+90000&&error.retrySource==='provider');
+  await assert.rejects(post(endpoint,{grant_type:'refresh_token',refresh_token:'private-fixture-token'}),/HTTP 429/);
+  assert.equal(calls,1);assert(!saved.includes('private-fixture'));assert(saved.includes('req_fixture'));
+  const restored=createOAuthState({now:()=>now,load:()=>JSON.parse(saved)});
+  const next=createClaudeOAuthPostJson(request,1000,{state:restored,now:()=>now});
+  await assert.rejects(next(endpoint,body),/requested a wait/);assert.equal(calls,1);
+  now+=90001;assert.equal(calls,1,'Expiry must not schedule an automatic token request');
+  await assert.rejects(next(endpoint,body),/HTTP 429/);assert.equal(calls,2);
+});
+
+test('missing retry time uses a clearly labelled local pause and diagnostics never store token bodies', async () => {
+  const {createClaudeOAuthPostJson}=await transportModule;
+  const {createOAuthState,LOCAL_BACKOFF_MS}=require('../src/atlas/claude-oauth-state.cjs');
+  const now=1900000000000;let saved;
+  const state=createOAuthState({now:()=>now,persist:value=>saved=JSON.stringify(value)});
+  const post=createClaudeOAuthPostJson(async()=>new Response('<html>private-fixture-token</html>',{status:429,headers:{'content-type':'text/html','request-id':'unsafe.value'}}),1000,{state,now:()=>now});
+  await assert.rejects(post(endpoint,body),/local delay.*HTML response/);
+  assert.equal(state.read().retryAt,now+LOCAL_BACKOFF_MS);assert.equal(state.read().retrySource,'local');
+  assert(!saved.includes('private-fixture'));assert(!saved.includes('unsafe.value'));
+});
+
+test('Retry-After accepts seconds and HTTP dates without inventing an exact server reset', () => {
+  const {retryTime}=require('../src/atlas/claude-oauth-state.cjs');
+  const now=1900000000000;
+  assert.equal(retryTime('120',now),now+120000);
+  assert.equal(retryTime(new Date(now+60000).toUTCString(),now),now+60000);
+  for(const value of [null,'','not a date','-20','0','Infinity'])assert.equal(retryTime(value,now),null);
+});
+
+test('overlapping token calls do not create a second network request', async () => {
+  const {createClaudeOAuthPostJson}=await transportModule;let finish,calls=0;
+  const post=createClaudeOAuthPostJson(async()=>{calls++;return new Promise(resolve=>finish=resolve);});
+  const first=post(endpoint,body);
+  await assert.rejects(post(endpoint,{grant_type:'refresh_token',refresh_token:'fixture'}),/already|still finishing/);
+  assert.equal(calls,1);finish(new Response('{}'));await first;
 });
 
 test('cancel before sending or during response reading rejects and never returns credentials', async () => {

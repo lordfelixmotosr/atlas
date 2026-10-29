@@ -30,10 +30,15 @@ import {
 } from '../../agent/rimworld/workshop.js';
 import type { RouteContext } from './context.js';
 import {buildRimworldMod} from '../../agent/rimworld/build.js';
+import {getPreviewCandidate, applyPreviewCandidate, discardPreviewCandidate, serializePreviewMutation} from '../../agent/assets/preview-protection.js';
 
 /** Asset CRUD + Workshop publish/link/unlink. */
 export function registerAssetsRoutes(ctx: RouteContext): void {
   const { ipc, getWindow } = ctx;
+  const previewRoot = (folder: string) => {
+    if (!folder || folder === '.' || folder === '..' || /[\\/:*?"<>|\x00]/.test(folder)) throw new Error('Invalid mod folder for a preview.');
+    return path.join(getWorkspacePaths().workspaceDir, folder);
+  };
 
   ipc.handle('modmixer:assets:scan', async (_evt, folder: string) => {
     const { workspaceDir } = getWorkspacePaths();
@@ -82,13 +87,20 @@ export function registerAssetsRoutes(ctx: RouteContext): void {
   ipc.handle(
     'modmixer:assets:set-preview-image',
     async (_evt, folder: string, sourceAbsPath: string) => {
-      await setPreviewImageFile(folder, sourceAbsPath);
+      await serializePreviewMutation(previewRoot(folder), () => setPreviewImageFile(folder, sourceAbsPath));
       const { workspaceDir } = getWorkspacePaths();
       return scanAssets(path.join(workspaceDir, folder));
     },
   );
 
   ipc.handle('atlas:assets:read-preview-image', (_evt, folder: string) => readPreviewImageDataUrl(folder));
+  ipc.handle('atlas:assets:preview-candidate/get', (_evt, folder: string) => getPreviewCandidate(previewRoot(folder)));
+  ipc.handle('atlas:assets:preview-candidate/apply', async (_evt, folder: string, id: string) => {
+    ctx.requireConsent(); await applyPreviewCandidate(previewRoot(folder), id);
+  });
+  ipc.handle('atlas:assets:preview-candidate/discard', async (_evt, folder: string, id: string) => {
+    await discardPreviewCandidate(previewRoot(folder), id);
+  });
 
   ipc.handle('atlas:assets:pick-preview-image', async () => {
     const win = getWindow(); if (!win) return null;

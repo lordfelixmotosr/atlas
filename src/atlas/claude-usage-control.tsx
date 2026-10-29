@@ -8,14 +8,18 @@ export function ClaudeUsageControl({model}: {model: Model}) {
   const enabled = model?.provider === 'anthropic';
   const [usage, setUsage] = useState<ClaudeUsage>(empty('loading'));
   const [refreshing, setRefreshing] = useState(false);
+  const [authPaused, setAuthPaused] = useState(false);
   const refreshRef = useRef<(force?: boolean) => void>(() => {});
 
   useEffect(() => {
     setUsage(empty('loading'));
     if (!enabled) return;
     let active = true;
+    let loginPaused = false;
+    setAuthPaused(false);
     let requestId = 0;
     const refresh = async (force = false) => {
+      if (!active || loginPaused) return;
       const request = ++requestId;
       setRefreshing(true);
       try {
@@ -34,10 +38,32 @@ export function ClaudeUsageControl({model}: {model: Model}) {
     const visible = () => {if (!document.hidden) void refresh();};
     document.addEventListener('visibilitychange', visible);
     const unsubscribe = window.modmixer.onOAuthEvent(event => {
-      if (event.type === 'links-changed' || event.providerId === 'anthropic') {
+      const isClaude = 'providerId' in event && event.providerId === 'anthropic';
+      if (isClaude && event.type === 'login-start') {
+        loginPaused = true;
+        setAuthPaused(true);
+        requestId++;
+        setRefreshing(false);
+        return;
+      }
+      if (isClaude && (event.type === 'login-error' || event.type === 'login-cancelled')) {
+        loginPaused = true;
+        setAuthPaused(true);
+        requestId++;
+        setRefreshing(false);
+        setUsage(previous => previous.updatedAt ? {...previous, status:'stale'} : empty('unavailable'));
+        return;
+      }
+      if (isClaude && (event.type === 'login-success' || event.type === 'logout')) {
+        loginPaused = false;
+        setAuthPaused(false);
         requestId++;
         setUsage(empty('loading'));
         void refresh(true);
+      } else if (event.type === 'links-changed' && !loginPaused) {
+        // Catalog changes also emit this event. The backend cache/backoff
+        // remains authoritative; this must not restart failed sign-in work.
+        void refresh();
       }
     });
     return () => {
@@ -74,11 +100,12 @@ export function ClaudeUsageControl({model}: {model: Model}) {
     usage.status === 'stale' ? 'Refresh failed. Showing the last known usage.' : '',
     usage.status === 'unavailable' ? 'Claude did not provide plan usage. Try Claude Code /usage or Claude Settings > Usage.' : '',
     usage.updatedAt ? `Last updated ${new Date(usage.updatedAt).toLocaleTimeString()}` : '',
+    authPaused ? 'Usage refresh is paused until Claude sign-in finishes successfully or you sign out.' : '',
     'Refreshes at most every five minutes. Click to check again.',
   ].filter(Boolean).join('\n');
 
   return <button type="button" className="felix-usage" data-atlas-claude-usage=""
-    onClick={() => refreshRef.current(true)} disabled={refreshing}
+    onClick={() => refreshRef.current(true)} disabled={refreshing || authPaused}
     aria-label={`Claude usage: ${description}`} aria-busy={refreshing} title={tooltip}>
     {windows.length ? windows.map(window => <span key={window.id}
       className={`felix-usage-item${window.remaining !== null && window.remaining <= 10 ? ' felix-usage-low' : ''}`}>

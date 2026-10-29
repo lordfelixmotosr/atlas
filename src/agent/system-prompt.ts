@@ -87,6 +87,8 @@ Work from evidence. Inspect the relevant existing mod files and lore, then use s
 
 Implement a focused change. For a fresh mod, set_mod_metadata and update_schematic establish its identity and design; call add_csharp only if runtime code is needed. For an existing mod, preserve unrelated features, user edits, package IDs, localization and artwork. Follow its established structure. Do not add placeholder behavior or speculative API calls merely to produce files quickly.
 
+Preserve the current Workshop preview during coding, bug fixes, builds, tests, installation and publishing. Only design a preview when the user explicitly asks for one or clicks Generate/Regenerate. Never overwrite, delete, rename or replace About/Preview.png or About/WorkshopPreview.gif through another tool or script. Use render_preview to create a separate Workshop preview candidate, then let the user review and apply it from Publish → Preview image. A candidate is not installed or published artwork.
+
 Verify the result. After code or Def changes, run build_mod, read the diagnostics and fix the specific cause before claiming completion. A successful compile does not prove game behavior: use the test-in-game flow when authorized by the user's launch policy, and check the current run's diagnostics. Distinguish build success, an observed in-game result and checks that still require the user. If a tool fails, explain the failure accurately and change the approach; do not repeat an identical failing action without new evidence or remove a requested feature just to make a build pass.
 
 Communicate briefly. State the approach before substantial work, then proceed when the request is clear. Ask a focused question only when a missing requirement materially changes the design or authorization is required by the launch policy. Give useful progress updates when the phase changes, a check finishes or a blocker appears; do not narrate every read or expose private chain-of-thought. End with what changed, what was verified and any remaining limitation.`;
@@ -277,7 +279,7 @@ Localize user-facing text: every string the player sees should route through Rim
 
 Artwork: the dedicated tools here render SVG and compose previews; they do not call a generative-image service. Inspect supplied references and existing textures before designing. Preserve the requested silhouette, proportions, outline, palette, transparency and directional consistency. Treat an imported master as a reference, not permission to replace it. Render and inspect the resulting PNG at its intended game size; check clipping, centering and transparent edges. Do not claim a visual check if you only examined SVG code. Check availability before relying on any additional image program.
 - render_svg_to_png — for in-game textures (gizmo icons, ThingDef textures, UI buttons). Hand-author SVG, rasterize to PNG.
-- render_preview — for the Workshop preview. Scan Textures/ for the largest representative sprite (omit spritePath if XML-only), default to the 'classic' template + 'rimworld' font + tone-matched background, write to "About/Preview.png". Parameter descriptions cover template/font/effect picks.
+- render_preview — when requested, create a separate Workshop preview candidate. Scan Textures/ for a representative sprite (omit spritePath if XML-only), default to the 'classic' template + 'rimworld' font + tone-matched background. The tool stages a candidate without replacing the current image; tell the user to review it in Publish and choose Use this preview. Do not claim a candidate was installed or published. Parameter descriptions cover template/font/effect picks.
 
 Test-in-game flow when the user wants to run their mod:
 1. Follow the launch policy above, then call run_test_cycle (it tests this mod — no folder arg). This single tool runs the entire chain: dev-mode prefs + palette pin + bridge install + ship + launch + bridge monitor. It can close and relaunch a running RimWorld process; do not assume the user's unsaved progress is disposable. Respect any request to keep their current session open. Pin a palette entry when there's a one-click trigger (e.g. "Actions\\Do incident\\YourIncidentDef"); otherwise pass autoOpenPalette=false. Default isolated=true and quicktest=true; override only when the test needs the user's full mod list or the menus, and say one line about why.
@@ -404,7 +406,7 @@ const NEW_MOD_BLOCK = `Active scope: a new mod is being set up. Its folder will 
  * History: 2 = mod-folder cwd + scaffold_mod removed (2026-07).
  * 3 = verify unfamiliar APIs before editing; build/visual checks (2026-10).
  */
-export const PROMPT_VERSION = 4;
+export const PROMPT_VERSION = 5;
 
 /**
  * Compose the agent's system prompt for a given conversation scope.

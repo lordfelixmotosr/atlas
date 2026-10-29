@@ -78,11 +78,83 @@ test('descriptions persist only for their exact content and comparison without m
  write(root,'Source/Main.cs','three');const changed=await api.readModChanges(root,100);assert.equal(changed.featureDescription,'');await assert.rejects(api.saveModDescription(root,'latest',report.descriptionKey,'stale'),/changed/);await assert.rejects(api.prepareModDescription(root,'latest',report.descriptionKey),/changed/);
 });
 test('old baselines without source snapshots remain usable and declare missing evidence',async t=>{
- const {root,state}=fixture(t);write(root,'Source/Main.cs','before');await api.recordModBaseline(root,'published');const stored=JSON.parse(fs.readFileSync(state));delete stored.published.inventory.files['Source/Main.cs'].preview;fs.writeFileSync(state,JSON.stringify(stored));write(root,'Source/Main.cs','after');const report=await api.readModChanges(root);assert.equal(report.status,'modified');const evidence=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey));assert.equal(evidence.evidence[0].earlierTextAvailable,false);assert.equal(evidence.evidence[0].before,null);assert.match(report.features.changed[0],/Main mod code/);
+ const {root,state}=fixture(t);write(root,'Source/Main.cs','before');await api.recordModBaseline(root,'published');const stored=JSON.parse(fs.readFileSync(state));delete stored.published.inventory.files['Source/Main.cs'].preview;fs.writeFileSync(state,JSON.stringify(stored));fs.rmSync(path.join(path.dirname(root),'.atlas/mod-note-sources'),{recursive:true,force:true});write(root,'Source/Main.cs','after');const report=await api.readModChanges(root);assert.equal(report.status,'modified');const evidence=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey));assert.equal(evidence.evidence[0].earlierTextAvailable,false);assert.equal(evidence.evidence[0].before,null);assert.match(report.features.changed[0],/Main mod code/);
 });
 test('text snapshots and AI evidence are bounded and a saved description cannot use the wrong baseline',async t=>{
  const {root}=fixture(t);for(let i=0;i<25;i++)write(root,'Source/File'+i+'.cs','a'.repeat(32000));await api.recordModBaseline(root,'published','',undefined,100);write(root,'Source/File0.cs','b'.repeat(32000));await api.recordModBaseline(root,'updated','',undefined,200);for(let i=0;i<25;i++)write(root,'Source/File'+i+'.cs','c'.repeat(32000));
- const inventory=await api.collectModInventory(root);assert(Object.values(inventory.files).reduce((total,file)=>total+Buffer.byteLength(file.preview??''),0)<=512*1024);const latest=await api.readModChanges(root),evidence=await api.prepareModDescription(root,'latest',latest.descriptionKey);assert(evidence.length<160000);assert(JSON.parse(evidence).omittedFiles>0);await assert.rejects(api.saveModDescription(root,'published',latest.descriptionKey,'wrong comparison'),/changed/);
+ const inventory=await api.collectModInventory(root);assert(Object.values(inventory.files).reduce((total,file)=>total+Buffer.byteLength(file.preview??''),0)<=512*1024);const latest=await api.readModChanges(root),evidence=await api.prepareModDescription(root,'latest',latest.descriptionKey);assert(evidence.length<=150000);const payload=JSON.parse(evidence);assert.equal(payload.omittedFiles,0);assert.equal(payload.evidence.length,25);assert(payload.evidence.some(file=>file.excerptTruncated));await assert.rejects(api.saveModDescription(root,'published',latest.descriptionKey,'wrong comparison'),/changed/);
+});
+
+test('change evidence focuses on late changed lines rather than a large unchanged prefix',async t=>{
+ const {root}=fixture(t),prefix=Array.from({length:500},(_,i)=>`// Unchanged fixture line ${i}`).join('\n')+'\n';
+ write(root,'Source/Targeting.cs',prefix+'bool CanTarget(Pawn pawn) { return true; }\n');await api.recordModBaseline(root,'published');
+ write(root,'Source/Targeting.cs',prefix+'bool CanTarget(Pawn pawn) { return pawn.Faction != Faction.OfPlayer; }\n');
+ const report=await api.readModChanges(root),payload=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey)),entry=payload.evidence[0];
+ assert.equal(payload.schemaVersion,2);assert.equal(payload.featuresAreHeuristics,true);assert.equal(entry.id,'file-1');assert.equal(entry.before,null);assert.equal(entry.after,null);assert.equal(entry.textEvidence,'comparison');assert.match(entry.changeExcerpt,/return true/);assert.match(entry.changeExcerpt,/pawn.Faction != Faction.OfPlayer/);assert(!entry.changeExcerpt.includes('fixture line 0'));assert.match(entry.changeExcerpt,/-501\//);assert.equal(entry.excerptTruncated,false);
+});
+
+test('changes past library excerpts use full hash-verified baseline source',async t=>{
+ const {root}=fixture(t),prefix='// retained prefix\n'.repeat(2200);write(root,'Source/Large.cs',prefix+'return false;');await api.recordModBaseline(root,'published');write(root,'Source/Large.cs',prefix+'return true;');
+ const report=await api.readModChanges(root),payload=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey)),entry=payload.evidence[0];
+ assert.equal(entry.changesOutsideCapturedText,false);assert.equal(entry.beforeTextTruncated,false);assert.equal(entry.afterTextTruncated,false);assert.match(entry.changeExcerpt,/return false/);assert.match(entry.changeExcerpt,/return true/);
+});
+
+test('definition relocation and byte-identical file moves are not new content or removals',async t=>{
+ const {root}=fixture(t);write(root,'Defs/Old.xml',xml('Armor','scale armor'));await api.recordModBaseline(root,'published');fs.renameSync(path.join(root,'Defs/Old.xml'),path.join(root,'Defs/New.xml'));
+ const report=await api.readModChanges(root),payload=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey));
+ assert.equal(payload.definitionChanges.length,1);const def=payload.definitionChanges[0];assert.equal(def.action,'relocated');assert.equal(def.sameContentMove,true);assert.equal(def.playerChangeEstablished,false);assert.equal(def.id,'definition-1');assert.equal(def.evidenceIds.length,2);assert(payload.evidence.every(file=>file.sameContentMove));assert(def.evidenceIds.every(id=>payload.evidence.some(file=>file.id===id)));
+});
+
+test('version variants retain their own values and cannot masquerade as global new content',async t=>{
+ const {root}=fixture(t),armor=value=>`<Defs><ThingDef><defName>Armor</defName><label>scale armor</label><statBases><ArmorRating_Sharp>${value}</ArmorRating_Sharp></statBases></ThingDef></Defs>`;
+ write(root,'1.6/Defs/Armor.xml',armor('0.2'));write(root,'1.7/Defs/Armor.xml',armor('0.3'));await api.recordModBaseline(root,'published');write(root,'1.7/Defs/Armor.xml',armor('0.4'));write(root,'1.8/Defs/Armor.xml',armor('0.4'));
+ const report=await api.readModChanges(root),payload=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey));const edited=payload.definitionChanges.find(def=>def.action==='edited'),variant=payload.definitionChanges.find(def=>def.action==='variant-added');
+ assert(edited);assert.equal(edited.beforePaths[0],'1.7/Defs/Armor.xml');assert.equal(edited.fieldChanges[0].before,'0.3');assert.equal(edited.fieldChanges[0].after,'0.4');assert.equal(edited.multipleVersionOrLoadVariants,true);assert.equal(edited.fieldComparisonAmbiguous,false);assert(variant?.ambiguous);assert(!payload.definitionChanges.some(def=>def.action==='added'));assert(payload.evidence.every(file=>file.category==='Def XML'));
+});
+
+test('a move across game-version scopes is ambiguous even when its bytes are identical',async t=>{
+ const {root}=fixture(t);write(root,'1.6/Defs/Armor.xml',xml('Armor','armor'));await api.recordModBaseline(root,'published');write(root,'1.7/Defs/Armor.xml',xml('Armor','armor'));fs.unlinkSync(path.join(root,'1.6/Defs/Armor.xml'));
+ const report=await api.readModChanges(root),payload=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey));assert.equal(payload.definitionChanges[0].action,'ambiguous');assert.equal(payload.definitionChanges[0].ambiguous,true);
+});
+
+test('repeated nested field names are excluded from precise definition balance deltas',async t=>{
+ const {root}=fixture(t),data=value=>`<Defs><ThingDef><defName>Weapon</defName><label>bow</label><verbs><li><damageAmountBase>${value}</damageAmountBase></li><li><damageAmountBase>99</damageAmountBase></li></verbs><statBases><Mass>2</Mass></statBases></ThingDef></Defs>`;
+ write(root,'Defs/Bow.xml',data('4'));await api.recordModBaseline(root,'published');write(root,'Defs/Bow.xml',data('8'));
+ const report=await api.readModChanges(root),payload=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey)),def=payload.definitionChanges[0];assert(def.ambiguousFields.includes('damageAmountBase'));assert(!def.fieldChanges.some(field=>field.field==='damageAmountBase'));assert(payload.evidenceWarnings.some(w=>/ambiguous/.test(w)));
+});
+
+test('missing legacy definition snapshots never establish that existing content was newly added',async t=>{
+ const {root,state}=fixture(t);write(root,'Defs/Armor.xml',xml('Armor','old armor'));await api.recordModBaseline(root,'published');const stored=JSON.parse(fs.readFileSync(state));delete stored.published.inventory.files['Defs/Armor.xml'].defs;fs.writeFileSync(state,JSON.stringify(stored));write(root,'Defs/Armor.xml',xml('Armor','new armor'));
+ const report=await api.readModChanges(root),payload=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey));assert.equal(payload.definitionCoverage.beforeComplete,false);assert.equal(payload.definitionChanges[0].action,'unconfirmed-added');assert.equal(payload.definitionChanges[0].ambiguous,true);assert(payload.evidenceWarnings.some(w=>/snapshots are missing/.test(w)));
+});
+
+test('JSON escaping cannot exceed the model evidence budget and tracking scope stays explicit',async t=>{
+ const {root}=fixture(t);for(let i=0;i<60;i++)write(root,`Source/File${i}.cs`,'a'.repeat(10000));await api.readModChanges(root);for(let i=0;i<60;i++)write(root,`Source/File${i}.cs`,'\u0001'.repeat(9000));
+ const report=await api.readModChanges(root),text=await api.prepareModDescription(root,'latest',report.descriptionKey),payload=JSON.parse(text);assert(text.length<=150000);assert.equal(payload.evidence.length,60);assert(payload.evidence.some(entry=>entry.excerptTruncated));assert(payload.evidenceWarnings.some(w=>/when Atlas began tracking/.test(w)));
+});
+
+test('private XML definition metadata cannot leak through summaries or changed-file descriptions',async t=>{
+ const {root}=fixture(t);write(root,'credentials.xml',xml('PrivateItem','private old label'));write(root,'Source/Public.cs','before');await api.recordModBaseline(root,'published');write(root,'credentials.xml',xml('PrivateItem','private new label'));write(root,'Source/Public.cs','after');
+ const report=await api.readModChanges(root),text=await api.prepareModDescription(root,'latest',report.descriptionKey),payload=JSON.parse(text);assert(!text.includes('private old label'));assert(!text.includes('private new label'));assert(!text.includes('PrivateItem'));assert.equal(payload.omittedFiles,1);assert.equal(payload.definitionChanges.length,0);assert.equal(payload.evidence[0].path,'Source/Public.cs');
 });
 
 test('private review warnings persist through editing and expire with the comparison',async t=>{const {root}=fixture(t);write(root,'Source/Main.cs','before');await api.recordModBaseline(root,'published');write(root,'Source/Main.cs','after');const report=await api.readModChanges(root);await api.saveModDescription(root,'latest',report.descriptionKey,'Added guards.','ai','Fixture',['Earlier text missing.']);let saved=await api.readModChanges(root);assert.equal(saved.reviewWarnings[0],'Earlier text missing.');assert(!saved.featureDescription.includes('missing'));await api.saveModDescription(root,'latest',report.descriptionKey,'Added recruitable guards.');saved=await api.readModChanges(root);assert.equal(saved.reviewWarnings[0],'Earlier text missing.');write(root,'Source/Main.cs','new edit');saved=await api.readModChanges(root);assert.equal(saved.reviewWarnings.length,0);assert.equal(saved.featureDescription,'');});
+
+test('changed source outside the shared library preview budget is loaded on demand',async t=>{
+ const {root}=fixture(t);for(let i=0;i<20;i++)write(root,`Defs/Bulk${i}.xml`,'<Defs><!--'+'bulk '.repeat(6400)+'--></Defs>');
+ write(root,'Source/ZMission.cs','bool WaitAtEdge = false;');await api.recordModBaseline(root,'published');
+ const snapshot=await api.collectModInventory(root);assert.equal(snapshot.files['Source/ZMission.cs'].preview,undefined);
+ write(root,'Source/ZMission.cs','bool WaitAtEdge = true;');write(root,'Source/ZDeparture.cs','void MarchThenWait() {}');const report=await api.readModChanges(root),payload=JSON.parse(await api.prepareModDescription(root,'latest',report.descriptionKey));
+ const mission=payload.evidence.find(e=>e.path==='Source/ZMission.cs'),departure=payload.evidence.find(e=>e.path==='Source/ZDeparture.cs');assert.equal(mission.earlierTextAvailable,true);assert.equal(mission.currentTextAvailable,true);assert.match(mission.changeExcerpt,/WaitAtEdge = false/);assert.match(mission.changeExcerpt,/WaitAtEdge = true/);assert.equal(departure.currentTextAvailable,true);assert.match(departure.changeExcerpt,/MarchThenWait/);
+});
+
+test('old generic AI fallback stays stored but cannot be copied as a generated public draft',async t=>{
+ const {root,state}=fixture(t);write(root,'Source/Main.cs','before');await api.recordModBaseline(root,'published');write(root,'Source/Main.cs','after');let report=await api.readModChanges(root);
+ await api.saveModDescription(root,'latest',report.descriptionKey,'Mod files updated.','ai','Fixture',['Missing source.']);const bytes=fs.readFileSync(state);report=await api.readModChanges(root);assert.equal(report.featureDescription,'');assert(report.reviewWarnings.includes('Missing source.'));assert(fs.readFileSync(state).equals(bytes));
+ await api.saveModDescription(root,'latest',report.descriptionKey,'Mod files updated.','manual');report=await api.readModChanges(root);assert.equal(report.featureDescription,'Mod files updated.');
+});
+
+test('a live edit cannot be stored under an earlier published source hash',async t=>{
+ const {root}=fixture(t);write(root,'Source/Main.cs','before');const captured=await api.collectModInventory(root);write(root,'Source/Main.cs','after');await api.recordModBaseline(root,'published','',captured);
+ const capture=path.join(path.dirname(root),'.atlas/mod-note-sources',path.basename(root),captured.files['Source/Main.cs'].hash+'.txt');assert(!fs.existsSync(capture));
+});

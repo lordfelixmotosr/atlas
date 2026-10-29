@@ -129,6 +129,14 @@ export interface CommunityRulesInfo {
  * everything we need.
  */
 export interface Channels {
+  'atlas:subagents:get': (conversationId:string) => import('../atlas/subagents-types').SubagentSnapshot;
+  'atlas:subagents:settings': (patch:Partial<import('../atlas/subagents-types').SubagentSettings>) => import('../atlas/subagents-types').SubagentSettings;
+  'atlas:subagents:cancel': (conversationId:string,id:string) => import('../atlas/subagents-types').SubagentTask;
+  'atlas:subagents:retry': (conversationId:string,id:string) => import('../atlas/subagents-types').SubagentTask;
+  'atlas:subagents:extend': (conversationId:string,id:string) => import('../atlas/subagents-types').SubagentTask;
+  'atlas:subagents:review-patch': (conversationId:string,id:string) => import('../atlas/subagents-types').SubagentPatchReview;
+  'atlas:subagents:apply-patch': (conversationId:string,id:string) => {files:string[]};
+  'atlas:subagents:steer': (conversationId:string,id:string,text:string) => import('../atlas/subagents-types').SubagentTask;
   // App
   'modmixer:app:version': () => string;
 
@@ -466,6 +474,7 @@ export interface Channels {
  * value type is the payload sent.
  */
 export interface Events {
+  'atlas:subagents:changed': import('../atlas/subagents-types').SubagentSnapshot;
   'modmixer:agent:event': AgentEventEnvelope;
   'modmixer:agent:scope-upgraded': ScopeUpgradedEnvelope;
   'modmixer:assets:changed': AssetsChangedEnvelope;
