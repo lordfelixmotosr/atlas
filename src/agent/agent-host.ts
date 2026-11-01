@@ -121,6 +121,7 @@ import {
   addConversation,
   getConversation,
   isDefaultTitle,
+  listConversations,
   removeConversation,
   setActiveForMod,
   setConvModel,
@@ -601,6 +602,24 @@ export class AgentHost {
   private helperTeamInstance: AtlasSubagents | null = null;
   hasActiveWork(): boolean {return this.busyConversations.size > 0 || !!this.helperTeamInstance?.isBusy();}
   subagentsBusy(conversationId?:string):boolean {return !!this.helperTeamInstance?.isBusy(conversationId);}
+  /** True while any chat for this mod is running, starting, compacting or has helpers working. */
+  modWorkBusy(folder:string):boolean {
+    for(const convo of listConversations()){
+      if(convo.scope.type!=='mod'||convo.scope.modFolder!==folder)continue;
+      if(this.busyConversations.has(convo.id)||this.constructing.has(convo.id)||this.subagentsBusy(convo.id))return true;
+      const entry=this.sessions.get(convo.id);
+      if(entry&&felixAgentWorking(entry.session))return true;
+    }
+    return false;
+  }
+  /** True while an agent test or live session is using the running game. */
+  gameInUseByAgent():boolean {
+    if(this.liveConversationId)return true;
+    const id=this.monitoringConversationId;if(!id)return false;
+    if(this.busyConversations.has(id)||this.subagentsBusy(id))return true;
+    const convo=getConversation(id);
+    return !!convo&&convo.scope.type==='mod'&&this.modWorkBusy(convo.scope.modFolder);
+  }
   subagentsProviderBusy(provider:string):boolean {return !!this.helperTeamInstance?.isProviderBusy(provider);}
   helperTeam():AtlasSubagents {
     return this.helperTeamInstance ??= new AtlasSubagents({agentDir:this.agentDir,host:this,

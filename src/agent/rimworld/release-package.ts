@@ -83,7 +83,7 @@ async function safeRoot(root: string): Promise<string> {
 }
 
 /** Read-only, deterministic selection for BOTH the game mirror and Steam upload. */
-export async function planRelease(modDir: string, virtualFiles: Record<string, string> = {}, inventoryOnly = false): Promise<ReleasePlan> {
+export async function planRelease(modDir: string, virtualFiles: Record<string, string> = {}, inventoryOnly = false, hash: (file: string) => Promise<string> = fileSha): Promise<ReleasePlan> {
   const root = await safeRoot(modDir);
   const plan: ReleasePlan = {valid: false, files: [], directories: [], totalBytes: 0, excluded: [], warnings: [], errors: [], unknownRootFolders: [], versions: [], loadRoots: [], allowDlls: []};
   const top = await fsp.readdir(root, {withFileTypes: true});
@@ -160,7 +160,7 @@ export async function planRelease(modDir: string, virtualFiles: Record<string, s
       if (inventoryOnly && !relative.toLowerCase().endsWith('.dll') && !['about/about.xml','loadfolders.xml'].includes(relative.toLowerCase())) return;
       if (seen.has(relative)) return;
       seen.add(relative);
-      plan.files.push({path: relative, bytes: st.size, sha256: await fileSha(full)});
+      plan.files.push({path: relative, bytes: st.size, sha256: await hash(full)});
     } else plan.errors.push(`Non-regular release file: ${relative}.`);
   };
   for (const p of selected) try {await visit(p);} catch (error) {plan.errors.push(`Cannot read ${p}: ${String(error)}`);}
@@ -200,8 +200,8 @@ export function allowedDll(relative: string, plan: Pick<ReleasePlan, 'loadRoots'
   return plan.allowDlls.some(d => d.toLowerCase() === p) || plan.loadRoots.some(r => p.startsWith((r ? r.toLowerCase() + '/' : '') + 'assemblies/'));
 }
 
-/** Full installed-file inventory. Used on demand, never by the toolbar timer. */
-export async function runtimeInventory(root: string): Promise<Pick<ReleasePlan,'files'|'directories'>> {
+/** Full installed-file inventory. The toolbar timer passes a hash that reuses unchanged files' hashes. */
+export async function runtimeInventory(root: string, hash: (file: string) => Promise<string> = fileSha): Promise<Pick<ReleasePlan,'files'|'directories'>> {
   await safeRoot(root);
   const files:ReleaseFile[]=[],directories:string[]=[],seen=new Set<string>();
   const walk=async(dir:string,prefix=''):Promise<void>=>{
@@ -212,7 +212,7 @@ export async function runtimeInventory(root: string): Promise<Pick<ReleasePlan,'
       seen.add(relative.toLowerCase());
       if(e.isSymbolicLink())throw new Error(`Linked installed path is not supported: ${relative}.`);
       if(e.isDirectory()){directories.push(relative);await walk(full,relative+'/');}
-      else if(e.isFile()){const st=await fsp.stat(full);files.push({path:relative,bytes:st.size,sha256:await fileSha(full)});}
+      else if(e.isFile()){const st=await fsp.stat(full);files.push({path:relative,bytes:st.size,sha256:await hash(full)});}
       else throw new Error(`Non-regular installed path: ${relative}.`);
     }
   };
