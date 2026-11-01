@@ -9,7 +9,7 @@ function fixture(t){
   fs.mkdirSync(resources);fs.mkdirSync(updates);
   fs.writeFileSync(path.join(resources,'trust.json'),JSON.stringify({keys:{'atlas-local-1':keys.publicKey.export({format:'pem',type:'spki'})}}));
   t.after(()=>{assert(root.startsWith(base+path.sep));fs.rmSync(root,{recursive:true,force:true});});
-  const bytes=Buffer.alloc(1024*1024,42),entry={version:'0.3.0',file:'Atlas-0.3.0.zip',size:bytes.length,sha256:sha(bytes)};
+  const bytes=Buffer.alloc(1024*1024,42),entry={version:'99.0.0',file:'Atlas-99.0.0.zip',size:bytes.length,sha256:sha(bytes)};
   const feed=()=>sign({type:'feed',sequence:1,issuedAt:Date.now()-1000,expiresAt:Date.now()+86400000,packs:[],application:entry},keys.privateKey);
   fs.writeFileSync(path.join(updates,entry.file),bytes);fs.writeFileSync(path.join(updates,'index.atlas.json'),feed());
   const library=new Library(root,resources),states=[];let time=0;
@@ -31,14 +31,14 @@ function assertFailed(f){
 }
 test('local archive streams with byte progress, verified readiness and an unsaved-draft restart guard',async t=>{
   const f=fixture(t),result=await f.app.download();
-  assert.equal(result.working,false);assert.equal(result.ready,'0.3.0');
+  assert.equal(result.working,false);assert.equal(result.ready,'99.0.0');
   assert.deepEqual([...new Set(f.states.map(s=>s.progress.stage))],['checking','downloading','verifying','ready']);
   const download=f.states.filter(s=>s.progress.stage==='downloading');assert(download.length>=3);assert(download.length<=5,'fast local chunks should be throttled');
   assert(download.every((s,i)=>s.progress.totalBytes===f.bytes.length&&(!i||s.progress.receivedBytes>=download[i-1].progress.receivedBytes)));
   assert.equal(download.at(-1).progress.receivedBytes,f.bytes.length);
   assert.equal(sha(fs.readFileSync(f.app.ready.path)),sha(f.bytes));f.app.restartBlockReason=()=> 'Save your file edits';await assert.rejects(f.app.install(),/file edits/);f.app.restartBlockReason=()=>null;
   assert(f.states.filter(s=>s.progress.stage==='verifying').every(s=>s.ready===null));
-  assert.deepEqual(fs.readdirSync(path.join(f.root,'data/updates')),['Atlas-0.3.0.zip']);
+  assert.deepEqual(fs.readdirSync(path.join(f.root,'data/updates')),['Atlas-99.0.0.zip']);
 });
 test('network progress uses signed totals, reports real transfer speed and locks competing actions',async t=>{
   const f=fixture(t);let unblock,entered;const waiting=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>unblock=resolve);
@@ -47,7 +47,7 @@ test('network progress uses signed totals, reports real transfer speed and locks
   await assert.rejects(f.app.check(),/running/);await assert.rejects(f.app.download(),/running/);unblock();await download;
   const events=f.states.filter(s=>s.progress.stage==='downloading'&&s.progress.receivedBytes>0);
   assert.equal(events.length,16);assert(events.every(s=>s.progress.totalBytes===f.bytes.length&&s.progress.bytesPerSecond>0));
-  assert.equal(f.app.status().ready,'0.3.0');
+  assert.equal(f.app.status().ready,'99.0.0');
 });
 for(const mode of ['truncated','oversized','corrupted'])test(mode+' archive never becomes installable and leaves no partial archive',async t=>{
   const f=fixture(t);
@@ -58,7 +58,7 @@ test('a disconnected download retains its byte count and partial archive; a serv
   const f=fixture(t);network(f,async function*(){f.tick();yield f.bytes.subarray(0,65536);throw new Error('Connection interrupted');});
   await assert.rejects(f.app.download(),/Connection interrupted/);assert.equal(f.app.status().ready,null);assert.equal(fs.statSync(path.join(f.root,'data/updates',f.entry.sha256+'.part')).size,65536);assert.equal(f.app.status().progress.receivedBytes,65536);
   const start=f.states.length;network(f,async function*(){f.tick();yield f.bytes;});
-  const result=await f.app.download();assert.equal(result.error,null);assert.equal(result.ready,'0.3.0');
+  const result=await f.app.download();assert.equal(result.error,null);assert.equal(result.ready,'99.0.0');
   assert(f.states.slice(start).some(s=>s.progress.stage==='downloading'&&s.progress.receivedBytes===0),'server without Range support must restart at zero');
 });
 test('scheduled automatic downloads broadcast application progress without per-chunk library refreshes',async t=>{
@@ -72,7 +72,7 @@ test('scheduled automatic downloads broadcast application progress without per-c
     t.after(()=>quit?.());await runtime.ready;
   }finally{global.setInterval=interval;}
   runtime.library.config.lastCheckedAt=0;await tick();
-  assert.equal(runtime.application.status().ready,'0.3.0');runtime.tasks.observeIndex({type:'starting'});await assert.rejects(runtime.application.install(),/reference indexing/);runtime.tasks.observeIndex({type:'done'});
+  assert.equal(runtime.application.status().ready,'99.0.0');runtime.tasks.observeIndex({type:'starting'});await assert.rejects(runtime.application.install(),/reference indexing/);runtime.tasks.observeIndex({type:'done'});
   const appEvents=events.filter(e=>e.channel==='atlas:app:state');
   assert(appEvents.some(e=>e.state.progress?.stage==='downloading'&&e.state.progress.receivedBytes>0));
   assert(appEvents.some(e=>e.state.progress?.stage==='verifying'));
@@ -83,7 +83,7 @@ test('valid HTTP ranges resume verified partial bytes across a process restart',
  const f=fixture(t);network(f,async function*(){yield f.bytes.subarray(0,65536);throw new Error('Offline');});await assert.rejects(f.app.download(),/Offline/);
  const resumed=new ApplicationUpdate(f.library,{app:{}},()=>false);assert.equal(resumed.status().progress.receivedBytes,65536);
  f.library.fetch=async(url,options)=>{if(String(url).endsWith('index.atlas.json'))return new Response(f.feed());assert.equal(options.headers.Range,'bytes=65536-');return new Response(f.bytes.subarray(65536),{status:206,headers:{'content-range':`bytes 65536-${f.bytes.length-1}/${f.bytes.length}`}});};
- await resumed.download();assert.equal(resumed.status().ready,'0.3.0');assert.equal(sha(fs.readFileSync(resumed.ready.path)),f.entry.sha256);
+ await resumed.download();assert.equal(resumed.status().ready,'99.0.0');assert.equal(sha(fs.readFileSync(resumed.ready.path)),f.entry.sha256);
 });
 test('invalid resume ranges cannot promote a partial archive',async t=>{
  const f=fixture(t);network(f,async function*(){yield f.bytes.subarray(0,64);throw new Error('Offline');});await assert.rejects(f.app.download());
@@ -93,7 +93,7 @@ test('invalid resume ranges cannot promote a partial archive',async t=>{
 test('pause retains a partial, survives restart, automatic checks respect pause, and cancellation discards staging',async t=>{
  const f=fixture(t);network(f,async function*(){yield f.bytes.subarray(0,65536);f.app.pause();yield f.bytes.subarray(65536);});const paused=await f.app.download();assert.equal(paused.progress.stage,'paused');assert.equal(paused.working,false);
  const restarted=new ApplicationUpdate(f.library,{app:{}},()=>false);const automatic=await restarted.download({automatic:true});assert.equal(automatic.progress.stage,'paused');assert.equal(automatic.working,false);assert.equal(fs.statSync(path.join(f.root,'data/updates',f.entry.sha256+'.part')).size,65536);
- restarted.cancel();assert.deepEqual(fs.readdirSync(path.join(f.root,'data/updates')),[]);network(f,async function*(){yield f.bytes;});await restarted.download();assert.equal(restarted.status().ready,'0.3.0');
+ restarted.cancel();assert.deepEqual(fs.readdirSync(path.join(f.root,'data/updates')),[]);network(f,async function*(){yield f.bytes;});await restarted.download();assert.equal(restarted.status().ready,'99.0.0');
 });
 test('corrupted retained bytes fail verification even with a valid range',async t=>{
  const f=fixture(t);network(f,async function*(){yield f.bytes.subarray(0,64);throw new Error('Offline');});await assert.rejects(f.app.download());fs.writeFileSync(path.join(f.root,'data/updates',f.entry.sha256+'.part'),Buffer.alloc(64,1));

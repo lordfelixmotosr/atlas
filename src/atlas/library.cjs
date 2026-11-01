@@ -2,7 +2,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const VERSION = '0.2.20';
+// The running Atlas version: the packaged app's version in Electron, or the repo's
+// package.json in build tools and tests. Never hard-code it, or the updater keeps
+// offering a release that is already installed.
+const VERSION = (() => {
+  try { const {app} = require('electron'); if (app && typeof app.getVersion === 'function') return app.getVersion(); } catch {}
+  return require('../../package.json').version;
+})();
 const ONLINE_SOURCE = 'https://github.com/lordfelixmotosr/atlas/releases/latest/download/';
 const MAX_BYTES = 24 * 1024 * 1024;
 const SAFE_ID = /^[a-z][a-z0-9-]{0,63}$/;

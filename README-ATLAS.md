@@ -1,4 +1,18 @@
-# Atlas 0.3.8 portable
+# Atlas 0.3.9 portable
+
+## 0.3.9 Install update for every change
+
+**Install update** now appears whenever a mod's runtime files differ from its game copy, including XML, textures, sounds and patches, not only DLLs. It installs them from your Atlas project the same way **Test in RimWorld** does, without launching the game. Agent work in other chats no longer blocks it. An agent test or live session using the game still does.
+
+While an agent or C# build is still changing a mod, Install update installs that mod's last completed build instead, marked **Last completed build** in the review, so half-finished edits never reach the game. With no completed build, Atlas asks you to wait. Successful C# builds now keep an install copy in the profile's `completed-builds` folder. A companion or dependency that cannot be prepared keeps its current game copy and is listed as a warning instead of blocking the chosen mod. The review warns when C# changed since the last build.
+
+Test runs, live sessions, game launch and quit, and Install update share one install lock, so mod files are never swapped during a launch.
+
+Saved sign-ins that cannot be read no longer stop the built-in login providers from loading. **Accounts & models** shows a warning and keeps the existing sign-in file.
+
+Decompiling the game index shows a moving activity bar with the number of generated C# files and elapsed time, instead of a percentage that looks stuck. The chat box offers offline **Tab** completion from your recent prompts and common requests; **Esc** dismisses it.
+
+The updater now uses the app's real version, so it no longer offers to reinstall the release that is already installed.
 
 ## 0.3.8 Complete change-note evidence
 
