@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "plannedInitialVersion": "0.1.0",
-  "status": "Atlas 0.3.8 native source release built and verified",
+  "status": "Atlas 0.3.9 native portable build",
   "createdAt": "2026-10-03",
   "upstream": {
     "repository": "https://github.com/lebek/modmixer",
@@ -93,7 +93,7 @@
   },
   "updaterDesign": {
     "releaseFeed": "updates",
-    "feedStatus": "Local signed feed included; live HTTPS feed not published",
+    "feedStatus": "Signed GitHub release feed using atlas-2026-11; 0.3.8 or earlier requires one manual application update",
     "channels": [
       "application",
       "managed knowledge and skills",
@@ -181,7 +181,8 @@
     "0.3.0: Projects, Workspace, Knowledge and Settings redesign; Activity drawer; responsive focus layouts and in-memory file draft retention",
     "0.3.1: Claude OAuth uses Chromium transport for token exchange and refresh; bounded timeout, cancellation and concise recovery messages",
     "0.3.2: Uninstall from RimWorld in the existing mod menu; retain workspace and publication identity; serialized atomic removal with Windows lock checks",
-    "0.3.8: Helpers, preview preservation and player-facing change notes, including complete source evidence and explicit failure handling"
+    "0.3.8: Helpers, preview preservation and player-facing change notes, including complete source evidence and explicit failure handling",
+    "0.3.9: Runtime-file update detection, safe completed builds, provider startup recovery, offline completion, version-correct updater, launch-lock preservation and publisher-key rotation"
   ],
   "acceptanceChecks": [
     "launch from a path with spaces and move to a different drive",
@@ -196,7 +197,7 @@
     "local game changes invalidate relevant indexes",
     "image validation reports static checks separately from in-game visual evidence"
   ],
-  "version": "0.3.8",
+  "version": "0.3.9",
   "supportedGames": [
     "rimworld"
   ],
@@ -219,7 +220,8 @@
     "helperRecovery": "20-minute routine research and 30-minute implementation/review budgets, manual 15-minute extensions up to two hours; saved partial patches can be reviewed and explicitly applied before continuing remaining work; connection inactivity remains separate",
     "previewProtection": "AI previews are separate proposals requiring explicit application; existing PNG/GIF artwork is preserved during unrelated coding, with recovery backups and reported paths on failure",
     "playerNotes": "Focused changed-file evidence, full source captured for future baselines, and read-only history recovery requiring exact baseline hashes; plain-language player notes, private warnings, and an explicit no-draft result instead of a generic public fallback",
-    "claudeAuthentication": "Serialized sign-in, cancellation and usage-refresh authentication; rate-limit cooldowns are respected without automatic request retries"
+    "claudeAuthentication": "Serialized sign-in, cancellation and usage-refresh authentication; rate-limit cooldowns are respected without automatic request retries",
+    "installUpdates": "Compare all installable runtime files; preserve completed builds while editing; recheck game state after acquiring the shared launch/install lock"
   },
   "acceptanceResults": {
     "pending": [],
@@ -372,25 +374,46 @@
       "0.3.2 portable, full-update and compact application ZIPs passed CRC, private-folder exclusion and receipt hash checks; no user game mod was uninstalled during verification",
       "0.3.8 117 regression tests passed for the current repair; source type checking and packaged startup/second-launch verification passed",
       "0.3.8 isolated native UI checks passed for notes, private warnings, draft preservation and no automatic generation retries; prior helper/preservation checks retained",
-      "0.3.8 repaired RimContractors comparison inspected read-only: all seven changed source/XML files have readable evidence, with recovered earlier source accepted only after complete baseline hash matching; no live provider request or Workshop upload used for this verification"
+      "0.3.8 repaired RimContractors comparison inspected read-only: all seven changed source/XML files have readable evidence, with recovered earlier source accepted only after complete baseline hash matching; no live provider request or Workshop upload used for this verification",
+      "0.3.9 source typecheck/build and 28 focused installation tests passed; three ZIP hashes and signed feed verified; complete suite 417/458 with 41 environment/fixture failures; automated startup inconclusive"
     ]
   },
   "release": {
     "portable": {
-      "path": "Atlas-0.3.8-win-x64-portable.zip",
-      "size": 402483685,
-      "sha256": "5e19ba7dffac5a5036a7830e33e8336fe17bd7a655de1e3fdc20e0bb922380f1"
+      "path": "Atlas-0.3.9-win-x64-portable.zip",
+      "size": 405008686,
+      "sha256": "abacdd3a69cfc5c0a0b4a9f63cf0bf391c84cccb89695373f8cebe4960d8675f"
     },
     "full-update": {
-      "path": "Atlas-0.3.8-win-x64-full-update.zip",
-      "size": 401901256,
-      "sha256": "d949357ce10da56e6520598db6fdd6467a05594ce504972109d0d8de3c7f6546"
+      "path": "Atlas-0.3.9-win-x64-full-update.zip",
+      "size": 404424040,
+      "sha256": "c5ddf6919b5d58256d5b25414b744a02bdefc60cd8148ce5506c1b65202d75f7"
     },
     "application-update": {
-      "path": "Atlas-0.3.8-win-x64-application-update.zip",
-      "size": 99821547,
-      "sha256": "f05b61e115d82c6b5486960dfbf50503ebfdd49326b4e568d23eb29a7e96ea7b"
+      "path": "Atlas-0.3.9-win-x64-application-update.zip",
+      "size": 101814673,
+      "sha256": "77135a99922460cf77c7449a4e084acaffa21bf275259496ffebb5f838cefbea"
     }
   },
-  "repository": "https://github.com/lordfelixmotosr/atlas"
+  "repository": "https://github.com/lordfelixmotosr/atlas",
+  "releaseVerification": {
+    "version": "0.3.9",
+    "typecheckPassed": true,
+    "buildPassed": true,
+    "focusedTests": {
+      "passed": 28,
+      "failed": 0
+    },
+    "fullTests": {
+      "passed": 417,
+      "total": 458,
+      "environmentOrFixtureFailures": 41
+    },
+    "startup": "Inconclusive: unchanged 0.3.8 and new 0.3.9 both exited with 0x80000003 in the restricted command runner",
+    "secondLaunch": "Not confirmed",
+    "archiveHashesVerified": true,
+    "feedSignatureVerified": true,
+    "publisherKeyId": "atlas-2026-11",
+    "manualUpdateRequiredFrom": "0.3.8 or earlier"
+  }
 }

@@ -108,16 +108,18 @@ export function registerDllUpdateRoutes(ctx: RouteContext): void {
         return {status:'confirmation',token:confirmation.token,running:pending.running,preview,warnings,message:(token?'The preview changed or expired. Review the updated file list. ':'')+(pending.running?'Save your game first. Atlas will close RimWorld. ':'')+(mode==='restore'?'Restore this mod’s previous installed runtime. Source edits stay in your workspace. Atlas testing keeps the restored copy until runtime files change or you choose Install update.':saved.size?'Install the files shown here. Mods an agent is still editing use their last completed build; the others come from your Atlas project, the same way Test in RimWorld does. Obsolete files will be removed.':'Install the files shown here from your Atlas project, the same way Test in RimWorld does, without launching the game. Obsolete files will be removed.')};
       }
       confirmation=undefined;
-      if(mode==='restore'&&ctx.host.hasActiveWork())throw new Error('Agent work started. Finish it before restoring.');
-      if(ctx.host.gameInUseByAgent())throw new Error(GAME_IN_USE);
-      if(await isRimWorldRunning()){
-        if(!pending.running)throw new Error('RimWorld started during preparation. Try Install update again.');
-        const quit=await quitRimWorld();if(!quit.killed||!quit.exited)throw new Error('RimWorld did not close. No runtime update was installed.');
-        if(ctx.host.gameInUseByAgent())throw new Error('Agent game work started while RimWorld was closing. No runtime update was installed.');
-        ctx.host.stopMonitoring();
-      }
       const installed:string[]=[];
       await withRuntimeSync(getRimWorldModsDir(),async()=>{
+        // A game launch may finish while this installation waits for the shared lock.
+        // Check and close the game only after acquiring it, before replacing any files.
+        if(mode==='restore'&&ctx.host.hasActiveWork())throw new Error('Agent work started. Finish it before restoring.');
+        if(ctx.host.gameInUseByAgent())throw new Error(GAME_IN_USE);
+        if(await isRimWorldRunning()){
+          if(!pending.running)throw new Error('RimWorld started during preparation. Try Install update again.');
+          const quit=await quitRimWorld();if(!quit.killed||!quit.exited)throw new Error('RimWorld did not close. No runtime update was installed.');
+          if(ctx.host.gameInUseByAgent())throw new Error('Agent game work started while RimWorld was closing. No runtime update was installed.');
+          ctx.host.stopMonitoring();
+        }
         for(const name of folders){
           const build=saved.get(name);
           if(mode==='restore'?ctx.host.hasActiveWork()||isBuildInProgress(path.join(workspace,name)):!build&&editing(name))throw new Error(`Work started during installation. Installed so far: ${installed.join(', ')||'none'}. Finish active work, then retry.`);

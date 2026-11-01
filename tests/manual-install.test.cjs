@@ -73,7 +73,7 @@ async function routes(t,{companion=false}={}){
     mods.push({folder:'Companion',source:'workspace',about:{name:'Companion',packageIdLc:'atlas.release.companion',modDependencies:[]}});
     t.after(()=>fs.unwatchFile(path.join(targetOf('Companion'),'About','PublishedFileId.txt')));
   }
-  const flags={running:false,busy:false,companionBusy:false,otherWork:false,gameInUse:false,building:false,buildStatus:'current',saved:{},quitSucceeds:true,syncError:null,installs:0,installed:[],quits:0,stops:0};
+  const flags={running:false,busy:false,companionBusy:false,otherWork:false,gameInUse:false,building:false,buildStatus:'current',saved:{},quitSucceeds:true,syncError:null,installs:0,installed:[],quits:0,stops:0,onInstallLock:null};
   const handlers={};
   const workspace={getWorkspacePaths:()=>({workspaceDir:path.dirname(f.source)}),getMirrorStateDir:()=>f.state,getRimWorldModsDir:()=>path.dirname(f.target),listWorkspaceMods:async()=>[],syncModToGame:async(folder,options)=>{
     flags.installs++;if(flags.syncError)throw flags.syncError;await mirrors.refreshRuntimeMirror(sourceOf(folder),targetOf(folder),f.state,options);flags.installed.push(folder);return {assetWarnings:[]};
@@ -83,7 +83,7 @@ async function routes(t,{companion=false}={}){
     '../../agent/workspace.js':workspace,'../../agent/conversations.js':{getConversation:()=>({scope:{type:'mod',modFolder:'Example'},game:'rimworld'})},
     '../../agent/registry/index.js':{getRegistry:()=>({start:async()=>{},getSnapshot:()=>({mods})})},
     '../../agent/rimworld/game.js':{isRimWorldRunning:async()=>flags.running,quitRimWorld:async()=>{flags.quits++;if(flags.quitSucceeds)flags.running=false;return {killed:flags.quitSucceeds,exited:flags.quitSucceeds};}},
-    '../../agent/rimworld/runtime-mirror.js':mirrors,'../../agent/rimworld/release-package.js':release,
+    '../../agent/rimworld/runtime-mirror.js':{...mirrors,withRuntimeSync:(root,work)=>{flags.onInstallLock?.();return mirrors.withRuntimeSync(root,work);}},'../../agent/rimworld/release-package.js':release,
     '../../agent/rimworld/install-preview.js':previews,
     '../../agent/rimworld/build-state.js':{isBuildInProgress:()=>flags.building,getBuildState:async()=>({status:flags.buildStatus,message:''}),getCompletedBuildStore:()=>({get:async source=>flags.saved[path.basename(source)]??null})},'../../agent/rimworld/dll-update.js':dll,
     '../../agent/rimworld/test-history.js':{readTestOptions:async()=>({companionMods:companion?['atlas.release.companion']:[]})},'../../atlas/mod-folder-shortcuts.js':{}
@@ -152,6 +152,26 @@ test('an agent test or live session using the game blocks installation',async t=
   const f=await routes(t);f.flags.gameInUse=true;
   const preview=await f.apply();await assert.rejects(f.apply(preview.token),/active agent test or live session/);assert.equal(f.flags.installs,0);
 });
+test('a game launch while installation waits for the shared lock prevents replacement',async t=>{
+  for(const agentSession of [false,true])await t.test(agentSession?'agent test or live session':'ordinary game launch',async t=>{
+    const f=await routes(t),preview=await f.apply();
+    let lockHeld,releaseLaunch,installationQueued;
+    const held=new Promise(resolve=>{lockHeld=resolve;}),release=new Promise(resolve=>{releaseLaunch=resolve;}),queued=new Promise(resolve=>{installationQueued=resolve;});
+    const launch=mirrors.withRuntimeSync(path.dirname(f.target),async()=>{
+      lockHeld();await release;f.flags.running=true;f.flags.gameInUse=agentSession;
+    });
+    await held;f.flags.onInstallLock=installationQueued;
+    const install=f.apply(preview.token);
+    const rejected=assert.rejects(install,agentSession?/active agent test or live session/:/RimWorld started during preparation/);
+    try{
+      await Promise.race([queued,install.then(()=>assert.fail('Installation finished without waiting for the launch lock.'))]);
+    }finally{releaseLaunch();}
+    await launch;await rejected;
+    assert.equal(f.flags.installs,0);assert.equal(f.flags.quits,0);assert.equal(f.flags.running,true);
+    assert.equal(fs.readFileSync(path.join(f.target,'Assemblies/Main.dll'),'utf8'),'old');
+  });
+});
+
 test('the review warns when C# changed since the last build',async t=>{
   const f=await routes(t);f.flags.buildStatus='needs-rebuild';
   const preview=await f.apply();assert.match(preview.warnings.join('\n'),/Fixture: C# code changed since its last build/);

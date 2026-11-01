@@ -5,6 +5,7 @@ const repository='lordfelixmotosr/atlas';
 let credential;
 function auth(){
  if(credential!==undefined)return credential;
+ if(process.env.GH_TOKEN||process.env.GITHUB_TOKEN){credential=process.env.GH_TOKEN||process.env.GITHUB_TOKEN;return credential;}
  try{const raw=cp.execFileSync('git',['credential','fill'],{input:'protocol=https\nhost=github.com\nusername='+repository.split('/')[0]+'\npath='+repository+'.git\n\n',encoding:'utf8',env:{...process.env,GIT_TERMINAL_PROMPT:'0',GCM_INTERACTIVE:'Never'},stdio:['pipe','pipe','pipe'],windowsHide:true});credential=raw.split(/\r?\n/).find(line=>line.startsWith('password='))?.slice(9)||'';}catch{credential='';}
  return credential;
 }
@@ -23,11 +24,13 @@ async function main(){
  const holdPath=path.join(root,'build-check/publish-hold.json');
  if(fs.existsSync(holdPath)){const approval=JSON.parse(fs.readFileSync(holdPath,'utf8'));if(approval.blocked||approval.approvedVersion&&approval.approvedVersion!==version)throw new Error('Publishing this version is on hold until the user explicitly authorises it. No GitHub request was sent.');}
  const repo=await api('');if(repo.private)throw new Error('The release feed requires a public repository; no visibility changes were made.');if(!auth())throw new Error('GitHub sign-in is required to publish.');
- const out=path.resolve(root,'../outputs'),checks=JSON.parse(fs.readFileSync(path.join(out,'Atlas-'+version+'-checksums.json'))),feed=path.join(out,'Atlas-update-feed');
+ const out=path.resolve(process.env.ATLAS_RELEASE_OUTPUT||path.join(root,'../outputs')),checks=JSON.parse(fs.readFileSync(path.join(out,'Atlas-'+version+'-checksums.json'))),feed=path.join(out,'Atlas-update-feed');
  const body=fs.readFileSync(path.join(root,'build-check/github-release-notes.md'),'utf8');
  let release;try{release=await api('/releases/tags/v'+version);}catch(error){if(!String(error.message).includes('GitHub 404:'))throw error;}
  if(!release){const drafts=(await api('/releases?per_page=100')).filter(item=>item.tag_name==='v'+version);if(drafts.length>1)throw new Error('Several drafts use this version. Resolve the duplicate drafts before publishing.');release=drafts[0];}
- if(!release)release=await api('/releases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag_name:'v'+version,target_commitish:repo.default_branch,name:'Atlas '+version+' — Felix',body,draft:true,prerelease:false})});
+ let target=process.env.ATLAS_RELEASE_COMMIT;
+ if(!target){try{target=cp.execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',windowsHide:true}).trim();}catch{target=repo.default_branch;}}
+ if(!release)release=await api('/releases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag_name:'v'+version,target_commitish:target,name:'Atlas '+version+' — Felix',body,draft:true,prerelease:false})});
  if(!release.draft)throw new Error('This release is already public. Do not overwrite published assets.');
  const existing=await api('/releases/'+release.id+'/assets');
  const files=[path.resolve(out,checks.portable.path),path.resolve(out,checks['application-update'].path),path.resolve(out,checks['full-update'].path),path.join(out,'Atlas-'+version+'-checksums.json'),path.join(out,'Atlas-'+version+'-UPDATE.txt'),...fs.readdirSync(feed).filter(file=>file.endsWith('.atlas.json')).map(file=>path.join(feed,file))];
@@ -40,6 +43,13 @@ async function main(){
   const url=release.upload_url.replace(/\{.*$/,'')+'?name='+encodeURIComponent(name),stream=fs.createReadStream(file);
   await api(url,{method:'POST',headers:{'Content-Type':'application/octet-stream','Content-Length':String(fs.statSync(file).size)},body:stream,duplex:'half'});console.log('Uploaded '+name);
  }
+ const verified=await api('/releases/'+release.id+'/assets');
+ for(const file of files){
+  const name=path.basename(file),asset=verified.find(item=>item.name===name),digest=crypto.createHash('sha256');
+  for await(const chunk of fs.createReadStream(file))digest.update(chunk);
+  if(!asset||asset.state!=='uploaded'||asset.size!==fs.statSync(file).size||asset.digest!=='sha256:'+digest.digest('hex'))throw new Error('Release asset verification failed: '+name);
+ }
+ console.log('All '+files.length+' release assets match local SHA-256 checksums.');
  if(process.argv.includes('--keep-draft')){console.log('Draft ready '+release.html_url);return;}
  const published=await api('/releases/'+release.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({draft:false})});console.log('Published '+published.html_url);
 }

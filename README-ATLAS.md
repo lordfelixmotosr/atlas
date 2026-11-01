@@ -2,6 +2,8 @@
 
 ## 0.3.9 Install update for every change
 
+**Updating from 0.3.8 or earlier:** This release uses a new publisher key, so update once manually. Close Atlas, back up its folder, then extract the `Atlas` folder contents from `Atlas-0.3.9-win-x64-application-update.zip` over it. Keep your existing `data`, `custom`, `library`, `updates` and `backups` folders. Later releases can install through **Settings → Updates** again.
+
 **Install update** now appears whenever a mod's runtime files differ from its game copy, including XML, textures, sounds and patches, not only DLLs. It installs them from your Atlas project the same way **Test in RimWorld** does, without launching the game. Agent work in other chats no longer blocks it. An agent test or live session using the game still does.
 
 While an agent or C# build is still changing a mod, Install update installs that mod's last completed build instead, marked **Last completed build** in the review, so half-finished edits never reach the game. With no completed build, Atlas asks you to wait. Successful C# builds now keep an install copy in the profile's `completed-builds` folder. A companion or dependency that cannot be prepared keeps its current game copy and is listed as a warning instead of blocking the chosen mod. The review warns when C# changed since the last build.
