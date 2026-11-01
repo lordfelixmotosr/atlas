@@ -1,6 +1,7 @@
 import {AgentActivity} from "../atlas/activity";
 import {ClaudeUsageControl} from '../atlas/claude-usage-control';
 import {SubagentsControl} from '../atlas/subagents-control';
+import {AtlasPromptAutocomplete} from '../atlas/prompt-autocomplete';
 import {FelixSpeedControl,FelixUsageControl,FelixAccountControl,FelixSteeringQueue,felixUseComposerFocus} from "../atlas/controls";
 import {applyCompactResult,applySteeringQueue} from "../conversations-store";
 import {
@@ -758,8 +759,11 @@ export function ChatPanel({
                 view your screenshots.
               </div>
             )}
-            <textarea
-              ref={composer}
+            <AtlasPromptAutocomplete
+              inputRef={composer}
+              history={messages}
+              conversationId={conversation.id}
+              onComplete={(completed: string) => setPanelDraft(conversation.id, completed)}
               data-demo="chat-input"
               value={draft}
               onChange={(e) => setPanelDraft(conversation.id, e.target.value)}

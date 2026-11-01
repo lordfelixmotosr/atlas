@@ -65,7 +65,7 @@ export function ModHeader({
       <div className="ml-4 flex flex-wrap items-center gap-2">
         <ModChangesButton mod={mod} busy={busy} />
         <FelixSentenceShortcut conversationId={conversationId} />
-        {isRimWorld&&<ManualInstallControl enabled={active} folder={mod.folder} name={mod.about.name} conversationId={conversationId} busy={busy||closing} onInstalling={setInstalling} restoreRequest={restoreRequest} onRestoreAvailable={setRestoreAvailable} uninstallRequest={uninstallRequest} onInstalledAvailable={setInstalledAvailable}/>}
+        {isRimWorld&&<ManualInstallControl enabled={active} folder={mod.folder} name={mod.about.name} conversationId={conversationId} busy={busy||closing} gameBusy={closing} onInstalling={setInstalling} restoreRequest={restoreRequest} onRestoreAvailable={setRestoreAvailable} uninstallRequest={uninstallRequest} onInstalledAvailable={setInstalledAvailable}/>}
         {isRimWorld && running ? (
           <button
             onClick={onClose}

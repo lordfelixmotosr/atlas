@@ -282,7 +282,13 @@ function felixOpenAIWorkBusy(host){
   for(const {session} of host.sessions.values())if(session.model?.provider==="openai-codex"&&felixAgentWorking(session))return true;
   return false;
 }
-function felixAccountsInfo(host){return {...host.credentials.openAIAccounts(),busy:!!host.felixAccountOperation||felixOpenAIWorkBusy(host),pendingLogin:host.pendingOAuth?.providerId==="openai-codex"};}
+function felixAccountsInfo(host){
+  let view,loadError=host.credentials.loadError;
+  // A read-only UI view. Mutation paths still use the strict accessor and
+  // validation before changing any saved account data.
+  try{view=host.credentials.openAIAccounts();}catch{view={activeId:null,accounts:[]};loadError="Saved sign-ins could not be loaded. Your existing sign-in file has been kept.";}
+  return {...view,...(loadError?{loadError}:{}),busy:!!host.felixAccountOperation||felixOpenAIWorkBusy(host),pendingLogin:host.pendingOAuth?.providerId==="openai-codex"};
+}
 function felixAccountEvent(host,message=undefined,usageChanged=false){host.emitOAuth({type:"accounts-changed",providerId:"openai-codex",message,usageChanged});}
 function felixBeginAccountChange(host){
   if(host.felixAccountOperation||host.pendingOAuth)throw new Error("Finish or cancel the current sign-in before changing OpenAI accounts.");

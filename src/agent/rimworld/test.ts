@@ -12,6 +12,8 @@ import { prepareDebugSession } from './prefs.js';
 import { shipAndLaunch } from './ship.js';
 import { ensureTestSavedataPrefs } from './test-savedata.js';
 import { saveTestOptions } from './test-history.js';
+import { withRuntimeSync } from './runtime-mirror.js';
+import { getRimWorldModsDir } from '../workspace.js';
 import type { RunTestCycleDetails, TestCycleContext } from '../adapters/types.js';
 
 /**
@@ -54,7 +56,14 @@ export const rimworldTestCycleParams = Type.Object({
 
 export type RimworldTestParams = Static<typeof rimworldTestCycleParams>;
 
+/** Test runs share the install lock with Install update, so files are never swapped mid-launch. */
 export async function runRimworldTestCycle(
+  ctx: TestCycleContext,
+): Promise<AgentToolResult<RunTestCycleDetails>> {
+  return withRuntimeSync(getRimWorldModsDir(), () => runRimworldTestCycleLocked(ctx));
+}
+
+async function runRimworldTestCycleLocked(
   ctx: TestCycleContext,
 ): Promise<AgentToolResult<RunTestCycleDetails>> {
   const p = ctx.params as RimworldTestParams;

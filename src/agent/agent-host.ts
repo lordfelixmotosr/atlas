@@ -87,6 +87,7 @@ import { withConfirmation } from './security/with-confirmation.js';
 import {
   SafeStorageAuthBackend,
   SafeStorageCredentialStore,
+  SAVED_SIGN_INS_UNREADABLE,
 } from './security/secure-auth-storage.js';
 import { createRunTestCycleTool } from './tools/run-test-cycle.js';
 import { notifyTestStatusTool } from './tools/notify-test-status.js';
@@ -784,7 +785,15 @@ export class AgentHost {
   async primeAfterReady(): Promise<void> {
     try {
       this.credentials.reload();
-      await this.credentials.initializeOpenAIAccounts();
+      try {
+        await this.credentials.initializeOpenAIAccounts();
+      } catch {
+        // Saved-account migration must not prevent built-in login providers
+        // from loading. Keep strict credential transactions intact so an
+        // unreadable file cannot be silently replaced by an empty store.
+        this.credentials.loadError = SAVED_SIGN_INS_UNREADABLE;
+        console.warn('[Atlas accounts] Saved sign-ins could not be loaded; continuing with login providers available.');
+      }
       // allowModelNetwork:false — construction stays offline so a slow or
       // unreachable pi.dev can't delay the window. The persisted catalog
       // overlay (models-store.json) is still read here, so yesterday's

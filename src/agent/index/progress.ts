@@ -18,6 +18,13 @@ export type IndexProgressEvent =
       message: string;
       /** Optional 0..1 fraction. Indeterminate phases omit this. */
       fraction?: number;
+      /** True while work inside the current step has no known total, such as decompiling one assembly. */
+      indeterminate?: boolean;
+      /** Decompile only: C# files written so far for the current assembly. */
+      filesGenerated?: number;
+      elapsedMs?: number;
+      completedAssemblies?: number;
+      totalAssemblies?: number;
     }
   | { type: 'done'; durationMs: number }
   | { type: 'error'; message: string };

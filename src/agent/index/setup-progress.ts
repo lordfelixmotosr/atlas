@@ -44,6 +44,12 @@ export function pipeSetupProgressToWindow(
   return onSetupProgress((game, event) => {
     const win = getWindow();
     if (!win || win.isDestroyed()) return;
-    win.webContents.send(channel, { game, event });
+    const wc = win.webContents;
+    if (wc.isDestroyed() || wc.isCrashed()) return;
+    try {
+      wc.send(channel, { game, event });
+    } catch {
+      // The renderer can reload between the liveness check and IPC send.
+    }
   });
 }

@@ -11,10 +11,11 @@ export function RuntimeInstallDialog({review,working,error,onClose,onConfirm}:{r
         <h2 id="atlas-install-title" className="text-base font-medium text-ink">{restore?'Restore previous version':'Review installation'}</h2>
         <p className="mt-2 text-xs leading-5 text-muted">{review.message}</p>
         <p className="mt-3 text-sm text-ink" role="status">{preview.added} added · {preview.modified} changed · {preview.removed} removed <span className="text-muted">· {runtimeBytes(preview.runtimeBytes)} installed</span></p>
+        {preview.mods.some(mod=>mod.buildSnapshot)&&<p className="mt-2 text-xs leading-5 text-muted">Mods an agent is still editing install their last completed build, shown below.</p>}
       </div>
       <div data-atlas-install-body className="min-h-0 overflow-y-auto overscroll-contain px-5 py-3 [overflow-wrap:anywhere]">
         {preview.mods.map(mod=><details key={mod.folder} open={preview.mods.length===1} className="mb-3 rounded-md border border-line">
-          <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-ink">{mod.name} <span className="text-xs font-normal text-muted">· {mod.changes.length} changes · {mod.unchanged} unchanged</span></summary>
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-ink">{mod.name} <span className="text-xs font-normal text-muted">· {mod.changes.length} changes · {mod.unchanged} unchanged</span>{mod.buildSnapshot&&<span data-atlas-build-snapshot={mod.buildSnapshot.id} className="mt-1 block text-xs font-normal text-accent">Last completed build — {new Date(mod.buildSnapshot.builtAt??mod.buildSnapshot.capturedAt).toLocaleString()}</span>}</summary>
           {mod.previousSavedAt&&<p className="px-3 pb-2 text-xs text-muted">Previous copy saved {new Date(mod.previousSavedAt).toLocaleString()}</p>}
           {mod.changes.length?<table className="w-full table-fixed text-left text-xs"><thead className="text-muted"><tr><th className="w-20 px-3 py-2 font-normal">Action</th><th className="py-2 font-normal">File</th><th className="w-28 px-3 py-2 text-right font-normal">Size</th></tr></thead><tbody>{mod.changes.map(change=><tr key={change.path} className="border-t border-line">
             <td className="px-3 py-2 align-top text-muted">{change.action==='modified'?'Changed':change.action==='added'?'Added':'Removed'}</td><td className="break-all py-2 font-mono text-ink">{change.path}</td><td className="px-3 py-2 text-right align-top text-muted">{runtimeBytes(change.action==='removed'?change.beforeBytes:change.afterBytes)}</td>

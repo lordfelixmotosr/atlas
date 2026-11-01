@@ -6,10 +6,10 @@ import {getConversation} from '../../agent/conversations.js';
 import {getRegistry} from '../../agent/registry/index.js';
 import {isRimWorldRunning,quitRimWorld} from '../../agent/rimworld/game.js';
 import {syncModToGame} from '../../agent/workspace.js';
-import {withRuntimeSync,previousRuntimeInfo,restoreRuntimeMirror,ownedMirror,isLegacyWorkspaceLink} from '../../agent/rimworld/runtime-mirror.js';
+import {withRuntimeSync,previousRuntimeInfo,refreshRuntimeMirror,restoreRuntimeMirror,ownedMirror,isLegacyWorkspaceLink} from '../../agent/rimworld/runtime-mirror.js';
 import {previewRuntimeMod} from '../../agent/rimworld/install-preview.js';
-import {runtimeSignature} from '../../agent/rimworld/release-package.js';
-import {getBuildState,isBuildInProgress} from '../../agent/rimworld/build-state.js';
+import {runtimeSignature,type ReleasePlan} from '../../agent/rimworld/release-package.js';
+import {getBuildState,getCompletedBuildStore,isBuildInProgress} from '../../agent/rimworld/build-state.js';
 import {dllTestFolders,inspectRuntimeUpdate,type DllUpdateOverview,type DllInstallResult,type ModDllUpdate,type RuntimeInstallMode,type RuntimeInstallPreview} from '../../agent/rimworld/dll-update.js';
 import {readTestOptions} from '../../agent/rimworld/test-history.js';
 import {refreshModShortcuts} from '../../atlas/mod-folder-shortcuts.js';
@@ -20,9 +20,12 @@ const GAME_IN_USE='RimWorld is being used by an active agent test or live sessio
 /**
  * Install update copies a mod's project folder into RimWorld's Mods folder the same
  * way Test in RimWorld does, without launching the game. Any runtime file change
- * counts. Only the mods being installed must be idle; a companion or dependency that
- * cannot be prepared keeps its current game copy and is reported instead of blocking.
+ * counts. Work in other chats does not block it. A mod that an agent or C# build is
+ * changing right now installs its last completed build instead, so half-finished edits
+ * never reach the game. A companion or dependency that cannot be prepared keeps its
+ * current game copy and is reported instead of blocking.
  */
+type SavedBuild={id:string;path:string;plan:ReleasePlan;builtAt:number|null;capturedAt:number};
 export function registerDllUpdateRoutes(ctx: RouteContext): void {
   let applying=false;
   let confirmation: {token:string;folder:string;signature:string;running:boolean;mode:RuntimeInstallMode;expires:number}|undefined;
@@ -35,7 +38,11 @@ export function registerDllUpdateRoutes(ctx: RouteContext): void {
   const workspaceDir=()=>getWorkspacePaths().workspaceDir;
   const editing=(name:string)=>ctx.host.modWorkBusy(name)||isBuildInProgress(path.join(workspaceDir(),name));
   const nameOf=(name:string)=>getRegistry().getSnapshot().mods.find(m=>m.source==='workspace'&&m.folder===name)?.about.name||name;
-  const stillWorking=(name:string)=>`The assistant or a C# build is still working on ${name}. Wait for that work to finish, then choose Install update again.`;
+  const stillWorking=(name:string)=>`The assistant or a C# build is still working on ${name}, and it has no completed build to install instead. Wait for that work to finish, then choose Install update again.`;
+  const savedBuild=async(name:string):Promise<SavedBuild|null>=>{
+    try{return await getCompletedBuildStore().get(path.join(workspaceDir(),name));}
+    catch(error){console.warn('[install update] saved build unavailable:',String(error));return null;}
+  };
   const state=async(folder:string,conversationId:string,force=false):Promise<DllUpdateOverview>=>{
     validate(folder,conversationId);
     const previous=cache.get(folder);if(!force&&previous&&Date.now()-previous.at<2000)return previous.task;
@@ -59,34 +66,46 @@ export function registerDllUpdateRoutes(ctx: RouteContext): void {
     if(mode!=='install'&&mode!=='restore')throw new Error('Invalid installation action.');
     if(applying)throw new Error('An installation is already in progress.');
     if(mode==='restore'&&ctx.host.hasActiveWork())throw new Error('Wait for active agent work to finish before restoring a previous runtime.');
-    if(mode==='install'&&editing(folder))throw new Error(stillWorking(nameOf(folder)));
     applying=true;
     try{
       const pending=await state(folder,conversationId,true);
-      if(mode==='install'&&pending.error)throw new Error(pending.error);
-      if(mode==='install'&&!pending.pending)return {status:'current' as const};
+      const saved=new Map<string,SavedBuild>();
+      if(mode==='install'&&editing(folder)){
+        const build=await savedBuild(folder);
+        if(!build)throw new Error(stillWorking(nameOf(folder)));
+        saved.set(folder,build);
+      }
+      if(mode==='install'&&pending.error&&!saved.has(folder))throw new Error(pending.error);
+      if(mode==='install'&&!pending.pending&&!saved.has(folder))return {status:'current' as const};
       const skipped=[...(mode==='install'?pending.skipped??[]:[])];
       const folders:string[]=[];
       for(const name of mode==='restore'?[folder]:[...new Set([folder,...pending.mods.filter(m=>m.changes.length).map(m=>m.folder)])]){
-        if(mode==='install'&&name!==folder&&editing(name)){skipped.push({folder:name,name:nameOf(name),changes:[],error:'The assistant or a C# build is still working on it.'});continue;}
+        if(mode==='install'&&name!==folder&&editing(name)){
+          const build=await savedBuild(name);
+          if(!build){skipped.push({folder:name,name:nameOf(name),changes:[],error:'The assistant or a C# build is still working on it, and it has no completed build to install instead.'});continue;}
+          saved.set(name,build);
+        }
         folders.push(name);
       }
       const workspace=workspaceDir();
-      const plans:{folder:string;signature:Awaited<ReturnType<typeof previewRuntimeMod>>['signature']}[]=[],warnings:string[]=skipped.map(m=>`${m.name}: not updated, its current game copy is kept. ${m.error}`),preview:RuntimeInstallPreview={mode,mods:[],added:0,modified:0,removed:0,runtimeBytes:0};
+      const plans:{folder:string;saved:string|null;signature:Awaited<ReturnType<typeof previewRuntimeMod>>['signature']}[]=[],warnings:string[]=skipped.map(m=>`${m.name}: not updated, its current game copy is kept. ${m.error}`),preview:RuntimeInstallPreview={mode,mods:[],added:0,modified:0,removed:0,runtimeBytes:0};
       for(const name of folders){
         if(mode==='restore'&&isBuildInProgress(path.join(workspace,name)))throw new Error('Wait for the C# build to finish before restoring.');
-        const result=await previewRuntimeMod(path.join(workspace,name),path.join(getRimWorldModsDir(),name),getMirrorStateDir(),mode);
+        const build=saved.get(name)??null;
+        const result=await previewRuntimeMod(path.join(workspace,name),path.join(getRimWorldModsDir(),name),getMirrorStateDir(),mode,build);
         result.preview.name=pending.mods.find(m=>m.folder===name)?.name??nameOf(name);
+        if(build)result.preview.buildSnapshot={id:build.id,builtAt:build.builtAt,capturedAt:build.capturedAt};
         preview.mods.push(result.preview);preview.runtimeBytes+=result.preview.runtimeBytes;
         for(const change of result.preview.changes)preview[change.action]++;
-        plans.push({folder:name,signature:result.signature});warnings.push(...result.warnings.map(w=>`${name}: ${w}`));
-        if(mode==='install'&&result.preview.changes.length&&(await getBuildState(path.join(workspace,name))).status==='needs-rebuild')warnings.push(`${result.preview.name}: C# code changed since its last build, so the game gets the last compiled DLL. Use Rebuild C# to include the code changes.`);
+        plans.push({folder:name,saved:build?.id??null,signature:result.signature});warnings.push(...result.warnings.map(w=>`${name}: ${w}`));
+        if(mode==='install'&&!build&&result.preview.changes.length&&(await getBuildState(path.join(workspace,name))).status==='needs-rebuild')warnings.push(`${result.preview.name}: C# code changed since its last build, so the game gets the last compiled DLL. Use Rebuild C# to include the code changes.`);
       }
+      if(mode==='install'&&preview.added+preview.modified+preview.removed===0)return {status:'current' as const};
       const signature=createHash('sha256').update(JSON.stringify(plans)).digest('hex');
       const accepted=confirmation&&token===confirmation.token&&folder===confirmation.folder&&signature===confirmation.signature&&pending.running===confirmation.running&&mode===confirmation.mode&&Date.now()<confirmation.expires;
       if(!accepted){
         confirmation={token:randomUUID(),folder,signature,running:pending.running,mode,expires:Date.now()+300000};
-        return {status:'confirmation',token:confirmation.token,running:pending.running,preview,warnings,message:(token?'The preview changed or expired. Review the updated file list. ':'')+(pending.running?'Save your game first. Atlas will close RimWorld. ':'')+(mode==='restore'?'Restore this mod’s previous installed runtime. Source edits stay in your workspace. Atlas testing keeps the restored copy until runtime files change or you choose Install update.':'Install the files shown here from your Atlas project, the same way Test in RimWorld does, without launching the game. Obsolete files will be removed.')};
+        return {status:'confirmation',token:confirmation.token,running:pending.running,preview,warnings,message:(token?'The preview changed or expired. Review the updated file list. ':'')+(pending.running?'Save your game first. Atlas will close RimWorld. ':'')+(mode==='restore'?'Restore this mod’s previous installed runtime. Source edits stay in your workspace. Atlas testing keeps the restored copy until runtime files change or you choose Install update.':saved.size?'Install the files shown here. Mods an agent is still editing use their last completed build; the others come from your Atlas project, the same way Test in RimWorld does. Obsolete files will be removed.':'Install the files shown here from your Atlas project, the same way Test in RimWorld does, without launching the game. Obsolete files will be removed.')};
       }
       confirmation=undefined;
       if(mode==='restore'&&ctx.host.hasActiveWork())throw new Error('Agent work started. Finish it before restoring.');
@@ -100,10 +119,13 @@ export function registerDllUpdateRoutes(ctx: RouteContext): void {
       const installed:string[]=[];
       await withRuntimeSync(getRimWorldModsDir(),async()=>{
         for(const name of folders){
-          if(mode==='restore'?ctx.host.hasActiveWork()||isBuildInProgress(path.join(workspace,name)):editing(name))throw new Error(`Work started during installation. Installed so far: ${installed.join(', ')||'none'}. Finish active work, then retry.`);
+          const build=saved.get(name);
+          if(mode==='restore'?ctx.host.hasActiveWork()||isBuildInProgress(path.join(workspace,name)):!build&&editing(name))throw new Error(`Work started during installation. Installed so far: ${installed.join(', ')||'none'}. Finish active work, then retry.`);
           try{
             const reviewed=plans.find(p=>p.folder===name)!.signature,options={forceWorkspace:true,expectedRuntime:runtimeSignature(reviewed.plan),expectedInstalled:runtimeSignature(reviewed.installed)};
-            const result=mode==='restore'?{assetWarnings:(await restoreRuntimeMirror(path.join(workspace,name),path.join(getRimWorldModsDir(),name),getMirrorStateDir(),options)).warnings}:await syncModToGame(name,options);
+            const result=mode==='restore'?{assetWarnings:(await restoreRuntimeMirror(path.join(workspace,name),path.join(getRimWorldModsDir(),name),getMirrorStateDir(),options)).warnings}
+              :build?{assetWarnings:(await refreshRuntimeMirror(path.join(workspace,name),path.join(getRimWorldModsDir(),name),getMirrorStateDir(),{...options,completedRuntime:build})).warnings}
+              :await syncModToGame(name,options);
             installed.push(name);warnings.push(...result.assetWarnings.map(w=>`${name}: ${w}`));
           }
           catch(error){throw new Error(`Installation stopped. Installed so far: ${installed.join(', ')||'none'}. ${String(error)}`,{cause:error});}

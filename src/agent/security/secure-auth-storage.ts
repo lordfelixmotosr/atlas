@@ -347,10 +347,13 @@ function felixAccountDocument(data){
   return document;
 }
 function felixAccountView(document){return {activeId:document.activeId,accounts:document.accounts.map(item=>({id:item.id,label:item.label,active:item.id===document.activeId}))};}
+export const SAVED_SIGN_INS_UNREADABLE="Saved sign-ins could not be loaded. Your existing sign-in file has been kept.";
 export class SafeStorageCredentialStore{
   data:any;backend:any;felixLoginContext:any;
+  /** Set when saved sign-ins cannot be read; the file is kept and login providers stay available. */
+  loadError:string|null=null;
   constructor(backend){this.data={};this.backend=backend;this.felixLoginContext=new AsyncLocalStorage();this.reload();}
-  reload(){try{this.data=this.backend.withLock(raw=>({result:parseCredentials(raw)}));}catch{this.data={};if(app.isReady())console.error("[modmixer:auth] Failed to reload encrypted credentials.");}}
+  reload(){try{this.data=this.backend.withLock(raw=>({result:parseCredentials(raw)}));this.loadError=null;}catch{this.data={};this.loadError=SAVED_SIGN_INS_UNREADABLE;if(app.isReady())console.error("[modmixer:auth] Failed to reload encrypted credentials.");}}
   peek(provider){return provider===FELIX_ACCOUNTS_KEY?undefined:this.data[provider];}
   async read(provider){return this.peek(provider);}
   async list(){return Object.entries(this.data).filter(([id,value])=>id!==FELIX_ACCOUNTS_KEY&&["oauth","api_key"].includes(value?.type)).map(([providerId,value])=>({providerId,type:value.type}));}
@@ -364,7 +367,7 @@ export class SafeStorageCredentialStore{
       const next=JSON.stringify(data,null,2);
       return {result,next:next===raw?undefined:next};
     });
-    this.data=updated;return result;
+    this.data=updated;this.loadError=null;return result;
   }
   async initializeOpenAIAccounts(){return this.felixTransaction(data=>felixAccountView(felixAccountDocument(data)));}
   openAIAccounts(){return felixAccountView(felixAccountDocument(JSON.parse(JSON.stringify(this.data))));}

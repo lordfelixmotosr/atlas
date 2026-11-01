@@ -147,7 +147,7 @@ async function saveRecord(r: MirrorRecord, stateDir: string): Promise<void> {
   finally {await fsp.unlink(temporary).catch(() => {});}
 }
 
-async function publishedId(root: string): Promise<string | null> {
+export async function publishedId(root: string): Promise<string | null> {
   const about = await stat(path.join(root, 'About'));
   if (!about) return null;
   if (about.isSymbolicLink() || !about.isDirectory()) throw new Error(`Unsafe About folder: ${root}`);
@@ -384,7 +384,7 @@ async function effectivePublishedId(source:string,target:string,stateDir:string)
   if(r&&dst!==null&&dst!==r.publishedId&&dst!==src){if(src!==r.publishedId)throw new Error('Workshop IDs changed in both workspace and runtime. Resolve them before restoring.');return dst;}
   return src;
 }
-function withPublishedId(original:ReleasePlan,id:string|null):ReleasePlan {
+export function withPublishedId(original:ReleasePlan,id:string|null):ReleasePlan {
   const files=original.files.filter(f=>f.path.toLowerCase()!=='about/publishedfileid.txt');
   if(id!==null)files.push({path:'About/PublishedFileId.txt',bytes:Buffer.byteLength(id),sha256:createHash('sha256').update(id).digest('hex')});
   files.sort((a,b)=>a.path.localeCompare(b.path));return {...original,files,totalBytes:files.reduce((n,f)=>n+f.bytes,0)};
@@ -403,7 +403,9 @@ async function keepPrevious(h:PreviousRuntime,stateDir:string):Promise<void>{
   // are never candidates for this cleanup; locked older versions are retained.
   if(prior&&prior.staging!==h.staging)try{await readPrevious(h.source,h.target,stateDir);if(matches(await stat(path.join(prior.staging,'previous')),prior.identity))await fsp.rm(prior.staging,{recursive:true,force:true});}catch(error){console.warn('[runtime mirror] older version retained:',prior.staging,String(error));}
 }
-export interface MirrorInstallOptions {forceWorkspace?:boolean;expectedRuntime?:string;expectedInstalled?:string}
+export interface MirrorInstallOptions {forceWorkspace?:boolean;expectedRuntime?:string;expectedInstalled?:string;
+  /** A saved completed build to install instead of the workspace, used while an agent is editing the mod. */
+  completedRuntime?:{path:string;plan:ReleasePlan}}
 export async function refreshRuntimeMirror(source:string,target:string,stateDir:string,options:MirrorInstallOptions={}):Promise<ReleasePlan>{
   return installRuntimeMirror(source,target,stateDir,options);
 }
@@ -423,12 +425,18 @@ async function installRuntimeMirror(source: string, target: string, stateDir: st
     let owned = await record(source, target, stateDir);
     const legacy = old ? await isLegacyWorkspaceLink(source, target) : false;
     if (old && !owned && !legacy) throw new Error(`Refusing to overwrite an unmanaged game mod: ${target}.`);
-    if (owned) {await reconcile(source, target, stateDir);owned=await record(source,target,stateDir);}
-    const workspacePlan=await planRelease(source);
+    const completed=options.completedRuntime??null;
+    if (owned&&!completed) {await reconcile(source, target, stateDir);owned=await record(source,target,stateDir);}
+    const completedPublishedId=completed?await publishedId(source):null;
+    if(owned&&completed){
+      const installedId=await publishedId(target);
+      if(installedId!==null&&installedId!==owned.publishedId&&installedId!==completedPublishedId)throw new Error('The installed Workshop ID changed independently. Reconcile its PublishedFileId.txt with the workspace before installing a saved build.');
+    }
+    const workspacePlan:ReleasePlan=completed?JSON.parse(JSON.stringify(completed.plan)):await planRelease(source);
     if(owned?.heldWorkspace&&!options.forceWorkspace&&!restore&&owned.heldWorkspace===runtimeSignature(workspacePlan)&&owned.plan){
       try{await auditRelease(target,owned.plan);return {...owned.plan,warnings:[...owned.plan.warnings,'Using the restored runtime. Install update or change runtime files to use the workspace version.']};}catch{/* independently changed runtime must refresh */}
     }
-    const plan = restore?withPublishedId(restore.plan,await publishedId(source)):workspacePlan;
+    const plan = restore?withPublishedId(restore.plan,await publishedId(source)):completed?withPublishedId(workspacePlan,completedPublishedId):workspacePlan;
     if (!plan.valid) throw new Error('Runtime release check failed:\n' + plan.errors.join('\n'));
     const inventory=owned?await runtimeInventory(target):null;
     if(options.expectedRuntime&&runtimeSignature(plan)!==options.expectedRuntime)throw new Error('Runtime files changed after review. Open the installation preview again.');
@@ -444,13 +452,15 @@ async function installRuntimeMirror(source: string, target: string, stateDir: st
     const j: Journal = {format: 'atlas-runtime-transaction-v1', source: path.resolve(source), target: path.resolve(target), phase: 'prepared', previous: old ? identity(old) : null, oldRecord: owned};
     let committed = false,keepStaging=false;
     try {
-      await copyRelease(restore?path.join(restore.staging,'previous'):source, next,restore?.plan??plan);
-      if(restore){await writeId(next,await publishedId(source));await auditRelease(next,plan);}
+      await copyRelease(restore?path.join(restore.staging,'previous'):completed?.path??source, next,restore?.plan??completed?.plan??plan);
+      if(restore||completed){await writeId(next,completed?completedPublishedId:await publishedId(source));await auditRelease(next,plan);}
       j.installed = identity(await fsp.lstat(next)); // journal identity before the rename/crash window
       await journalWrite(staging, j);
       if (old && !(await ownedMirror(source, target, stateDir)) && !(await isLegacyWorkspaceLink(source, target))) throw new Error('Runtime mirror ownership changed during copying.');
       if (!old && await stat(target)) throw new Error('A game mod appeared at the mirror destination during copying.');
+      if (completed && await publishedId(source)!==completedPublishedId) throw new Error('Workshop ID changed while preparing the saved build. Open Install update again.');
       if (owned) await checkDllLocks(target);
+      if (completed&&options.expectedInstalled&&runtimeSignature(owned?await runtimeInventory(target):{files:[],directories:[]})!==options.expectedInstalled) throw new Error('Installed files changed while preparing the saved build. Open the installation preview again.');
       if (old) {
         await retry('move previous runtime ' + target, () => fsp.rename(target, backup));
         j.phase = 'previous-moved'; await journalWrite(staging, j);
@@ -458,7 +468,7 @@ async function installRuntimeMirror(source: string, target: string, stateDir: st
       await retry('install runtime ' + target, () => fsp.rename(next, target));
       const st = await fsp.lstat(target);
       j.installed = identity(st); j.phase = 'installed'; await journalWrite(staging, j);
-      await saveRecord({format: 'atlas-runtime-mirror-v1', source: path.resolve(source), target: path.resolve(target), identity: {dev: st.dev, ino: st.ino, birthtimeMs: st.birthtimeMs}, publishedId: await publishedId(source),plan,heldWorkspace:restore?runtimeSignature(workspacePlan):undefined}, stateDir);
+      await saveRecord({format: 'atlas-runtime-mirror-v1', source: path.resolve(source), target: path.resolve(target), identity: {dev: st.dev, ino: st.ino, birthtimeMs: st.birthtimeMs}, publishedId: completed?completedPublishedId:await publishedId(source),plan,heldWorkspace:restore?runtimeSignature(workspacePlan):undefined}, stateDir);
       j.phase = 'committed'; await journalWrite(staging, j);
       committed = true;
       if(owned&&previousPlan&&runtimeSignature(previousPlan)!==runtimeSignature(plan)){

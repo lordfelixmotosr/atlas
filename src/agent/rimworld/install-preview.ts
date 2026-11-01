@@ -1,14 +1,15 @@
 import path from 'node:path';
 import {planRelease,runtimeInventory,type ReleasePlan} from './release-package.js';
-import {ownedMirror,missingRecordedMirror,previousRuntimePlan} from './runtime-mirror.js';
+import {ownedMirror,missingRecordedMirror,previousRuntimePlan,publishedId,withPublishedId} from './runtime-mirror.js';
 import type {RuntimeInstallMode,RuntimeModPreview} from './dll-update.js';
 
 /** Full hashes are read only when the user opens the installation preview. */
-export async function previewRuntimeMod(source:string,target:string,stateDir:string,mode:RuntimeInstallMode){
+/** `completedRuntime` previews a saved completed build instead of the workspace. */
+export async function previewRuntimeMod(source:string,target:string,stateDir:string,mode:RuntimeInstallMode,completedRuntime:{plan:ReleasePlan}|null=null){
   const owned=await ownedMirror(source,target,stateDir),missing=!owned&&await missingRecordedMirror(source,target,stateDir);
   if(!owned&&!missing)throw new Error('This mod has no managed runtime to replace. Use Sync to game or launch a test first.');
   const previous=mode==='restore'?await previousRuntimePlan(source,target,stateDir):null;
-  const plan=previous?.plan??await planRelease(source);
+  const plan=previous?.plan??(completedRuntime?withPublishedId(JSON.parse(JSON.stringify(completedRuntime.plan)),await publishedId(source)):await planRelease(source));
   if(!plan.valid)throw new Error(plan.errors.join('\n'));
   const installed=missing?{files:[],directories:[]}:await runtimeInventory(target);
   const before=new Map(installed.files.map(file=>[file.path.toLowerCase(),file]));

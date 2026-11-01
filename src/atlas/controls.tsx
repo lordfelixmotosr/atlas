@@ -138,7 +138,7 @@ function felixUseOpenAIAccounts(enabled=true){
     return ()=>{active=false;revision++;unsubscribe();refreshRef.current=()=>{};};
   },[enabled]);
   async function run(operation){setWorking(true);setError("");setNotice("");try{const data=await operation();setInfo(data);return true;}catch(reason){setError(reason instanceof Error?reason.message:String(reason));return false;}finally{setWorking(false);refreshRef.current();}}
-  return {info,error,notice,working,run};
+  return {info,error:error||info?.loadError||'',notice,working,run};
 }
 function FelixAccountControl({model,onConnect,busy=false}){
   const enabled=model?.provider==="openai-codex",state=felixUseOpenAIAccounts(enabled);

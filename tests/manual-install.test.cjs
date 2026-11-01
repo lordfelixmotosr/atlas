@@ -73,7 +73,7 @@ async function routes(t,{companion=false}={}){
     mods.push({folder:'Companion',source:'workspace',about:{name:'Companion',packageIdLc:'atlas.release.companion',modDependencies:[]}});
     t.after(()=>fs.unwatchFile(path.join(targetOf('Companion'),'About','PublishedFileId.txt')));
   }
-  const flags={running:false,busy:false,companionBusy:false,otherWork:false,gameInUse:false,building:false,buildStatus:'current',quitSucceeds:true,syncError:null,installs:0,installed:[],quits:0,stops:0};
+  const flags={running:false,busy:false,companionBusy:false,otherWork:false,gameInUse:false,building:false,buildStatus:'current',saved:{},quitSucceeds:true,syncError:null,installs:0,installed:[],quits:0,stops:0};
   const handlers={};
   const workspace={getWorkspacePaths:()=>({workspaceDir:path.dirname(f.source)}),getMirrorStateDir:()=>f.state,getRimWorldModsDir:()=>path.dirname(f.target),listWorkspaceMods:async()=>[],syncModToGame:async(folder,options)=>{
     flags.installs++;if(flags.syncError)throw flags.syncError;await mirrors.refreshRuntimeMirror(sourceOf(folder),targetOf(folder),f.state,options);flags.installed.push(folder);return {assetWarnings:[]};
@@ -85,7 +85,7 @@ async function routes(t,{companion=false}={}){
     '../../agent/rimworld/game.js':{isRimWorldRunning:async()=>flags.running,quitRimWorld:async()=>{flags.quits++;if(flags.quitSucceeds)flags.running=false;return {killed:flags.quitSucceeds,exited:flags.quitSucceeds};}},
     '../../agent/rimworld/runtime-mirror.js':mirrors,'../../agent/rimworld/release-package.js':release,
     '../../agent/rimworld/install-preview.js':previews,
-    '../../agent/rimworld/build-state.js':{isBuildInProgress:()=>flags.building,getBuildState:async()=>({status:flags.buildStatus,message:''})},'../../agent/rimworld/dll-update.js':dll,
+    '../../agent/rimworld/build-state.js':{isBuildInProgress:()=>flags.building,getBuildState:async()=>({status:flags.buildStatus,message:''}),getCompletedBuildStore:()=>({get:async source=>flags.saved[path.basename(source)]??null})},'../../agent/rimworld/dll-update.js':dll,
     '../../agent/rimworld/test-history.js':{readTestOptions:async()=>({companionMods:companion?['atlas.release.companion']:[]})},'../../atlas/mod-folder-shortcuts.js':{}
   });
   const host={hasActiveWork:()=>flags.busy||flags.companionBusy||flags.otherWork,modWorkBusy:folder=>folder==='Example'?flags.busy:folder==='Companion'&&flags.companionBusy,gameInUseByAgent:()=>flags.gameInUse,stopMonitoring:()=>flags.stops++};
@@ -170,6 +170,29 @@ test('a companion with a broken release does not block the chosen mod',async t=>
   const state=await f.state();assert.equal(state.error,undefined);assert.match(state.skipped[0].error,/Stray DLL/);
   const preview=await f.apply();assert.match(preview.warnings.join('\n'),/Companion: not updated, its current game copy is kept\. Stray DLL/);
   assert.equal((await f.apply(preview.token)).status,'installed');assert.deepEqual(f.flags.installed,['Example']);
+});
+async function savedBuildOf(f,source,id){const plan=await release.planRelease(source),dir=path.join(f.root,'completed-builds',id);fs.mkdirSync(path.dirname(dir),{recursive:true});await release.copyRelease(source,dir,plan);return {id,path:dir,plan,builtAt:Date.now()-1000,capturedAt:Date.now()-500};}
+test('while the assistant edits a mod, Install update installs its last completed build',async t=>{
+  const f=await routes(t);f.flags.saved.Example=await savedBuildOf(f,f.source,'saved-example');
+  f.write('Defs/HalfDone.xml','partial edit');f.flags.busy=true;
+  const preview=await f.apply();assert.equal(preview.status,'confirmation');assert.equal(preview.preview.mods[0].buildSnapshot.id,'saved-example');assert.match(preview.message,/last completed build/);
+  assert.equal((await f.apply(preview.token)).status,'installed');assert.equal(f.flags.installs,0);
+  assert.equal(fs.readFileSync(path.join(f.target,'Assemblies/Main.dll'),'utf8'),'new');assert.equal(fs.existsSync(path.join(f.target,'Defs/HalfDone.xml')),false);
+  assert.equal(fs.readFileSync(path.join(f.target,'About/PublishedFileId.txt'),'utf8'),'123456');
+});
+test('a newer completed build after review requires a fresh review',async t=>{
+  const f=await routes(t);f.flags.busy=true;f.flags.saved.Example=await savedBuildOf(f,f.source,'first');
+  const preview=await f.apply();f.write('Defs/Later.xml','built later');f.flags.saved.Example=await savedBuildOf(f,f.source,'second');
+  const again=await f.apply(preview.token);assert.equal(again.status,'confirmation');assert.notEqual(again.token,preview.token);
+  assert.equal((await f.apply(again.token)).status,'installed');assert(fs.existsSync(path.join(f.target,'Defs/Later.xml')));
+});
+test('a busy companion with a completed build installs that build',async t=>{
+  const f=await routes(t,{companion:true});
+  f.flags.saved.Companion=await savedBuildOf(f,path.join(path.dirname(f.source),'Companion'),'companion-build');
+  f.writeCompanion('Defs/Companion.xml','half done');f.flags.companionBusy=true;
+  const preview=await f.apply();assert.deepEqual(list(preview.preview.mods.map(m=>m.folder)).sort(),['Companion','Example']);
+  assert.equal((await f.apply(preview.token)).status,'installed');assert.deepEqual(f.flags.installed,['Example']);
+  assert.equal(fs.readFileSync(path.join(f.companionTarget,'Defs/Companion.xml'),'utf8'),'new');
 });
 test('test history retains companions without changing the normal savedata mode',async t=>{
   const f=fixture(t),history=load('agent/rimworld/test-history.ts',{electron:{app:{getPath:()=>path.join(f.root,'profile')}}});

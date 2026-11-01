@@ -26,7 +26,7 @@ import {
   reconcileFallbackAssemblyName,
 } from './assembly-names.js';
 import type { BuildModDetails } from '../adapters/types.js';
-import {beginBuild, finishBuild} from './build-state.js';
+import {beginBuild, clearBuildInProgress, finishBuild} from './build-state.js';
 
 async function buildRimworldModInternal(
   modDir: string,
@@ -79,7 +79,10 @@ async function buildRimworldModInternal(
     dotnetEnv(dotnet),
   );
   let buildRecordNote = '';
-  try {await finishBuild(modDir, buildBefore, result.exitCode === 0 && !signal?.aborted);}
+  try {
+    const tracked = await finishBuild(modDir, buildBefore, result.exitCode === 0 && !signal?.aborted);
+    if (tracked?.snapshotWarning) buildRecordNote = `\n\n${tracked.snapshotWarning}`;
+  }
   catch(error) {buildRecordNote = `\n\nBuild tracking could not record this result: ${String(error)}`;}
   // Run lints even on a failed build — most lint findings (tickerType, wrong
   // TFM) are diagnoseable from source alone, and surfacing them alongside
@@ -144,7 +147,7 @@ export async function buildRimworldMod(modDir:string,signal?:AbortSignal):Promis
   if(runningBuilds.has(key))throw new Error('This mod already has a C# build in progress.');
   if(signal?.aborted)throw new Error('Build cancelled.');
   runningBuilds.add(key);
-  try{return await buildRimworldModInternal(modDir,signal);}finally{runningBuilds.delete(key);}
+  try{return await buildRimworldModInternal(modDir,signal);}finally{runningBuilds.delete(key);clearBuildInProgress(modDir);}
 }
 
 function runCommand(

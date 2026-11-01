@@ -145,19 +145,11 @@ export function GameSetupBody({
             <p className="mt-2 text-sm text-ink">{buildLine}</p>
           )}
           {building && (
-            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-paper">
-              <div
-                className="h-full bg-accent transition-all"
-                style={{
-                  width:
-                    fraction !== null ? `${Math.max(2, fraction * 100)}%` : '40%',
-                  animation:
-                    fraction === null
-                      ? 'indexIndeterminate 1.4s linear infinite'
-                      : undefined,
-                }}
-              />
-            </div>
+            <IndexProgress
+              fraction={fraction}
+              indeterminate={latest?.type === 'phase' && latest.indeterminate === true}
+              message={buildLine || phaseLabel || 'Building game index'}
+            />
           )}
 
           {isError && latest?.type === 'error' && (
@@ -197,6 +189,25 @@ export function GameSetupBody({
  * existing IPC (the adapter is main-only and can't hand us a callback) and
  * re-checks afterward so the row flips green without a manual refresh.
  */
+/** Decompiling one assembly has no known total, so that step shows a moving bar instead of a stuck percentage. */
+function IndexProgress({ fraction, indeterminate, message }: { fraction: number | null; indeterminate: boolean; message: string }) {
+  const unknown = indeterminate || fraction === null;
+  const value = unknown || fraction === null ? null : Math.max(0, Math.min(1, fraction));
+  return (
+    <div
+      className="atlas-index-progress"
+      role="progressbar"
+      aria-label="Game index progress"
+      aria-valuetext={message}
+      aria-busy
+      data-indeterminate={unknown}
+      {...(unknown ? {} : { 'aria-valuemin': 0, 'aria-valuemax': 1, 'aria-valuenow': value ?? 0 })}
+    >
+      <span aria-hidden style={unknown ? undefined : { width: (value ?? 0) * 100 + '%' }} />
+    </div>
+  );
+}
+
 function RequirementRow({
   req,
   onRecheck,

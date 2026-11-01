@@ -163,3 +163,9 @@
 @media(prefers-reduced-motion:reduce) {
   .atlas-v3 *, .atlas-v3 *::before, .atlas-v3 *::after { scroll-behavior:auto!important; animation-duration:.01ms!important; transition-duration:.01ms!important; }
 }
+
+/* Active decompilation has no known total within an assembly. */
+.atlas-index-progress{height:6px;width:100%;margin-top:12px;overflow:hidden;border-radius:999px;background:var(--paper)}.atlas-index-progress>span{height:100%;display:block;background:var(--accent);border-radius:inherit;transition:width .2s ease}.atlas-index-progress[data-indeterminate=true]>span{width:34%;animation:atlas-index-sweep 1.6s ease-in-out infinite alternate;will-change:transform}@keyframes atlas-index-sweep{from{transform:translateX(0)}to{transform:translateX(194%)}}@media(prefers-reduced-motion:reduce){.atlas-index-progress>span{transition:none}.atlas-index-progress[data-indeterminate=true]>span{animation:none;transform:translateX(97%);will-change:auto}}
+
+/* Local chat prompt autocomplete */
+.atlas-prompt-autocomplete{min-width:0;width:100%}.atlas-prompt-input-wrap{position:relative;min-width:0}.atlas-prompt-input-wrap textarea{position:relative;z-index:1}.atlas-prompt-ghost{position:absolute;inset:0;overflow:hidden;pointer-events:none;user-select:none}.atlas-prompt-ghost>div{box-sizing:border-box;white-space:pre-wrap;overflow-wrap:break-word}.atlas-prompt-suffix{color:var(--subtle);opacity:.85}.atlas-autocomplete-hint{margin-top:4px;color:var(--subtle);font-size:11px;line-height:16px;user-select:none}

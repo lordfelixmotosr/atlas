@@ -4,7 +4,9 @@ import {appAlert,appConfirm} from '../components/app-dialog';
 import {RuntimeInstallDialog} from './runtime-install-dialog';
 
 type Review=Extract<DllInstallResult,{status:'confirmation'}>;
-export function ManualInstallControl({enabled=true,folder,name,conversationId,busy,onInstalling,restoreRequest=0,onRestoreAvailable,uninstallRequest=0,onInstalledAvailable}:{enabled?:boolean;folder:string;name?:string;conversationId:string;busy:boolean;onInstalling:(value:boolean)=>void;restoreRequest?:number;onRestoreAvailable?:(available:boolean)=>void;uninstallRequest?:number;onInstalledAvailable?:(available:boolean)=>void}) {
+export function ManualInstallControl({enabled=true,folder,name,conversationId,busy,gameBusy=false,onInstalling,restoreRequest=0,onRestoreAvailable,uninstallRequest=0,onInstalledAvailable}:{enabled?:boolean;folder:string;name?:string;conversationId:string;busy:boolean;
+  /** Install update stays available while the chat works (the main process picks a safe build); only closing the game disables it. */
+  gameBusy?:boolean;onInstalling:(value:boolean)=>void;restoreRequest?:number;onRestoreAvailable?:(available:boolean)=>void;uninstallRequest?:number;onInstalledAvailable?:(available:boolean)=>void}) {
   const [state,setState]=useState<DllUpdateOverview|null>(null),[working,setWorking]=useState(false),[notice,setNotice]=useState(''),[review,setReview]=useState<Review|null>(null),[error,setError]=useState('');
   const lastRestore=useRef(restoreRequest),lastUninstall=useRef(uninstallRequest),active=useRef(false);
   useEffect(()=>{if(!notice)return;const timer=window.setTimeout(()=>setNotice(''),6000);return()=>window.clearTimeout(timer);},[notice]);
@@ -48,7 +50,7 @@ export function ManualInstallControl({enabled=true,folder,name,conversationId,bu
   useEffect(()=>{if(uninstallRequest!==lastUninstall.current){lastUninstall.current=uninstallRequest;void uninstall();}},[uninstallRequest]);
   const changes=state?.mods.flatMap(mod=>mod.changes.map(change=>`${mod.name}: ${change.action} ${change.path}`))??[];
   return <>
-    {(state?.pending||working)&&<button type="button" data-atlas-manual-install className="atlas-button atlas-install-update" disabled={busy||working||!!state?.error} onClick={()=>void run('install')}
+    {(state?.pending||working)&&<button type="button" data-atlas-manual-install className="atlas-button atlas-install-update" disabled={gameBusy||working||!!state?.error} onClick={()=>void run('install')}
       title={state?.error||`Review the complete runtime update before installing. Removes obsolete files.\n${changes.join('\n')}`} aria-label={working?'Updating game installation':'Install mod update'}>
       <span aria-hidden>{working?'◌':'↓'}</span> {working?'Working…':'Install update'}
       {!working&&state&&state.mods.length>1&&<span className="text-[10px] opacity-75">{state.mods.length} mods</span>}

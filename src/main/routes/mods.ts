@@ -4,6 +4,7 @@ import {
   createUntitledMod,
   deleteWorkspaceMod,
   getWorkspaceMod,
+  getRimWorldModsDir,
   getWorkspacePaths,
   importModFromFolder,
   listWorkspaceMods,
@@ -38,6 +39,7 @@ import { getGame, resolveGameId } from '../../agent/games/registry.js';
 import type { GameId } from '../../agent/games/types.js';
 import type { RouteContext } from './context.js';
 import {registerModUninstallRoute} from './mod-uninstall.js';
+import {withRuntimeSync} from '../../agent/rimworld/runtime-mirror.js';
 import {registerDllUpdateRoutes} from './dll-updates.js';
 
 /**
@@ -233,7 +235,8 @@ export function registerModRoutes(ctx: RouteContext): void {
     disableModInGame(folder),
   );
 
-  ipc.handle('modmixer:rimworld:launch', () => launchRimWorld());
+  // Game launch and quit share the install lock, so Install update never swaps files mid-launch.
+  ipc.handle('modmixer:rimworld:launch', () => withRuntimeSync(getRimWorldModsDir(), () => launchRimWorld()));
   ipc.handle('modmixer:rimworld:is-running', () => isRimWorldRunning());
-  ipc.handle('modmixer:rimworld:quit', () => quitRimWorld());
+  ipc.handle('modmixer:rimworld:quit', () => withRuntimeSync(getRimWorldModsDir(), () => quitRimWorld()));
 }

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {metadataReadPath, metadataWritePath} from '../mod-metadata.js';
-import {fileSha, planRelease} from './release-package.js';
+import {allowedDll, auditRelease, copyRelease, fileSha, isDevelopmentPath, planRelease, releaseRelative, runtimeSignature} from './release-package.js';
 
 export interface BuildState {
   status: 'not-needed' | 'untracked' | 'needs-rebuild' | 'current' | 'building' | 'unknown';
@@ -13,6 +13,8 @@ export interface BuildState {
 interface BuildRecord {version: 1; builtAt?: number; inputs?: Record<string,string>; outputs?: Record<string,string>; attempt?: 'building' | 'failed' | 'changed' | 'success'}
 const active = new Set<string>();
 export const isBuildInProgress = (mod: string): boolean => active.has(path.resolve(mod));
+/** Clears the build flag if a build ended without recording a result (for example, the compiler failed to start). */
+export function clearBuildInProgress(mod: string): void {active.delete(path.resolve(mod));}
 const skipped = new Set(['bin','obj','.git','.atlas','.modmixer','node_modules','.live']);
 const rootInput = /^(?:Directory\.(?:Build|Packages)\.(?:props|targets)|global\.json|NuGet\.Config|\.editorconfig)$/i;
 const codeInput = /\.(?:cs|csproj|props|targets|resx|ruleset|editorconfig)$/i;
@@ -46,13 +48,36 @@ export async function beginBuild(mod:string):Promise<Record<string,string>>{
   const inputs=await buildInputs(mod);const previous=await read(mod).catch(()=>null);
   await write(mod,{...previous,version:1,attempt:'building'});active.add(path.resolve(mod));return inputs;
 }
-export async function finishBuild(mod:string,before:Record<string,string>|undefined,success:boolean):Promise<void>{
-  active.delete(path.resolve(mod));const previous=await read(mod).catch(()=>null);
+/**
+ * Immutable copies of each mod's last successful build. Install update uses one while an
+ * agent is still editing that mod, so half-finished edits never reach the game.
+ */
+let completedBuildStore: any = null;
+export function getCompletedBuildStore(): any {
+  if (!completedBuildStore) {
+    const {app} = require('electron');
+    completedBuildStore = require('./atlas/build-snapshots.cjs').create({
+      root: path.join(app.getPath('userData'), 'completed-builds'),
+      workshopVerification: {planRelease, copyRelease, auditRelease, releaseRelative, isDevelopmentPath, allowedDll, runtimeSignature},
+      buildInputs,
+      signature,
+    });
+  }
+  return completedBuildStore;
+}
+export async function finishBuild(mod:string,before:Record<string,string>|undefined,success:boolean):Promise<{snapshotWarning?:string}|void>{
+  // The build stays marked in progress until its result and saved copy are recorded.
+  try{
+  const previous=await read(mod).catch(()=>null);
   if(!success||!before){await write(mod,{...previous,version:1,attempt:'failed'});return;}
   const after=await buildInputs(mod);
   if(signature(before)!==signature(after)){await write(mod,{...previous,version:1,attempt:'changed'});return;}
   const dlls=await outputs(mod);if(!Object.keys(dlls).length)throw new Error('Build produced no releasable DLLs.');
-  await write(mod,{version:1,attempt:'success',builtAt:Date.now(),inputs:after,outputs:dlls});
+  const completed={version:1 as const,attempt:'success' as const,builtAt:Date.now(),inputs:after,outputs:dlls};
+  await write(mod,completed);
+  try{await getCompletedBuildStore().capture(mod,completed);}
+  catch(error){return {snapshotWarning:`Build succeeded, but its install snapshot could not be saved: ${String(error)}. The previous completed build remains available.`};}
+  }finally{active.delete(path.resolve(mod));}
 }
 export async function getBuildState(mod:string):Promise<BuildState>{
   try{

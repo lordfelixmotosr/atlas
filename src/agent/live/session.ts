@@ -20,9 +20,11 @@ import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { loadSettings } from '../settings.js';
 import {
+  getRimWorldModsDir,
   getWorkspacePaths,
   mintWorkspaceFolderId,
 } from '../workspace.js';
+import { withRuntimeSync } from '../rimworld/runtime-mirror.js';
 import { detectGameVersionMajorMinorSync, detectRimWorldPaths } from '../paths.js';
 import { isRimWorldRunning, quitRimWorld } from '../rimworld/game.js';
 import { shipAndLaunch } from '../rimworld/ship.js';
@@ -79,7 +81,12 @@ function sessionTitle(now = new Date()): string {
   return `Live Session – ${date}`;
 }
 
+/** Live sessions share the install lock with Install update and test launches. */
 export async function launchLiveSession(): Promise<LiveLaunchResult> {
+  return withRuntimeSync(getRimWorldModsDir(), () => launchLiveSessionLocked());
+}
+
+async function launchLiveSessionLocked(): Promise<LiveLaunchResult> {
   // The Live mod must be available before we scaffold anything — a session
   // without the in-game channel is just a confusing test cycle. Clicking
   // "Launch Live Session" again after subscribing is the retry path: the

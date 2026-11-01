@@ -10,7 +10,9 @@ export interface ModDllUpdate {folder: string; name: string; changes: DllChange[
 export interface DllUpdateOverview {running: boolean; pending: boolean; installed?: boolean; mods: ModDllUpdate[]; error?: string;previous?:{savedAt:number;files:number;bytes:number}|null;skipped?:ModDllUpdate[]}
 export type RuntimeInstallMode='install'|'restore';
 export interface RuntimeFileChange {path:string;action:'added'|'modified'|'removed';beforeBytes:number;afterBytes:number}
-export interface RuntimeModPreview {folder:string;name:string;changes:RuntimeFileChange[];unchanged:number;runtimeBytes:number;previousSavedAt?:number}
+export interface RuntimeModPreview {folder:string;name:string;changes:RuntimeFileChange[];unchanged:number;runtimeBytes:number;previousSavedAt?:number;
+  /** Set when this mod installs its last completed build because an agent is still editing it. */
+  buildSnapshot?:{id:string;builtAt:number|null;capturedAt:number}}
 export interface RuntimeInstallPreview {mode:RuntimeInstallMode;mods:RuntimeModPreview[];added:number;modified:number;removed:number;runtimeBytes:number}
 export type DllInstallResult = {status: 'installed'; installed: string[]; warnings: string[]}
   | {status: 'current'}
